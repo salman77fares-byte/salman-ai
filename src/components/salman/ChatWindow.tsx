@@ -2,6 +2,7 @@ import { useChat } from "@ai-sdk/react";
 import { DefaultChatTransport, type UIMessage } from "ai";
 import { Copy, Mic, MicOff, RefreshCw } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 
 import { BrandMark } from "./BrandMark";
@@ -58,6 +59,8 @@ export function ChatWindow({
   const [listening, setListening] = useState(false);
   const recognitionRef = useRef<{ stop: () => void } | null>(null);
 
+  const queryClient = useQueryClient();
+
   const transport = useMemo(
     () =>
       new DefaultChatTransport({
@@ -79,6 +82,9 @@ export function ChatWindow({
     id: conversationId,
     messages: initialMessages,
     transport,
+    onFinish: () => {
+      void queryClient.invalidateQueries({ queryKey: ["conversations"] });
+    },
     onError: (err) => {
       const message = err.message.includes("429")
         ? "تم تجاوز حد الاستخدام، حاول بعد قليل."

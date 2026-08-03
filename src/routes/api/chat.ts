@@ -19,6 +19,28 @@ function textOf(message: UIMessage): string {
     .trim();
 }
 
+async function generateConversationTitle(firstMessage: string): Promise<string> {
+  const fallback = firstMessage.replace(/\s+/g, " ").trim().slice(0, 50);
+  const apiKey = process.env["LOVABLE_API_KEY"];
+  if (!apiKey) return fallback;
+  try {
+    const { generateText } = await import("ai");
+    const { createLovableAiGatewayProvider } = await import("@/lib/ai-gateway.server");
+    const gateway = createLovableAiGatewayProvider(apiKey);
+    const { text } = await generateText({
+      model: gateway("google/gemini-3.1-flash-lite"),
+      system:
+        "اكتب عنواناً قصيراً جداً (٢ إلى ٥ كلمات) يصف موضوع رسالة المستخدم، بنفس لغة الرسالة. بدون علامات ترقيم في النهاية وبدون علامات تنصيص وبدون أي شرح.",
+      prompt: firstMessage.slice(0, 500),
+    });
+    const title = text.replace(/^["'«»\s]+|["'«».\s]+$/g, "").replace(/\s+/g, " ").trim();
+    return title ? title.slice(0, 60) : fallback;
+  } catch (error) {
+    console.error("[chat] title generation failed", error);
+    return fallback;
+  }
+}
+
 export const Route = createFileRoute("/api/chat")({
   server: {
     handlers: {
@@ -50,6 +72,7 @@ export const Route = createFileRoute("/api/chat")({
         const uiMessages = messages as UIMessage[];
         const lastMessage = uiMessages[uiMessages.length - 1];
 
+        let titleSeed = "";
         if (lastMessage && lastMessage.role === "user") {
           const content = textOf(lastMessage);
           const { error: insertError } = await supabase
@@ -57,14 +80,7 @@ export const Route = createFileRoute("/api/chat")({
             .insert({ conversation_id: conversationId, sender: "user", content });
           if (insertError) console.error("[chat] failed to save user message", insertError);
 
-          if (conversation.title === "محادثة جديدة" && content) {
-            const title = content.slice(0, 60);
-            const { error: titleError } = await supabase
-              .from("conversations")
-              .update({ title, updated_at: new Date().toISOString() })
-              .eq("id", conversationId);
-            if (titleError) console.error("[chat] failed to set title", titleError);
-          }
+          if (conversation.title === "محادثة جديدة" && content) titleSeed = content;
         }
 
         const { createLovableAiGatewayProvider } = await import("@/lib/ai-gateway.server");
@@ -79,6 +95,14 @@ export const Route = createFileRoute("/api/chat")({
         return result.toUIMessageStreamResponse({
           originalMessages: uiMessages,
           onFinish: async ({ responseMessage }) => {
+            if (titleSeed) {
+              const title = await generateConversationTitle(titleSeed);
+              const { error: titleError } = await supabase
+                .from("conversations")
+                .update({ title, updated_at: new Date().toISOString() })
+                .eq("id", conversationId);
+              if (titleError) console.error("[chat] failed to set title", titleError);
+            }
             const content = textOf(responseMessage);
             if (!content) return;
             const { error } = await supabase
@@ -92,6 +116,7 @@ export const Route = createFileRoute("/api/chat")({
             if (touchError) console.error("[chat] failed to touch conversation", touchError);
           },
         });
+
       },
     },
   },

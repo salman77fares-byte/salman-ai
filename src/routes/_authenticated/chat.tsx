@@ -6,6 +6,7 @@ import { useState } from "react";
 import { toast } from "sonner";
 
 import { AppSidebar } from "@/components/salman/AppSidebar";
+import { MobileBottomNav } from "@/components/salman/MobileBottomNav";
 import { BrandMark } from "@/components/salman/BrandMark";
 import { Button } from "@/components/ui/button";
 import {
@@ -128,7 +129,7 @@ function ChatLayout() {
       </Sheet>
 
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="grid grid-cols-[auto_minmax(0,1fr)] items-center gap-2 border-b border-border px-3 py-2 md:hidden">
+        <header className="safe-top grid grid-cols-[auto_minmax(0,1fr)] items-center gap-2 border-b border-border px-3 py-2 md:hidden">
           <Button
             variant="ghost"
             size="icon-sm"
@@ -146,6 +147,12 @@ function ChatLayout() {
         <main className="min-h-0 flex-1">
           <Outlet />
         </main>
+
+        <MobileBottomNav
+          onNewChat={() => newChat.mutate()}
+          onOpenHistory={() => setMobileOpen(true)}
+          onOpenSettings={() => setSettingsOpen(true)}
+        />
       </div>
 
       <Dialog open={settingsOpen} onOpenChange={setSettingsOpen}>

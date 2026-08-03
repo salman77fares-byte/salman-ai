@@ -355,3 +355,25 @@ pre code,
 .salman-dot {
   animation: salman-blink 1.2s infinite ease-in-out;
 }
+
+/* Native mobile: safe-area insets + touch tuning */
+.safe-top {
+  padding-top: max(0px, env(safe-area-inset-top));
+}
+.safe-bottom {
+  padding-bottom: max(0px, env(safe-area-inset-bottom));
+}
+.safe-x {
+  padding-inline: max(0px, env(safe-area-inset-left), env(safe-area-inset-right));
+}
+@media (max-width: 767px) {
+  body {
+    -webkit-tap-highlight-color: transparent;
+    overscroll-behavior-y: none;
+  }
+  button,
+  [role="button"],
+  a {
+    touch-action: manipulation;
+  }
+}

@@ -9,7 +9,6 @@ import {
   Sun,
   Trash2,
   Sparkle,
-  PanelLeftClose,
 } from "lucide-react";
 
 import { BrandMark } from "./BrandMark";
@@ -68,7 +67,7 @@ export function AppSidebar({
 
   return (
     <div className="flex h-full w-full flex-col bg-sidebar text-sidebar-foreground">
-      <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2 px-4 pt-4">
+      <div className="safe-top flex items-center gap-2 px-4 pt-4">
         <Link to="/chat" className="flex min-w-0 items-center gap-2">
           <BrandMark size={34} />
           <span className="min-w-0">
@@ -79,12 +78,8 @@ export function AppSidebar({
             </span>
           </span>
         </Link>
-        {onClose ? (
-          <Button variant="ghost" size="icon-sm" onClick={onClose} aria-label="إغلاق القائمة">
-            <PanelLeftClose className="size-4" />
-          </Button>
-        ) : null}
       </div>
+
 
       <div className="p-4">
         <Button

@@ -1,0 +1,12 @@
+{
+  "appId": "com.salman.ai",
+  "appName": "Salman AI",
+  "webDir": "dist",
+  "bundledWebRuntime": false,
+  "android": {
+    "allowMixedContent": false
+  },
+  "server": {
+    "androidScheme": "https"
+  }
+}

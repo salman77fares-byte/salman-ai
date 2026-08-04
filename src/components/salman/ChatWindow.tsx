@@ -406,7 +406,9 @@ export function ChatWindow({
                 status={status}
                 className="size-9 shrink-0 rounded-full brand-gradient-bg text-primary-foreground"
               >
-                <ArrowUp className="size-4" />
+                {status === "ready" || status === undefined ? (
+                  <ArrowUp className="size-4" />
+                ) : undefined}
               </PromptInputSubmit>
             </div>
           </PromptInput>

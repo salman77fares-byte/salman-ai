@@ -1,11 +1,16 @@
 import { useChat } from "@ai-sdk/react";
 import { DefaultChatTransport, type UIMessage } from "ai";
-import { Copy, Mic, MicOff, RefreshCw } from "lucide-react";
+import { ArrowUp, Copy, Mic, MicOff, RefreshCw } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 
 import { BrandMark } from "./BrandMark";
+import {
+  GeneratedImage,
+  ImageGenerationLoader,
+  parseImageMessage,
+} from "./GeneratedImage";
 import {
   Conversation,
   ConversationContent,
@@ -33,13 +38,14 @@ import {
   type PromptInputMessage,
 } from "@/components/ai-elements/prompt-input";
 import { supabase } from "@/integrations/supabase/client";
+import { extractImagePrompt, isImageRequest } from "@/lib/image-intent";
 import { cn } from "@/lib/utils";
 
 const QUICK_PROMPTS = [
   { title: "ساعدني في كتابة كود", hint: "أنشئ دالة React لعرض قائمة مهام" },
+  { title: "أنشئ صورة", hint: "أنشئ صورة لمدينة مستقبلية على ساحل البحر" },
   { title: "لخص هذا النص", hint: "لخّص المقال التالي في خمس نقاط" },
   { title: "أفكار لمشاريع جديدة", hint: "اقترح ٥ أفكار مشاريع تقنية مربحة" },
-  { title: "اشرح لي مفهوماً", hint: "اشرح لي كيف تعمل قواعد البيانات العلائقية" },
 ];
 
 function messageText(message: UIMessage): string {
@@ -58,6 +64,7 @@ export function ChatWindow({
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const [listening, setListening] = useState(false);
   const recognitionRef = useRef<{ stop: () => void } | null>(null);
+  const [imagePending, setImagePending] = useState(false);
 
   const queryClient = useQueryClient();
 
@@ -78,7 +85,7 @@ export function ChatWindow({
     [conversationId],
   );
 
-  const { messages, sendMessage, status, regenerate, error } = useChat({
+  const { messages, setMessages, sendMessage, status, regenerate, error } = useChat({
     id: conversationId,
     messages: initialMessages,
     transport,
@@ -95,7 +102,7 @@ export function ChatWindow({
     },
   });
 
-  const isBusy = status === "submitted" || status === "streaming";
+  const isBusy = status === "submitted" || status === "streaming" || imagePending;
   const isEmpty = messages.length === 0;
 
   const focusInput = useCallback(() => {
@@ -110,16 +117,84 @@ export function ChatWindow({
     if (status === "ready") focusInput();
   }, [status, focusInput]);
 
+  const runImageGeneration = useCallback(
+    async ({ prompt, userText }: { prompt: string; userText?: string | undefined }) => {
+      setImagePending(true);
+      if (userText) {
+        setMessages((current) => [
+          ...current,
+          {
+            id: `local-user-${Date.now()}`,
+            role: "user" as const,
+            parts: [{ type: "text" as const, text: userText }],
+          },
+        ]);
+      }
+      try {
+        const { data } = await supabase.auth.getSession();
+        const response = await fetch("/api/generate-image", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            ...(data.session?.access_token
+              ? { Authorization: `Bearer ${data.session.access_token}` }
+              : {}),
+          },
+          body: JSON.stringify({ prompt, conversationId, save: Boolean(userText) }),
+        });
+        const payload = (await response.json().catch(() => ({}))) as {
+          url?: string;
+          error?: string;
+        };
+        if (!response.ok || !payload.url) {
+          throw new Error(payload.error ?? "تعذّر توليد الصورة، حاول مرة أخرى.");
+        }
+        setMessages((current) => [
+          ...current,
+          {
+            id: `local-image-${Date.now()}`,
+            role: "assistant" as const,
+            parts: [{ type: "text" as const, text: `![${prompt}](${payload.url})` }],
+          },
+        ]);
+        void queryClient.invalidateQueries({ queryKey: ["conversations"] });
+      } catch (err) {
+        const message =
+          err instanceof Error ? err.message : "تعذّر توليد الصورة، حاول مرة أخرى.";
+        toast.error(message);
+        setMessages((current) => [
+          ...current,
+          {
+            id: `local-image-error-${Date.now()}`,
+            role: "assistant" as const,
+            parts: [{ type: "text" as const, text: `⚠️ ${message}` }],
+          },
+        ]);
+      } finally {
+        setImagePending(false);
+        focusInput();
+      }
+    },
+    [conversationId, focusInput, queryClient, setMessages],
+  );
+
   const submit = useCallback(
     async (message: PromptInputMessage) => {
       const text = message.text.trim();
       if (!text && message.files.length === 0) return;
       if (isBusy) return;
+
+      if (text && message.files.length === 0 && isImageRequest(text)) {
+        onFirstMessage?.();
+        await runImageGeneration({ prompt: extractImagePrompt(text), userText: text });
+        return;
+      }
+
       await sendMessage({ text, files: message.files });
       onFirstMessage?.();
       focusInput();
     },
-    [isBusy, sendMessage, onFirstMessage, focusInput],
+    [isBusy, sendMessage, onFirstMessage, focusInput, runImageGeneration],
   );
 
   const toggleVoice = useCallback(() => {
@@ -179,26 +254,26 @@ export function ChatWindow({
   return (
     <div className="flex h-full min-h-0 flex-col">
       <Conversation className="min-h-0 flex-1">
-        <ConversationContent className="mx-auto w-full max-w-3xl gap-6 px-4 py-6">
+        <ConversationContent className="mx-auto w-full max-w-3xl gap-3 px-3 py-4 sm:gap-4 sm:px-4">
           {isEmpty ? (
-            <div className="flex flex-col items-center justify-center py-10 text-center">
-              <BrandMark size={72} className="shadow-glow" />
-              <h1 className="mt-6 text-2xl font-extrabold sm:text-3xl">
-                مرحباً بك، أنا <span className="brand-gradient-text">Salman AI</span>
+            <div className="flex flex-col items-center justify-center py-8 text-center">
+              <BrandMark size={64} className="shadow-glow" />
+              <h1 className="mt-5 text-xl font-extrabold sm:text-3xl">
+                مرحباً، أنا <span className="brand-gradient-text">Salman AI</span>
               </h1>
-              <p className="mt-2 text-sm text-muted-foreground sm:text-base">
-                كيف يمكنني مساعدتك اليوم؟
-              </p>
-              <div className="mt-8 grid w-full gap-3 sm:grid-cols-2">
+              <p className="mt-2 text-sm text-muted-foreground">كيف يمكنني مساعدتك اليوم؟</p>
+              <div className="mt-6 grid w-full gap-2.5 sm:grid-cols-2">
                 {QUICK_PROMPTS.map((prompt) => (
                   <button
                     key={prompt.title}
                     type="button"
                     onClick={() => void submit({ text: prompt.hint, files: [] })}
-                    className="rounded-2xl border border-border bg-card p-4 text-start transition-all hover:border-primary/50 hover:shadow-glow"
+                    className="rounded-2xl border border-border bg-card p-3 text-start transition-all hover:border-primary/50 hover:shadow-glow"
                   >
-                    <span className="block text-sm font-extrabold">{prompt.title}</span>
-                    <span className="mt-1 block text-xs text-muted-foreground">{prompt.hint}</span>
+                    <span className="block text-[13px] font-extrabold">{prompt.title}</span>
+                    <span className="mt-1 block text-[11px] text-muted-foreground">
+                      {prompt.hint}
+                    </span>
                   </button>
                 ))}
               </div>
@@ -206,28 +281,38 @@ export function ChatWindow({
           ) : (
             messages.map((message, index) => {
               const text = messageText(message);
+              const image = message.role === "assistant" ? parseImageMessage(text) : null;
               const isLastAssistant =
                 message.role === "assistant" && index === messages.length - 1;
               return (
                 <Message from={message.role} key={message.id}>
-                  <div className="flex w-full items-start gap-3">
-                    {message.role === "assistant" ? <BrandMark size={30} /> : null}
+                  <div className="flex w-full items-start gap-2.5">
+                    {message.role === "assistant" ? <BrandMark size={26} /> : null}
                     <MessageContent
                       className={cn(
-                        "min-w-0",
+                        "min-w-0 text-[13px] leading-7 sm:text-sm",
                         message.role === "user" &&
-                          "group-[.is-user]:bg-bubble-user group-[.is-user]:text-bubble-user-foreground group-[.is-user]:rounded-2xl",
+                          "group-[.is-user]:bg-bubble-user group-[.is-user]:text-bubble-user-foreground group-[.is-user]:rounded-2xl group-[.is-user]:px-3.5 group-[.is-user]:py-2.5",
                       )}
                     >
-                      {message.role === "assistant" ? (
+                      {image ? (
+                        <GeneratedImage
+                          url={image.url}
+                          prompt={image.prompt}
+                          busy={isBusy}
+                          onRegenerate={() =>
+                            void runImageGeneration({ prompt: image.prompt })
+                          }
+                        />
+                      ) : message.role === "assistant" ? (
                         <MessageResponse>{text}</MessageResponse>
                       ) : (
-                        <p className="whitespace-pre-wrap leading-relaxed">{text}</p>
+                        <p className="whitespace-pre-wrap leading-7">{text}</p>
                       )}
                     </MessageContent>
                   </div>
-                  {message.role === "assistant" && text ? (
-                    <MessageActions className="ms-11">
+                  {message.role === "assistant" && text && !image ? (
+                    <MessageActions className="ms-9">
                       <MessageAction
                         label="نسخ الرسالة"
                         tooltip="نسخ الرسالة"
@@ -252,10 +337,17 @@ export function ChatWindow({
             })
           )}
 
+          {imagePending ? (
+            <div className="flex items-start gap-2.5">
+              <BrandMark size={26} />
+              <ImageGenerationLoader />
+            </div>
+          ) : null}
+
           {status === "submitted" ? (
-            <div className="flex items-center gap-3">
-              <BrandMark size={30} />
-              <Shimmer className="text-sm font-bold">... Salman AI يكتب الآن</Shimmer>
+            <div className="flex items-center gap-2.5">
+              <BrandMark size={26} />
+              <Shimmer className="text-[13px] font-bold">... Salman AI يكتب الآن</Shimmer>
               <span className="flex gap-1">
                 <span className="salman-dot size-1.5 rounded-full bg-primary" />
                 <span
@@ -278,23 +370,18 @@ export function ChatWindow({
       </Conversation>
 
       <div className="sticky bottom-0 border-t border-border bg-background/85 backdrop-blur">
-        <div className="mx-auto w-full max-w-3xl px-4 py-3">
+        <div className="mx-auto w-full max-w-3xl px-3 py-2">
           <PromptInput
             onSubmit={submit}
             accept="image/*,text/*,application/pdf"
             multiple
             maxFiles={4}
-            className="rounded-2xl"
+            className="rounded-full px-1.5 py-1"
           >
-            <PromptInputTextarea
-              ref={textareaRef}
-              placeholder="اكتب رسالتك إلى Salman AI..."
-              className="min-h-[52px] text-base"
-            />
-            <PromptInputFooter className="justify-between">
-              <PromptInputTools>
+            <div className="flex items-center gap-1">
+              <PromptInputTools className="gap-0.5">
                 <PromptInputActionMenu>
-                  <PromptInputActionMenuTrigger />
+                  <PromptInputActionMenuTrigger className="size-8 rounded-full" />
                   <PromptInputActionMenuContent>
                     <PromptInputActionAddAttachments label="إرفاق ملف" />
                   </PromptInputActionMenuContent>
@@ -304,14 +391,28 @@ export function ChatWindow({
                   onClick={toggleVoice}
                   aria-label="الإدخال الصوتي"
                   variant={listening ? "default" : "ghost"}
+                  className="size-8 rounded-full"
                 >
                   {listening ? <MicOff className="size-4" /> : <Mic className="size-4" />}
                 </PromptInputButton>
               </PromptInputTools>
-              <PromptInputSubmit status={status} />
-            </PromptInputFooter>
+              <PromptInputTextarea
+                ref={textareaRef}
+                placeholder="اكتب رسالتك إلى Salman AI..."
+                className="min-h-9 flex-1 resize-none py-2 text-[13px] leading-6"
+                rows={1}
+              />
+              <PromptInputSubmit
+                status={status}
+                className="size-9 shrink-0 rounded-full brand-gradient-bg text-primary-foreground"
+              >
+                {status === "ready" || status === undefined ? (
+                  <ArrowUp className="size-4" />
+                ) : undefined}
+              </PromptInputSubmit>
+            </div>
           </PromptInput>
-          <p className="mt-2 text-center text-[11px] text-muted-foreground">
+          <p className="mt-1.5 text-center text-[10px] text-muted-foreground">
             قد يخطئ Salman AI — تحقّق من المعلومات المهمة.
           </p>
         </div>

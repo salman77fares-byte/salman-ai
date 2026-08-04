@@ -131,7 +131,7 @@ export function AppSidebar({
                         type="button"
                         aria-label="حذف المحادثة"
                         onClick={() => onDeleteConversation(conversation.id)}
-                        className="rounded-md p-1.5 text-muted-foreground opacity-0 transition-opacity hover:text-destructive focus-visible:opacity-100 group-hover:opacity-100"
+                        className="shrink-0 rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
                       >
                         <Trash2 className="size-4" />
                       </button>

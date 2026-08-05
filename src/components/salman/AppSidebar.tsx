@@ -1,14 +1,13 @@
 import { Link } from "@tanstack/react-router";
 import { isToday, isYesterday, parseISO, subDays } from "date-fns";
 import {
+  LogIn,
   LogOut,
   MessageSquare,
   Moon,
-  Plus,
   Settings,
   Sun,
   Trash2,
-  Sparkle,
 } from "lucide-react";
 
 import { BrandMark } from "./BrandMark";
@@ -46,7 +45,8 @@ function groupConversations(conversations: Conversation[]): Group[] {
 export function AppSidebar({
   conversations,
   activeId,
-  onNewChat,
+  isGuest,
+  userEmail,
   onDeleteConversation,
   onClearAll,
   onOpenSettings,
@@ -55,7 +55,8 @@ export function AppSidebar({
 }: {
   conversations: Conversation[];
   activeId?: string | undefined;
-  onNewChat: () => void;
+  isGuest: boolean;
+  userEmail?: string | null | undefined;
   onDeleteConversation: (id: string) => void;
   onClearAll: () => void;
   onOpenSettings: () => void;
@@ -67,32 +68,21 @@ export function AppSidebar({
 
   return (
     <div className="flex h-full w-full flex-col bg-sidebar text-sidebar-foreground">
-      <div className="safe-top flex items-center gap-2 px-4 pt-4">
-        <Link to="/chat" className="flex min-w-0 items-center gap-2">
-          <BrandMark size={34} />
-          <span className="min-w-0">
-            <span className="block truncate text-base font-extrabold">Salman AI</span>
-            <span className="flex items-center gap-1 text-[11px] font-bold text-primary">
-              <Sparkle className="size-3" />
-              سلمان للتقنية
-            </span>
-          </span>
+      <div className="safe-top flex items-center gap-2 px-4 py-4">
+        <Link to="/chat" className="flex min-w-0 items-center gap-2.5">
+          <BrandMark size={36} />
+          <span className="min-w-0 truncate text-base font-extrabold">Salman AI</span>
         </Link>
       </div>
 
+      <Separator />
 
-      <div className="p-4">
-        <Button
-          onClick={onNewChat}
-          className="w-full justify-center gap-2 rounded-xl brand-gradient-bg text-base font-extrabold text-primary-foreground shadow-glow hover:opacity-90"
-        >
-          <Plus className="size-4" />
-          محادثة جديدة
-        </Button>
-      </div>
-
-      <div className="min-h-0 flex-1 overflow-y-auto px-2 pb-2">
-        {groups.length === 0 ? (
+      <div className="min-h-0 flex-1 overflow-y-auto px-2 py-2">
+        {isGuest ? (
+          <p className="px-3 py-6 text-center text-xs leading-6 text-muted-foreground">
+            سجّل الدخول لحفظ محادثاتك وعرض سجلّك هنا.
+          </p>
+        ) : groups.length === 0 ? (
           <p className="px-3 py-6 text-center text-xs text-muted-foreground">
             لا توجد محادثات بعد. ابدأ محادثتك الأولى.
           </p>
@@ -113,6 +103,14 @@ export function AppSidebar({
                         active ? "bg-sidebar-accent" : "hover:bg-sidebar-accent/60",
                       )}
                     >
+                      <button
+                        type="button"
+                        aria-label="حذف المحادثة"
+                        onClick={() => onDeleteConversation(conversation.id)}
+                        className="shrink-0 rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
+                      >
+                        <Trash2 className="size-4" />
+                      </button>
                       <Link
                         to="/chat/$conversationId"
                         params={{ conversationId: conversation.id }}
@@ -127,14 +125,6 @@ export function AppSidebar({
                         />
                         <span className="truncate">{conversation.title}</span>
                       </Link>
-                      <button
-                        type="button"
-                        aria-label="حذف المحادثة"
-                        onClick={() => onDeleteConversation(conversation.id)}
-                        className="shrink-0 rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
-                      >
-                        <Trash2 className="size-4" />
-                      </button>
                     </li>
                   );
                 })}
@@ -150,18 +140,35 @@ export function AppSidebar({
           {theme === "dark" ? <Sun className="size-4" /> : <Moon className="size-4" />}
           {theme === "dark" ? "الوضع النهاري" : "الوضع الليلي"}
         </Button>
-        <Button variant="ghost" className="w-full justify-start gap-2" onClick={onClearAll}>
-          <Trash2 className="size-4" />
-          حذف كل المحادثات
-        </Button>
+        {!isGuest ? (
+          <Button variant="ghost" className="w-full justify-start gap-2" onClick={onClearAll}>
+            <Trash2 className="size-4" />
+            حذف كل المحادثات
+          </Button>
+        ) : null}
         <Button variant="ghost" className="w-full justify-start gap-2" onClick={onOpenSettings}>
           <Settings className="size-4" />
           الإعدادات
         </Button>
-        <Button variant="ghost" className="w-full justify-start gap-2" onClick={onSignOut}>
-          <LogOut className="size-4" />
-          تسجيل الخروج
-        </Button>
+        {isGuest ? (
+          <Button
+            asChild
+            className="w-full justify-start gap-2 brand-gradient-bg font-extrabold text-primary-foreground hover:opacity-90"
+          >
+            <Link to="/auth" onClick={onClose}>
+              <LogIn className="size-4" />
+              تسجيل الدخول
+            </Link>
+          </Button>
+        ) : (
+          <Button variant="ghost" className="w-full justify-start gap-2" onClick={onSignOut}>
+            <LogOut className="size-4" />
+            <span className="min-w-0 truncate">
+              تسجيل الخروج
+              {userEmail ? <span className="text-muted-foreground"> — {userEmail}</span> : null}
+            </span>
+          </Button>
+        )}
       </div>
     </div>
   );

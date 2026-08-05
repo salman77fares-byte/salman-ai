@@ -47,40 +47,47 @@ export const Route = createFileRoute("/api/chat")({
       POST: async ({ request }) => {
         const authHeader = request.headers.get("authorization") ?? "";
         const token = authHeader.startsWith("Bearer ") ? authHeader.slice(7) : "";
-        if (!token) return new Response("Unauthorized", { status: 401 });
 
         const body = (await request.json()) as ChatRequestBody;
         const messages = body.messages;
         const conversationId = typeof body.conversationId === "string" ? body.conversationId : "";
-        if (!Array.isArray(messages) || !conversationId) {
+        if (!Array.isArray(messages)) {
           return new Response("Bad request", { status: 400 });
         }
 
         const apiKey = process.env["LOVABLE_API_KEY"];
         if (!apiKey) return new Response("Missing LOVABLE_API_KEY", { status: 500 });
 
-        const { createUserClient } = await import("@/lib/supabase-user.server");
-        const supabase = createUserClient(token);
-
-        const { data: conversation, error: convError } = await supabase
-          .from("conversations")
-          .select("id, title")
-          .eq("id", conversationId)
-          .maybeSingle();
-        if (convError || !conversation) return new Response("Forbidden", { status: 403 });
-
         const uiMessages = messages as UIMessage[];
         const lastMessage = uiMessages[uiMessages.length - 1];
 
+        // Guests chat without persistence; signed-in users get their history saved.
+        const persist = Boolean(token && conversationId);
+        let supabase: Awaited<
+          ReturnType<typeof import("@/lib/supabase-user.server").createUserClient>
+        > | null = null;
         let titleSeed = "";
-        if (lastMessage && lastMessage.role === "user") {
-          const content = textOf(lastMessage);
-          const { error: insertError } = await supabase
-            .from("messages")
-            .insert({ conversation_id: conversationId, sender: "user", content });
-          if (insertError) console.error("[chat] failed to save user message", insertError);
 
-          if (conversation.title === "محادثة جديدة" && content) titleSeed = content;
+        if (persist) {
+          const { createUserClient } = await import("@/lib/supabase-user.server");
+          supabase = createUserClient(token);
+
+          const { data: conversation, error: convError } = await supabase
+            .from("conversations")
+            .select("id, title")
+            .eq("id", conversationId)
+            .maybeSingle();
+          if (convError || !conversation) return new Response("Forbidden", { status: 403 });
+
+          if (lastMessage && lastMessage.role === "user") {
+            const content = textOf(lastMessage);
+            const { error: insertError } = await supabase
+              .from("messages")
+              .insert({ conversation_id: conversationId, sender: "user", content });
+            if (insertError) console.error("[chat] failed to save user message", insertError);
+
+            if (conversation.title === "محادثة جديدة" && content) titleSeed = content;
+          }
         }
 
         const { createLovableAiGatewayProvider } = await import("@/lib/ai-gateway.server");
@@ -95,9 +102,11 @@ export const Route = createFileRoute("/api/chat")({
         return result.toUIMessageStreamResponse({
           originalMessages: uiMessages,
           onFinish: async ({ responseMessage }) => {
+            const db = supabase;
+            if (!db) return;
             if (titleSeed) {
               const title = await generateConversationTitle(titleSeed);
-              const { error: titleError } = await supabase
+              const { error: titleError } = await db
                 .from("conversations")
                 .update({ title, updated_at: new Date().toISOString() })
                 .eq("id", conversationId);
@@ -105,19 +114,19 @@ export const Route = createFileRoute("/api/chat")({
             }
             const content = textOf(responseMessage);
             if (!content) return;
-            const { error } = await supabase
+            const { error } = await db
               .from("messages")
               .insert({ conversation_id: conversationId, sender: "assistant", content });
             if (error) console.error("[chat] failed to save assistant message", error);
-            const { error: touchError } = await supabase
+            const { error: touchError } = await db
               .from("conversations")
               .update({ updated_at: new Date().toISOString() })
               .eq("id", conversationId);
             if (touchError) console.error("[chat] failed to touch conversation", touchError);
           },
         });
-
       },
+
     },
   },
 });

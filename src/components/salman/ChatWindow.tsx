@@ -1,16 +1,14 @@
 import { useChat } from "@ai-sdk/react";
 import { DefaultChatTransport, type UIMessage } from "ai";
-import { ArrowUp, Copy, Mic, MicOff, RefreshCw } from "lucide-react";
+import { ArrowUp, Copy, LogIn, Mic, MicOff, RefreshCw } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Link } from "@tanstack/react-router";
 import { useQueryClient } from "@tanstack/react-query";
+import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
 
 import { BrandMark } from "./BrandMark";
-import {
-  GeneratedImage,
-  ImageGenerationLoader,
-  parseImageMessage,
-} from "./GeneratedImage";
+import { GeneratedImage, parseImageMessage } from "./GeneratedImage";
 import {
   Conversation,
   ConversationContent,
@@ -31,42 +29,40 @@ import {
   PromptInputActionMenuContent,
   PromptInputActionMenuTrigger,
   PromptInputButton,
-  PromptInputFooter,
   PromptInputSubmit,
   PromptInputTextarea,
   PromptInputTools,
   type PromptInputMessage,
 } from "@/components/ai-elements/prompt-input";
 import { supabase } from "@/integrations/supabase/client";
+import { appendMessages } from "@/lib/chat.functions";
 import { extractImagePrompt, isImageRequest } from "@/lib/image-intent";
+import { buildPollinationsUrl } from "@/lib/pollinations";
 import { cn } from "@/lib/utils";
-
-const QUICK_PROMPTS = [
-  { title: "ساعدني في كتابة كود", hint: "أنشئ دالة React لعرض قائمة مهام" },
-  { title: "أنشئ صورة", hint: "أنشئ صورة لمدينة مستقبلية على ساحل البحر" },
-  { title: "لخص هذا النص", hint: "لخّص المقال التالي في خمس نقاط" },
-  { title: "أفكار لمشاريع جديدة", hint: "اقترح ٥ أفكار مشاريع تقنية مربحة" },
-];
 
 function messageText(message: UIMessage): string {
   return message.parts.map((part) => (part.type === "text" ? part.text : "")).join("");
 }
 
 export function ChatWindow({
+  chatKey,
   conversationId,
   initialMessages,
+  isGuest = false,
   onFirstMessage,
 }: {
-  conversationId: string;
+  chatKey: string;
+  conversationId?: string | undefined;
   initialMessages: UIMessage[];
+  isGuest?: boolean | undefined;
   onFirstMessage?: (() => void) | undefined;
 }) {
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const [listening, setListening] = useState(false);
   const recognitionRef = useRef<{ stop: () => void } | null>(null);
-  const [imagePending, setImagePending] = useState(false);
 
   const queryClient = useQueryClient();
+  const saveMessages = useServerFn(appendMessages);
 
   const transport = useMemo(
     () =>
@@ -78,7 +74,7 @@ export function ChatWindow({
             headers: data.session?.access_token
               ? { Authorization: `Bearer ${data.session.access_token}` }
               : {},
-            body: { messages, conversationId },
+            body: { messages, ...(conversationId ? { conversationId } : {}) },
           };
         },
       }),
@@ -86,7 +82,7 @@ export function ChatWindow({
   );
 
   const { messages, setMessages, sendMessage, status, regenerate, error } = useChat({
-    id: conversationId,
+    id: chatKey,
     messages: initialMessages,
     transport,
     onFinish: () => {
@@ -102,7 +98,7 @@ export function ChatWindow({
     },
   });
 
-  const isBusy = status === "submitted" || status === "streaming" || imagePending;
+  const isBusy = status === "submitted" || status === "streaming";
   const isEmpty = messages.length === 0;
 
   const focusInput = useCallback(() => {
@@ -111,71 +107,54 @@ export function ChatWindow({
 
   useEffect(() => {
     focusInput();
-  }, [conversationId, focusInput]);
+  }, [chatKey, focusInput]);
 
   useEffect(() => {
     if (status === "ready") focusInput();
   }, [status, focusInput]);
 
+  /** Generates an image straight from the Pollinations URL API. */
   const runImageGeneration = useCallback(
-    async ({ prompt, userText }: { prompt: string; userText?: string | undefined }) => {
-      setImagePending(true);
-      if (userText) {
-        setMessages((current) => [
-          ...current,
-          {
-            id: `local-user-${Date.now()}`,
-            role: "user" as const,
-            parts: [{ type: "text" as const, text: userText }],
+    ({ prompt, userText }: { prompt: string; userText?: string | undefined }) => {
+      const url = buildPollinationsUrl(prompt);
+      const stamp = Date.now();
+
+      setMessages((current) => [
+        ...current,
+        ...(userText
+          ? [
+              {
+                id: `local-user-${stamp}`,
+                role: "user" as const,
+                parts: [{ type: "text" as const, text: userText }],
+              },
+            ]
+          : []),
+        {
+          id: `local-image-${stamp}`,
+          role: "assistant" as const,
+          parts: [{ type: "text" as const, text: `![${prompt}](${url})` }],
+        },
+      ]);
+
+      if (!isGuest && conversationId) {
+        void saveMessages({
+          data: {
+            conversationId,
+            messages: [
+              ...(userText ? [{ sender: "user" as const, content: userText }] : []),
+              { sender: "assistant" as const, content: `![${prompt}](${url})` },
+            ],
+            ...(userText ? { title: prompt.slice(0, 60) } : {}),
           },
-        ]);
+        })
+          .then(() => queryClient.invalidateQueries({ queryKey: ["conversations"] }))
+          .catch(() => toast.error("تعذّر حفظ الصورة في سجل المحادثات."));
       }
-      try {
-        const { data } = await supabase.auth.getSession();
-        const response = await fetch("/api/generate-image", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            ...(data.session?.access_token
-              ? { Authorization: `Bearer ${data.session.access_token}` }
-              : {}),
-          },
-          body: JSON.stringify({ prompt, conversationId, save: Boolean(userText) }),
-        });
-        const payload = (await response.json().catch(() => ({}))) as {
-          url?: string;
-          error?: string;
-        };
-        if (!response.ok || !payload.url) {
-          throw new Error(payload.error ?? "تعذّر توليد الصورة، حاول مرة أخرى.");
-        }
-        setMessages((current) => [
-          ...current,
-          {
-            id: `local-image-${Date.now()}`,
-            role: "assistant" as const,
-            parts: [{ type: "text" as const, text: `![${prompt}](${payload.url})` }],
-          },
-        ]);
-        void queryClient.invalidateQueries({ queryKey: ["conversations"] });
-      } catch (err) {
-        const message =
-          err instanceof Error ? err.message : "تعذّر توليد الصورة، حاول مرة أخرى.";
-        toast.error(message);
-        setMessages((current) => [
-          ...current,
-          {
-            id: `local-image-error-${Date.now()}`,
-            role: "assistant" as const,
-            parts: [{ type: "text" as const, text: `⚠️ ${message}` }],
-          },
-        ]);
-      } finally {
-        setImagePending(false);
-        focusInput();
-      }
+
+      focusInput();
     },
-    [conversationId, focusInput, queryClient, setMessages],
+    [conversationId, focusInput, isGuest, queryClient, saveMessages, setMessages],
   );
 
   const submit = useCallback(
@@ -186,7 +165,7 @@ export function ChatWindow({
 
       if (text && message.files.length === 0 && isImageRequest(text)) {
         onFirstMessage?.();
-        await runImageGeneration({ prompt: extractImagePrompt(text), userText: text });
+        runImageGeneration({ prompt: extractImagePrompt(text), userText: text });
         return;
       }
 
@@ -256,27 +235,12 @@ export function ChatWindow({
       <Conversation className="min-h-0 flex-1">
         <ConversationContent className="mx-auto w-full max-w-3xl gap-3 px-3 py-4 sm:gap-4 sm:px-4">
           {isEmpty ? (
-            <div className="flex flex-col items-center justify-center py-8 text-center">
+            <div className="flex flex-col items-center justify-center py-10 text-center">
               <BrandMark size={64} className="shadow-glow" />
               <h1 className="mt-5 text-xl font-extrabold sm:text-3xl">
                 مرحباً، أنا <span className="brand-gradient-text">Salman AI</span>
               </h1>
               <p className="mt-2 text-sm text-muted-foreground">كيف يمكنني مساعدتك اليوم؟</p>
-              <div className="mt-6 grid w-full gap-2.5 sm:grid-cols-2">
-                {QUICK_PROMPTS.map((prompt) => (
-                  <button
-                    key={prompt.title}
-                    type="button"
-                    onClick={() => void submit({ text: prompt.hint, files: [] })}
-                    className="rounded-2xl border border-border bg-card p-3 text-start transition-all hover:border-primary/50 hover:shadow-glow"
-                  >
-                    <span className="block text-[13px] font-extrabold">{prompt.title}</span>
-                    <span className="mt-1 block text-[11px] text-muted-foreground">
-                      {prompt.hint}
-                    </span>
-                  </button>
-                ))}
-              </div>
             </div>
           ) : (
             messages.map((message, index) => {
@@ -300,9 +264,7 @@ export function ChatWindow({
                           url={image.url}
                           prompt={image.prompt}
                           busy={isBusy}
-                          onRegenerate={() =>
-                            void runImageGeneration({ prompt: image.prompt })
-                          }
+                          onRegenerate={() => runImageGeneration({ prompt: image.prompt })}
                         />
                       ) : message.role === "assistant" ? (
                         <MessageResponse>{text}</MessageResponse>
@@ -337,13 +299,6 @@ export function ChatWindow({
             })
           )}
 
-          {imagePending ? (
-            <div className="flex items-start gap-2.5">
-              <BrandMark size={26} />
-              <ImageGenerationLoader />
-            </div>
-          ) : null}
-
           {status === "submitted" ? (
             <div className="flex items-center gap-2.5">
               <BrandMark size={26} />
@@ -369,8 +324,23 @@ export function ChatWindow({
         <ConversationScrollButton />
       </Conversation>
 
-      <div className="sticky bottom-0 border-t border-border bg-background/85 backdrop-blur">
-        <div className="mx-auto w-full max-w-3xl px-3 py-2">
+      <div className="sticky bottom-0 z-20 shrink-0 border-t border-border bg-background/90 backdrop-blur">
+        <div className="safe-bottom mx-auto w-full max-w-3xl px-3 pt-2">
+          {isGuest ? (
+            <div className="mb-2 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-primary/30 bg-primary/5 px-3 py-2">
+              <p className="min-w-0 flex-1 text-[11px] leading-5 text-muted-foreground">
+                تنبيه: أنت تجري المحادثة كزائر. لن يتم حفظ هذه المحادثة، احفظ سجلاتك بالتسجيل الآن.
+              </p>
+              <Link
+                to="/auth"
+                className="inline-flex shrink-0 items-center gap-1 rounded-lg brand-gradient-bg px-2.5 py-1.5 text-[11px] font-extrabold text-primary-foreground"
+              >
+                <LogIn className="size-3.5" />
+                تسجيل الدخول / إنشاء حساب
+              </Link>
+            </div>
+          ) : null}
+
           <PromptInput
             onSubmit={submit}
             accept="image/*,text/*,application/pdf"
@@ -412,7 +382,7 @@ export function ChatWindow({
               </PromptInputSubmit>
             </div>
           </PromptInput>
-          <p className="mt-1.5 text-center text-[10px] text-muted-foreground">
+          <p className="mt-1.5 pb-2 text-center text-[10px] text-muted-foreground">
             قد يخطئ Salman AI — تحقّق من المعلومات المهمة.
           </p>
         </div>

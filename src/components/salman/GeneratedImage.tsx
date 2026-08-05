@@ -25,6 +25,10 @@ export function GeneratedImage({
   busy?: boolean | undefined;
 }) {
   const [downloading, setDownloading] = useState(false);
+  const [loaded, setLoaded] = useState(false);
+  const [failed, setFailed] = useState(false);
+  const [attempt, setAttempt] = useState(0);
+
 
   const download = async () => {
     setDownloading(true);
@@ -41,20 +45,44 @@ export function GeneratedImage({
       URL.revokeObjectURL(objectUrl);
       toast.success("تم تحميل الصورة");
     } catch {
-      toast.error("تعذّر تحميل الصورة.");
+      window.open(url, "_blank", "noopener");
     } finally {
       setDownloading(false);
     }
   };
 
+  if (failed) {
+    return (
+      <p className="text-xs font-bold text-destructive">
+        تعذّر توليد الصورة، حاول مرة أخرى.
+      </p>
+    );
+  }
+
   return (
     <div className="w-full max-w-sm">
-      <img
-        src={url}
-        alt={prompt || "صورة مولّدة بواسطة Salman AI"}
-        loading="lazy"
-        className="w-full rounded-2xl border border-border shadow-soft"
-      />
+      <div className="relative overflow-hidden rounded-2xl border border-border shadow-soft">
+        {!loaded ? (
+          <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-secondary">
+            <div className="absolute inset-0 animate-pulse brand-gradient-bg opacity-15" />
+            <Loader2 className="size-6 animate-spin text-primary" />
+            <p className="px-3 text-center text-[11px] font-bold text-muted-foreground">
+              جاري رسم وتوليد صورتك بواسطة Salman AI...
+            </p>
+          </div>
+        ) : null}
+        <img
+          key={attempt}
+          src={attempt === 0 ? url : `${url}&retry=${attempt}`}
+          alt={prompt || "صورة مولّدة بواسطة Salman AI"}
+          onLoad={() => setLoaded(true)}
+          onError={() => {
+            if (attempt < 2) setAttempt((value) => value + 1);
+            else setFailed(true);
+          }}
+          className="block aspect-square w-full object-cover"
+        />
+      </div>
       <div className="mt-2 flex items-center gap-2">
         <Button
           type="button"
@@ -62,7 +90,7 @@ export function GeneratedImage({
           size="sm"
           className="rounded-xl text-xs font-bold"
           onClick={() => void download()}
-          disabled={downloading}
+          disabled={downloading || !loaded}
         >
           {downloading ? (
             <Loader2 className="size-3.5 animate-spin" />
@@ -81,24 +109,10 @@ export function GeneratedImage({
             disabled={busy}
           >
             <RefreshCw className="size-3.5" />
-            إعادة التوليد
+            إعادة توليد
           </Button>
         ) : null}
       </div>
-    </div>
-  );
-}
-
-export function ImageGenerationLoader() {
-  return (
-    <div className="w-full max-w-sm">
-      <div className="relative flex aspect-square w-full items-center justify-center overflow-hidden rounded-2xl border border-border bg-secondary">
-        <div className="absolute inset-0 animate-pulse brand-gradient-bg opacity-15" />
-        <Loader2 className="size-6 animate-spin text-primary" />
-      </div>
-      <p className="mt-2 text-xs font-bold text-muted-foreground">
-        جاري رسم وتوليد صورتك بواسطة Salman AI...
-      </p>
     </div>
   );
 }

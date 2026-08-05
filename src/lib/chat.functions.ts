@@ -52,6 +52,51 @@ export const getConversationMessages = createServerFn({ method: "POST" })
     return (rows ?? []) as StoredMessage[];
   });
 
+/** Persists an exchange (used by the client-side image generation flow). */
+export const appendMessages = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: unknown) =>
+    z
+      .object({
+        conversationId: z.string().uuid(),
+        messages: z
+          .array(
+            z.object({
+              sender: z.enum(["user", "assistant"]),
+              content: z.string().min(1).max(8000),
+            }),
+          )
+          .min(1)
+          .max(4),
+        title: z.string().trim().min(1).max(120).optional(),
+      })
+      .parse(input),
+  )
+  .handler(async ({ data, context }) => {
+    const { error } = await context.supabase.from("messages").insert(
+      data.messages.map((message) => ({
+        conversation_id: data.conversationId,
+        sender: message.sender,
+        content: message.content,
+      })),
+    );
+    if (error) throw new Error(error.message);
+
+    const patch: { updated_at: string; title?: string } = {
+      updated_at: new Date().toISOString(),
+    };
+    if (data.title) patch.title = data.title;
+    let query = context.supabase
+      .from("conversations")
+      .update(patch)
+      .eq("id", data.conversationId);
+    if (data.title) query = query.eq("title", "محادثة جديدة");
+    await query;
+
+    return { ok: true };
+  });
+
+
 export const deleteConversation = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((input: unknown) => z.object({ conversationId: z.string().uuid() }).parse(input))

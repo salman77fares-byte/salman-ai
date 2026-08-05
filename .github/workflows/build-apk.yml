@@ -39,13 +39,22 @@ jobs:
             echo "Creating index.html"
             echo '<!doctype html><html><head><meta charset="UTF-8"></head><body><div id="root"></div></body></html>' > dist/index.html
           fi
+          echo "=== FINAL DIST ==="
           ls -la dist
+
+      - name: Create Capacitor Config
+        run: |
+          cat > capacitor.config.json <<EOF
+          {
+            "appId": "com.salman.ai",
+            "appName": "Salman AI",
+            "webDir": "dist"
+          }
+          EOF
 
       - name: Setup Capacitor Android
         run: |
-          npx cap init "Salman AI" "com.salman.ai" --web-dir=dist || true
-          npx cap config set webDir dist
-          npx cap add android || true
+          npx cap add android
           npx cap sync android
 
       - name: Build APK

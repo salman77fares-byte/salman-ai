@@ -28,19 +28,9 @@ jobs:
       - name: Build Web
         run: |
           npm run build
-          mkdir -p dist
-          cp -r .output/public/. dist/ || true
-          echo "=== DIST FILES ==="
-          ls -la dist
-
-      - name: Check Web Assets
-        run: |
-          if [ ! -f dist/index.html ]; then
-            echo "Creating index.html"
-            echo '<!doctype html><html><head><meta charset="UTF-8"></head><body><div id="root"></div></body></html>' > dist/index.html
-          fi
-          echo "=== FINAL DIST ==="
-          ls -la dist
+          echo "=== CHECK OUTPUT ==="
+          ls -la .output
+          ls -la .output/public
 
       - name: Create Capacitor Config
         run: |
@@ -48,7 +38,7 @@ jobs:
           {
             "appId": "com.salman.ai",
             "appName": "Salman AI",
-            "webDir": "dist"
+            "webDir": ".output/public"
           }
           EOF
 

@@ -1,12 +1,13 @@
 name: Build APK
 
 on:
+  push:
+    branches: ["**"]
   workflow_dispatch:
 
 jobs:
-  build:
+  build-apk:
     runs-on: ubuntu-latest
-
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -14,47 +15,39 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version: "20"
 
       - name: Setup Java
         uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: 21
+          java-version: "21"
 
       - name: Install dependencies
         run: npm install --legacy-peer-deps
 
-      - name: Build Web
-        run: |
-          npm run build
-          echo "=== CHECK OUTPUT ==="
-          ls -la .output
-          ls -la .output/public
+      - name: Build web bundle
+        run: npm run build
 
-      - name: Create Capacitor Config
+      - name: Prepare web assets for Capacitor
         run: |
-          cat > capacitor.config.json <<EOF
-          {
-            "appId": "com.salman.ai",
-            "appName": "Salman AI",
-            "webDir": ".output/public"
-          }
-          EOF
+          mkdir -p dist
+          if [ -d ".output/public" ]; then cp -r .output/public/. dist/; fi
 
-      - name: Setup Capacitor Android
-        run: |
-          npx cap add android
-          npx cap sync android
+      - name: Add Android platform
+        run: npx cap add android || npx cap sync android
 
-      - name: Build APK
+      - name: Sync Capacitor
+        run: npx cap sync android
+
+      - name: Build debug APK
         working-directory: android
         run: |
-          chmod +x gradlew
+          chmod +x ./gradlew
           ./gradlew assembleDebug
 
-      - name: Upload APK
+      - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: Salman-AI-APK
+          name: app-debug
           path: android/app/build/outputs/apk/debug/app-debug.apk

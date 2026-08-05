@@ -86,19 +86,23 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { name: "apple-mobile-web-app-status-bar-style", content: "black-translucent" },
       { name: "mobile-web-app-capable", content: "yes" },
 
-      { title: "Salman AI — مساعدك الذكي بالعربية" },
+      { title: "Salman AI" },
       {
         name: "description",
-        content: "منصة محادثة ذكية بالعربية والإنجليزية مع دعم كامل للأكواد والتنسيق.",
+        content: "​Salman AI | منصتك الذكية المتكاملة لتوليد الصور، برمجة الأكواد، كتابة النصوص، وغيرها من الخدمات المتطورة بسرعة ودقة متناهية. ابدأ الآن!",
       },
       { name: "author", content: "Salman AI" },
-      { property: "og:title", content: "Salman AI — مساعدك الذكي بالعربية" },
+      { property: "og:title", content: "Salman AI" },
       {
         property: "og:description",
-        content: "منصة محادثة ذكية بالعربية والإنجليزية مع دعم كامل للأكواد والتنسيق.",
+        content: "​Salman AI | منصتك الذكية المتكاملة لتوليد الصور، برمجة الأكواد، كتابة النصوص، وغيرها من الخدمات المتطورة بسرعة ودقة متناهية. ابدأ الآن!",
       },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
+      { name: "twitter:title", content: "Salman AI" },
+      { name: "twitter:description", content: "​Salman AI | منصتك الذكية المتكاملة لتوليد الصور، برمجة الأكواد، كتابة النصوص، وغيرها من الخدمات المتطورة بسرعة ودقة متناهية. ابدأ الآن!" },
+      { property: "og:image", content: "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/fe948f62-4c43-4d78-8b1b-a4cb4747803c/id-preview-a928a428--7b49c286-5b40-474b-a3e2-e353200ab43c.lovable.app-1785956176893.png" },
+      { name: "twitter:image", content: "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/fe948f62-4c43-4d78-8b1b-a4cb4747803c/id-preview-a928a428--7b49c286-5b40-474b-a3e2-e353200ab43c.lovable.app-1785956176893.png" },
     ],
     links: [
       { rel: "stylesheet", href: appCss },

@@ -3,16 +3,16 @@ import { createFileRoute, redirect } from "@tanstack/react-router";
 export const Route = createFileRoute("/")({
   head: () => ({
     meta: [
-      { title: "Salman AI — محادثة ذكية بالعربية" },
+      { title: "Salman AI" },
       {
         name: "description",
         content:
-          "Salman AI من سلمان للتقنية: ابدأ المحادثة فوراً بالعربية والإنجليزية مع دعم الأكواد وتوليد الصور.",
+          "​Salman AI | منصتك الذكية المتكاملة لتوليد الصور، برمجة الأكواد، كتابة النصوص، وغيرها من الخدمات المتطورة بسرعة ودقة متناهية. ابدأ الآن!",
       },
-      { property: "og:title", content: "Salman AI — محادثة ذكية بالعربية" },
+      { property: "og:title", content: "Salman AI" },
       {
         property: "og:description",
-        content: "ابدأ المحادثة فوراً مع Salman AI: نصوص، أكواد، وتوليد صور.",
+        content: "​Salman AI | منصتك الذكية المتكاملة لتوليد الصور، برمجة الأكواد، كتابة النصوص، وغيرها من الخدمات المتطورة بسرعة ودقة متناهية. ابدأ الآن!",
       },
     ],
   }),

@@ -1,7 +1,13 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { createFileRoute, Outlet, useNavigate, useParams } from "@tanstack/react-router";
+import {
+  createFileRoute,
+  Link,
+  Outlet,
+  useNavigate,
+  useParams,
+} from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
-import { Menu } from "lucide-react";
+import { LogIn, LogOut, Menu, Plus } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 
@@ -18,6 +24,7 @@ import {
 } from "@/components/ui/dialog";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
 import { Switch } from "@/components/ui/switch";
+import { useSession } from "@/hooks/useSession";
 import { supabase } from "@/integrations/supabase/client";
 import {
   clearAllConversations,
@@ -26,19 +33,34 @@ import {
   listConversations,
   type Conversation,
 } from "@/lib/chat.functions";
+import { GuestChatProvider, useGuestChat } from "@/lib/guest-chat";
 import { useTheme } from "@/lib/theme";
 
-export const Route = createFileRoute("/_authenticated/chat")({
+export const Route = createFileRoute("/chat")({
+  ssr: false,
   head: () => ({
     meta: [
       { title: "المحادثة — Salman AI" },
-      { name: "description", content: "تحدّث مع Salman AI بالعربية والإنجليزية واحفظ محادثاتك." },
+      {
+        name: "description",
+        content: "تحدّث مع Salman AI بالعربية والإنجليزية، ابدأ كزائر أو احفظ محادثاتك بحسابك.",
+      },
       { property: "og:title", content: "المحادثة — Salman AI" },
       { property: "og:description", content: "تحدّث مع Salman AI بالعربية والإنجليزية." },
+      { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary_large_image" },
     ],
   }),
-  component: ChatLayout,
+  component: ChatRoute,
 });
+
+function ChatRoute() {
+  return (
+    <GuestChatProvider>
+      <ChatLayout />
+    </GuestChatProvider>
+  );
+}
 
 function ChatLayout() {
   const navigate = useNavigate();
@@ -47,6 +69,8 @@ function ChatLayout() {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const { theme, toggleTheme } = useTheme();
+  const { session, user, isGuest } = useSession();
+  const { resetGuestChat } = useGuestChat();
 
   const fetchConversations = useServerFn(listConversations);
   const createFn = useServerFn(createConversation);
@@ -56,6 +80,7 @@ function ChatLayout() {
   const { data: conversations = [] } = useQuery<Conversation[]>({
     queryKey: ["conversations"],
     queryFn: () => fetchConversations(),
+    enabled: Boolean(session),
   });
 
   const invalidate = () => queryClient.invalidateQueries({ queryKey: ["conversations"] });
@@ -72,6 +97,16 @@ function ChatLayout() {
     },
     onError: () => toast.error("تعذّر إنشاء محادثة جديدة."),
   });
+
+  const startNewChat = () => {
+    if (isGuest) {
+      resetGuestChat();
+      setMobileOpen(false);
+      void navigate({ to: "/chat" });
+      return;
+    }
+    newChat.mutate();
+  };
 
   const removeChat = useMutation({
     mutationFn: (conversationId: string) => deleteFn({ data: { conversationId } }),
@@ -97,14 +132,15 @@ function ChatLayout() {
     await queryClient.cancelQueries();
     queryClient.clear();
     await supabase.auth.signOut();
-    void navigate({ to: "/auth", replace: true });
+    void navigate({ to: "/chat", replace: true });
   };
 
   const sidebar = (onClose?: () => void) => (
     <AppSidebar
       conversations={conversations}
       activeId={params.conversationId}
-      onNewChat={() => newChat.mutate()}
+      isGuest={isGuest}
+      userEmail={user?.email ?? null}
       onDeleteConversation={(id) => removeChat.mutate(id)}
       onClearAll={() => clearAll.mutate()}
       onOpenSettings={() => {
@@ -129,18 +165,58 @@ function ChatLayout() {
       </Sheet>
 
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="safe-top grid grid-cols-[auto_minmax(0,1fr)] items-center gap-2 border-b border-border px-3 py-2 md:hidden">
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            onClick={() => setMobileOpen(true)}
-            aria-label="فتح القائمة"
-          >
-            <Menu className="size-5" />
-          </Button>
-          <div className="flex min-w-0 items-center gap-2">
-            <BrandMark size={28} />
-            <span className="truncate text-sm font-extrabold">Salman AI</span>
+        <header className="safe-top shrink-0 border-b border-border bg-background/95 px-3 py-3 backdrop-blur sm:px-5">
+          <div className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-2">
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => setMobileOpen(true)}
+              aria-label="فتح القائمة"
+              className="md:hidden"
+            >
+              <Menu className="size-5" />
+            </Button>
+            <div className="flex min-w-0 items-center gap-2.5">
+              <BrandMark size={40} />
+              <span className="truncate text-lg font-extrabold sm:text-xl">Salman AI</span>
+            </div>
+            {isGuest ? (
+              <Button
+                asChild
+                size="sm"
+                className="shrink-0 gap-1.5 rounded-xl brand-gradient-bg text-xs font-extrabold text-primary-foreground hover:opacity-90"
+              >
+                <Link to="/auth">
+                  <LogIn className="size-3.5" />
+                  تسجيل الدخول
+                </Link>
+              </Button>
+            ) : (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => void signOut()}
+                className="shrink-0 gap-1.5 rounded-xl text-xs font-bold"
+              >
+                <LogOut className="size-3.5" />
+                تسجيل الخروج
+              </Button>
+            )}
+          </div>
+          <div className="mt-2.5 flex items-center gap-2">
+            <Button
+              size="sm"
+              onClick={startNewChat}
+              className="h-8 shrink-0 gap-1.5 rounded-full px-3 text-xs font-extrabold"
+            >
+              <Plus className="size-3.5" />
+              محادثة جديدة
+            </Button>
+            {!isGuest && user?.email ? (
+              <span className="truncate text-[11px] text-muted-foreground" dir="ltr">
+                {user.email}
+              </span>
+            ) : null}
           </div>
         </header>
 
@@ -149,7 +225,7 @@ function ChatLayout() {
         </main>
 
         <MobileBottomNav
-          onNewChat={() => newChat.mutate()}
+          onNewChat={startNewChat}
           onOpenHistory={() => setMobileOpen(true)}
           onOpenSettings={() => setSettingsOpen(true)}
         />
@@ -166,7 +242,9 @@ function ChatLayout() {
             <Switch checked={theme === "dark"} onCheckedChange={toggleTheme} />
           </div>
           <div className="rounded-2xl bg-secondary px-4 py-3 text-xs leading-6 text-muted-foreground">
-            يتم حفظ محادثاتك في حسابك الخاص، ولا يمكن لأي مستخدم آخر الوصول إليها.
+            {isGuest
+              ? "أنت تستخدم التطبيق كزائر، سجّل الدخول لحفظ محادثاتك بشكل دائم."
+              : "يتم حفظ محادثاتك في حسابك الخاص، ولا يمكن لأي مستخدم آخر الوصول إليها."}
           </div>
         </DialogContent>
       </Dialog>

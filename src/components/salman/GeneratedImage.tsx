@@ -27,6 +27,8 @@ export function GeneratedImage({
   const [downloading, setDownloading] = useState(false);
   const [loaded, setLoaded] = useState(false);
   const [failed, setFailed] = useState(false);
+  const [attempt, setAttempt] = useState(0);
+
 
   const download = async () => {
     setDownloading(true);

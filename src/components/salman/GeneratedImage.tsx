@@ -72,10 +72,14 @@ export function GeneratedImage({
           </div>
         ) : null}
         <img
-          src={url}
+          key={attempt}
+          src={attempt === 0 ? url : `${url}&retry=${attempt}`}
           alt={prompt || "صورة مولّدة بواسطة Salman AI"}
           onLoad={() => setLoaded(true)}
-          onError={() => setFailed(true)}
+          onError={() => {
+            if (attempt < 2) setAttempt((value) => value + 1);
+            else setFailed(true);
+          }}
           className="block aspect-square w-full object-cover"
         />
       </div>

@@ -7,12 +7,11 @@ import {
   useParams,
 } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
-import { LogIn, LogOut, Menu, Plus } from "lucide-react";
+import { LogIn, LogOut, Menu } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 
 import { AppSidebar } from "@/components/salman/AppSidebar";
-import { MobileBottomNav } from "@/components/salman/MobileBottomNav";
 import { BrandMark } from "@/components/salman/BrandMark";
 import { Button } from "@/components/ui/button";
 import {
@@ -33,7 +32,7 @@ import {
   listConversations,
   type Conversation,
 } from "@/lib/chat.functions";
-import { GuestChatProvider, useGuestChat } from "@/lib/guest-chat";
+import { GuestChatProvider, NewChatProvider, useGuestChat } from "@/lib/guest-chat";
 import { useTheme } from "@/lib/theme";
 
 export const Route = createFileRoute("/chat")({
@@ -159,7 +158,10 @@ function ChatLayout() {
       </aside>
 
       <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
-        <SheetContent side="right" className="w-[85%] max-w-xs p-0">
+        <SheetContent
+          side="right"
+          className="w-[68%] max-w-[260px] p-0 [&>button]:hidden"
+        >
           {sidebar(() => setMobileOpen(false))}
         </SheetContent>
       </Sheet>
@@ -203,32 +205,18 @@ function ChatLayout() {
               </Button>
             )}
           </div>
-          <div className="mt-2.5 flex items-center gap-2">
-            <Button
-              size="sm"
-              onClick={startNewChat}
-              className="h-8 shrink-0 gap-1.5 rounded-full px-3 text-xs font-extrabold"
-            >
-              <Plus className="size-3.5" />
-              محادثة جديدة
-            </Button>
-            {!isGuest && user?.email ? (
-              <span className="truncate text-[11px] text-muted-foreground" dir="ltr">
-                {user.email}
-              </span>
-            ) : null}
-          </div>
+          {!isGuest && user?.email ? (
+            <p className="mt-1.5 truncate text-[11px] text-muted-foreground" dir="ltr">
+              {user.email}
+            </p>
+          ) : null}
         </header>
 
         <main className="min-h-0 flex-1">
-          <Outlet />
+          <NewChatProvider onNewChat={startNewChat}>
+            <Outlet />
+          </NewChatProvider>
         </main>
-
-        <MobileBottomNav
-          onNewChat={startNewChat}
-          onOpenHistory={() => setMobileOpen(true)}
-          onOpenSettings={() => setSettingsOpen(true)}
-        />
       </div>
 
       <Dialog open={settingsOpen} onOpenChange={setSettingsOpen}>

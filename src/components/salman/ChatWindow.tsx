@@ -460,7 +460,7 @@ export function ChatWindow({
             maxFiles={4}
             className="rounded-full px-1.5 py-1"
           >
-            <div className="flex items-center gap-1">
+            <div className="flex w-full items-center gap-1">
               <PromptInputSubmit
                 status={status}
                 className="order-last size-9 shrink-0 rounded-full brand-gradient-bg text-primary-foreground"
@@ -484,7 +484,7 @@ export function ChatWindow({
               <PromptInputTextarea
                 ref={textareaRef}
                 placeholder="اكتب رسالتك إلى Salman AI..."
-                className="min-h-9 flex-1 resize-none py-2 text-[13px] leading-6"
+                className="min-h-9 w-full min-w-0 flex-1 resize-none py-2 text-center text-[13px] leading-6"
                 rows={1}
               />
             </div>

@@ -83,6 +83,14 @@ export function GeneratedImage({
           className="block aspect-square w-full object-cover"
         />
       </div>
+      {prompt ? (
+        <p
+          dir="ltr"
+          className="mt-1.5 line-clamp-3 text-start text-[10px] leading-4 text-muted-foreground"
+        >
+          {prompt}
+        </p>
+      ) : null}
       <div className="mt-2 flex items-center gap-2">
         <Button
           type="button"

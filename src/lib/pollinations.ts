@@ -5,6 +5,6 @@
  */
 export function buildPollinationsUrl(prompt: string, seed?: number): string {
   const cleaned = prompt.replace(/\s+/g, " ").trim().slice(0, 400);
-  const finalSeed = seed ?? Math.floor(Math.random() * 1_000_000);
-  return `https://image.pollinations.ai/prompt/${encodeURIComponent(cleaned)}?width=1024&height=1024&seed=${finalSeed}&nologo=true`;
+  const finalSeed = seed ?? Math.floor(Math.random() * 100_000);
+  return `https://image.pollinations.ai/prompt/${encodeURIComponent(cleaned)}?width=1024&height=1024&nologo=true&seed=${finalSeed}`;
 }

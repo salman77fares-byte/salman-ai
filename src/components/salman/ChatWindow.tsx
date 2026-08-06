@@ -37,6 +37,7 @@ import {
   PromptInputActionMenu,
   PromptInputActionMenuContent,
   PromptInputActionMenuItem,
+  PromptInputActionMenuTrigger,
   PromptInputButton,
   PromptInputSubmit,
   PromptInputTextarea,
@@ -63,7 +64,12 @@ function PlusMenu({ onGenerateImage }: { onGenerateImage: () => void }) {
 
   return (
     <PromptInputActionMenu>
-      <PromptInputActionMenuTriggerButton />
+      <PromptInputActionMenuTrigger
+        aria-label="خيارات إضافية"
+        className="size-8 rounded-full"
+      >
+        <Plus className="size-4" />
+      </PromptInputActionMenuTrigger>
       <PromptInputActionMenuContent
         align="start"
         side="top"
@@ -99,29 +105,6 @@ function PlusMenu({ onGenerateImage }: { onGenerateImage: () => void }) {
         </PromptInputActionMenuItem>
       </PromptInputActionMenuContent>
     </PromptInputActionMenu>
-  );
-}
-
-function PromptInputActionMenuTriggerButton() {
-  return (
-    <PromptInputActionMenuTriggerWrapper>
-      <Plus className="size-4" />
-    </PromptInputActionMenuTriggerWrapper>
-  );
-}
-
-/** Thin wrapper so the trigger can carry our own icon + sizing. */
-function PromptInputActionMenuTriggerWrapper({ children }: { children: React.ReactNode }) {
-  return (
-    <PromptInputButton
-      type="button"
-      aria-label="خيارات إضافية"
-      className="size-8 rounded-full"
-      asChild={false}
-      data-slot="prompt-input-action-menu-trigger"
-    >
-      {children}
-    </PromptInputButton>
   );
 }
 

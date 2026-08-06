@@ -1,6 +1,16 @@
 import { useChat } from "@ai-sdk/react";
 import { DefaultChatTransport, type UIMessage } from "ai";
-import { ArrowUp, Copy, LogIn, Mic, MicOff, RefreshCw } from "lucide-react";
+import {
+  ArrowUp,
+  Copy,
+  FileText,
+  Image as ImageIcon,
+  Mic,
+  MicOff,
+  Palette,
+  Plus,
+  RefreshCw,
+} from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { useQueryClient } from "@tanstack/react-query";
@@ -24,24 +34,95 @@ import {
 import { Shimmer } from "@/components/ai-elements/shimmer";
 import {
   PromptInput,
-  PromptInputActionAddAttachments,
   PromptInputActionMenu,
   PromptInputActionMenuContent,
-  PromptInputActionMenuTrigger,
+  PromptInputActionMenuItem,
   PromptInputButton,
   PromptInputSubmit,
   PromptInputTextarea,
   PromptInputTools,
+  usePromptInputAttachments,
   type PromptInputMessage,
 } from "@/components/ai-elements/prompt-input";
+import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 import { appendMessages } from "@/lib/chat.functions";
+import { useNewChat } from "@/lib/guest-chat";
+import { translateImagePrompt } from "@/lib/image-prompt.functions";
 import { extractImagePrompt, isImageRequest } from "@/lib/image-intent";
 import { buildPollinationsUrl } from "@/lib/pollinations";
 import { cn } from "@/lib/utils";
 
 function messageText(message: UIMessage): string {
   return message.parts.map((part) => (part.type === "text" ? part.text : "")).join("");
+}
+
+/** Plus (+) menu: attachments and a shortcut that seeds an image request. */
+function PlusMenu({ onGenerateImage }: { onGenerateImage: () => void }) {
+  const attachments = usePromptInputAttachments();
+
+  return (
+    <PromptInputActionMenu>
+      <PromptInputActionMenuTriggerButton />
+      <PromptInputActionMenuContent
+        align="start"
+        side="top"
+        sideOffset={10}
+        className="min-w-56 rounded-2xl"
+      >
+        <PromptInputActionMenuItem
+          onSelect={(event) => {
+            event.preventDefault();
+            attachments.openFileDialog();
+          }}
+        >
+          <ImageIcon className="me-2 size-4" />
+          إرفاق صورة
+        </PromptInputActionMenuItem>
+        <PromptInputActionMenuItem
+          onSelect={(event) => {
+            event.preventDefault();
+            attachments.openFileDialog();
+          }}
+        >
+          <FileText className="me-2 size-4" />
+          إرفاق ملف
+        </PromptInputActionMenuItem>
+        <PromptInputActionMenuItem
+          onSelect={(event) => {
+            event.preventDefault();
+            onGenerateImage();
+          }}
+        >
+          <Palette className="me-2 size-4" />
+          توليد صورة بالذكاء الاصطناعي
+        </PromptInputActionMenuItem>
+      </PromptInputActionMenuContent>
+    </PromptInputActionMenu>
+  );
+}
+
+function PromptInputActionMenuTriggerButton() {
+  return (
+    <PromptInputActionMenuTriggerWrapper>
+      <Plus className="size-4" />
+    </PromptInputActionMenuTriggerWrapper>
+  );
+}
+
+/** Thin wrapper so the trigger can carry our own icon + sizing. */
+function PromptInputActionMenuTriggerWrapper({ children }: { children: React.ReactNode }) {
+  return (
+    <PromptInputButton
+      type="button"
+      aria-label="خيارات إضافية"
+      className="size-8 rounded-full"
+      asChild={false}
+      data-slot="prompt-input-action-menu-trigger"
+    >
+      {children}
+    </PromptInputButton>
+  );
 }
 
 export function ChatWindow({
@@ -59,10 +140,13 @@ export function ChatWindow({
 }) {
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const [listening, setListening] = useState(false);
+  const [generatingImage, setGeneratingImage] = useState(false);
   const recognitionRef = useRef<{ stop: () => void } | null>(null);
 
   const queryClient = useQueryClient();
   const saveMessages = useServerFn(appendMessages);
+  const translatePrompt = useServerFn(translateImagePrompt);
+  const startNewChat = useNewChat();
 
   const transport = useMemo(
     () =>
@@ -98,7 +182,7 @@ export function ChatWindow({
     },
   });
 
-  const isBusy = status === "submitted" || status === "streaming";
+  const isBusy = status === "submitted" || status === "streaming" || generatingImage;
   const isEmpty = messages.length === 0;
 
   const focusInput = useCallback(() => {
@@ -113,11 +197,18 @@ export function ChatWindow({
     if (status === "ready") focusInput();
   }, [status, focusInput]);
 
-  /** Generates an image straight from the Pollinations URL API. */
-  const runImageGeneration = useCallback(
-    ({ prompt, userText }: { prompt: string; userText?: string | undefined }) => {
-      const url = buildPollinationsUrl(prompt);
+  /** Renders a Pollinations image for an already-translated English prompt. */
+  const renderImage = useCallback(
+    ({
+      englishPrompt,
+      userText,
+    }: {
+      englishPrompt: string;
+      userText?: string | undefined;
+    }) => {
+      const url = buildPollinationsUrl(englishPrompt);
       const stamp = Date.now();
+      const content = `![${englishPrompt}](${url})`;
 
       setMessages((current) => [
         ...current,
@@ -133,7 +224,7 @@ export function ChatWindow({
         {
           id: `local-image-${stamp}`,
           role: "assistant" as const,
-          parts: [{ type: "text" as const, text: `![${prompt}](${url})` }],
+          parts: [{ type: "text" as const, text: content }],
         },
       ]);
 
@@ -143,9 +234,9 @@ export function ChatWindow({
             conversationId,
             messages: [
               ...(userText ? [{ sender: "user" as const, content: userText }] : []),
-              { sender: "assistant" as const, content: `![${prompt}](${url})` },
+              { sender: "assistant" as const, content },
             ],
-            ...(userText ? { title: prompt.slice(0, 60) } : {}),
+            ...(userText ? { title: userText.slice(0, 60) } : {}),
           },
         })
           .then(() => queryClient.invalidateQueries({ queryKey: ["conversations"] }))
@@ -157,6 +248,26 @@ export function ChatWindow({
     [conversationId, focusInput, isGuest, queryClient, saveMessages, setMessages],
   );
 
+  /** Translates the request to a detailed English prompt, then generates. */
+  const runImageGeneration = useCallback(
+    async ({ request, userText }: { request: string; userText?: string | undefined }) => {
+      setGeneratingImage(true);
+      try {
+        let englishPrompt = request;
+        try {
+          const result = await translatePrompt({ data: { prompt: request } });
+          if (result?.prompt) englishPrompt = result.prompt;
+        } catch {
+          toast.error("تعذّرت ترجمة الوصف، سيتم استخدام النص الأصلي.");
+        }
+        renderImage({ englishPrompt, userText });
+      } finally {
+        setGeneratingImage(false);
+      }
+    },
+    [renderImage, translatePrompt],
+  );
+
   const submit = useCallback(
     async (message: PromptInputMessage) => {
       const text = message.text.trim();
@@ -165,7 +276,7 @@ export function ChatWindow({
 
       if (text && message.files.length === 0 && isImageRequest(text)) {
         onFirstMessage?.();
-        runImageGeneration({ prompt: extractImagePrompt(text), userText: text });
+        void runImageGeneration({ request: extractImagePrompt(text), userText: text });
         return;
       }
 
@@ -175,6 +286,15 @@ export function ChatWindow({
     },
     [isBusy, sendMessage, onFirstMessage, focusInput, runImageGeneration],
   );
+
+  const seedImagePrompt = useCallback(() => {
+    const textarea = textareaRef.current;
+    if (!textarea) return;
+    textarea.value = textarea.value.trim() ? textarea.value : "أنشئ صورة ";
+    textarea.dispatchEvent(new Event("input", { bubbles: true }));
+    textarea.focus();
+    textarea.setSelectionRange(textarea.value.length, textarea.value.length);
+  }, []);
 
   const toggleVoice = useCallback(() => {
     if (listening) {
@@ -231,7 +351,7 @@ export function ChatWindow({
   }, []);
 
   return (
-    <div className="flex h-full min-h-0 flex-col">
+    <div className="flex h-full min-h-0 flex-col overflow-x-hidden">
       <Conversation className="min-h-0 flex-1">
         <ConversationContent className="mx-auto w-full max-w-3xl gap-3 px-3 py-4 sm:gap-4 sm:px-4">
           {isEmpty ? (
@@ -241,6 +361,15 @@ export function ChatWindow({
                 مرحباً، أنا <span className="brand-gradient-text">Salman AI</span>
               </h1>
               <p className="mt-2 text-sm text-muted-foreground">كيف يمكنني مساعدتك اليوم؟</p>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={startNewChat}
+                className="mt-4 h-8 gap-1.5 rounded-full px-3 text-xs font-extrabold"
+              >
+                <Plus className="size-3.5" />
+                محادثة جديدة
+              </Button>
             </div>
           ) : (
             messages.map((message, index) => {
@@ -264,7 +393,9 @@ export function ChatWindow({
                           url={image.url}
                           prompt={image.prompt}
                           busy={isBusy}
-                          onRegenerate={() => runImageGeneration({ prompt: image.prompt })}
+                          onRegenerate={() =>
+                            renderImage({ englishPrompt: image.prompt })
+                          }
                         />
                       ) : message.role === "assistant" ? (
                         <MessageResponse>{text}</MessageResponse>
@@ -299,10 +430,14 @@ export function ChatWindow({
             })
           )}
 
-          {status === "submitted" ? (
+          {status === "submitted" || generatingImage ? (
             <div className="flex items-center gap-2.5">
               <BrandMark size={26} />
-              <Shimmer className="text-[13px] font-bold">... Salman AI يكتب الآن</Shimmer>
+              <Shimmer className="text-[13px] font-bold">
+                {generatingImage
+                  ? "جاري رسم وتوليد صورتك بواسطة Salman AI..."
+                  : "... Salman AI يكتب الآن"}
+              </Shimmer>
               <span className="flex gap-1">
                 <span className="salman-dot size-1.5 rounded-full bg-primary" />
                 <span
@@ -327,18 +462,12 @@ export function ChatWindow({
       <div className="sticky bottom-0 z-20 shrink-0 border-t border-border bg-background/90 backdrop-blur">
         <div className="safe-bottom mx-auto w-full max-w-3xl px-3 pt-2">
           {isGuest ? (
-            <div className="mb-2 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-primary/30 bg-primary/5 px-3 py-2">
-              <p className="min-w-0 flex-1 text-[11px] leading-5 text-muted-foreground">
-                تنبيه: أنت تجري المحادثة كزائر. لن يتم حفظ هذه المحادثة، احفظ سجلاتك بالتسجيل الآن.
-              </p>
-              <Link
-                to="/auth"
-                className="inline-flex shrink-0 items-center gap-1 rounded-lg brand-gradient-bg px-2.5 py-1.5 text-[11px] font-extrabold text-primary-foreground"
-              >
-                <LogIn className="size-3.5" />
-                تسجيل الدخول / إنشاء حساب
+            <p className="mb-1.5 flex items-center justify-center gap-2 text-[11px] leading-5 text-muted-foreground">
+              <span>تنبيه: محادثة كزائر - لن يتم حفظ السجل</span>
+              <Link to="/auth" className="font-extrabold text-primary hover:underline">
+                تسجيل الدخول
               </Link>
-            </div>
+            </p>
           ) : null}
 
           <PromptInput
@@ -349,13 +478,16 @@ export function ChatWindow({
             className="rounded-full px-1.5 py-1"
           >
             <div className="flex items-center gap-1">
+              <PromptInputSubmit
+                status={status}
+                className="order-last size-9 shrink-0 rounded-full brand-gradient-bg text-primary-foreground"
+              >
+                {status === "ready" || status === undefined ? (
+                  <ArrowUp className="size-4" />
+                ) : undefined}
+              </PromptInputSubmit>
               <PromptInputTools className="gap-0.5">
-                <PromptInputActionMenu>
-                  <PromptInputActionMenuTrigger className="size-8 rounded-full" />
-                  <PromptInputActionMenuContent>
-                    <PromptInputActionAddAttachments label="إرفاق ملف" />
-                  </PromptInputActionMenuContent>
-                </PromptInputActionMenu>
+                <PlusMenu onGenerateImage={seedImagePrompt} />
                 <PromptInputButton
                   type="button"
                   onClick={toggleVoice}
@@ -372,14 +504,6 @@ export function ChatWindow({
                 className="min-h-9 flex-1 resize-none py-2 text-[13px] leading-6"
                 rows={1}
               />
-              <PromptInputSubmit
-                status={status}
-                className="size-9 shrink-0 rounded-full brand-gradient-bg text-primary-foreground"
-              >
-                {status === "ready" || status === undefined ? (
-                  <ArrowUp className="size-4" />
-                ) : undefined}
-              </PromptInputSubmit>
             </div>
           </PromptInput>
           <p className="mt-1.5 pb-2 text-center text-[10px] text-muted-foreground">

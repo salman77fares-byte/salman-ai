@@ -33,24 +33,23 @@ jobs:
       - name: Build Web Assets
         run: npm run build
 
-      - name: Ensure Build Assets in dist/ (Fix Blank Screen)
+      - name: Ensure Build Assets in .output/public (Fix Blank Screen)
         run: |
-          mkdir -p dist
-          # البحث الديناميكي عن المجلد الذي يحتوي على index.html ونسخ محتوياته إلى dist/
-          INDEX_PATH=$(find . -maxdepth 3 -name "index.html" -not -path "*/node_modules/*" -not -path "*/public/*" -not -path "*/dist/*" | head -n 1)
+          mkdir -p .output/public
+          INDEX_PATH=$(find . -maxdepth 4 -name "index.html" -not -path "*/node_modules/*" -not -path "*/public/*" -not -path "*/.output/*" | head -n 1)
           if [ -n "$INDEX_PATH" ]; then
             BUILD_DIR=$(dirname "$INDEX_PATH")
             echo "Found web build assets in: $BUILD_DIR"
-            if [ "$BUILD_DIR" != "./dist" ] && [ "$BUILD_DIR" != "dist" ]; then
-              cp -r $BUILD_DIR/* dist/
+            if [ "$BUILD_DIR" != "./.output/public" ] && [ "$BUILD_DIR" != ".output/public" ]; then
+              cp -r $BUILD_DIR/* .output/public/
             fi
           else
             echo "Warning: index.html not found in subdirectories, checking public..."
             if [ -d "public" ]; then
-              cp -r public/* dist/
+              cp -r public/* .output/public/
             fi
           fi
-          ls -la dist/
+          ls -la .output/public/
 
       - name: Generate App Icons
         run: |

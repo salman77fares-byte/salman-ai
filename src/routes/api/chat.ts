@@ -1,11 +1,16 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { convertToModelMessages, streamText, type UIMessage } from "ai";
+import { convertToModelMessages, stepCountIs, streamText, tool, type UIMessage } from "ai";
+import { z } from "zod";
 
 const SYSTEM_PROMPT = `أنت "Salman AI"، مساعد ذكي عربي متقدّم من سلمان للتقنية.
 - أجب بلغة المستخدم: إذا كتب بالعربية أجب بعربية فصحى واضحة، وإذا كتب بالإنجليزية أجب بالإنجليزية.
 - استخدم تنسيق Markdown (عناوين، قوائم، جداول، نص عريض) لتنظيم الإجابات.
 - ضع الأكواد دائماً داخل كتل برمجية مع تحديد اللغة، مثل \`\`\`ts.
-- كن دقيقاً وموجزاً، واطلب التوضيح إذا كان السؤال غامضاً.`;
+- كن دقيقاً وموجزاً، واطلب التوضيح إذا كان السؤال غامضاً.
+- لديك أداة \`web_search\` للبحث في الويب. استخدمها إلزامياً لأي سؤال عن أحداث جارية، أخبار، نتائج رياضية، أسعار أو بيانات مالية، إصدارات تقنية حديثة، أو أي معلومة قد تكون تغيّرت بعد بيانات تدريبك، وكذلك عند أي شك في حداثة المعلومة.
+- اعتمد فقط على نتائج البحث في هذه الحالات، ولا تخمّن أبداً. اذكر المصادر (روابط) عند الاستناد إلى البحث.
+- إذا لم تجد معلومة موثوقة، قل ذلك بصراحة بدلاً من اختلاق إجابة.
+- التاريخ الحالي: ${new Date().toISOString().slice(0, 10)}.`;
 
 type ChatRequestBody = {
   messages?: unknown;
@@ -93,10 +98,30 @@ export const Route = createFileRoute("/api/chat")({
         const { createLovableAiGatewayProvider } = await import("@/lib/ai-gateway.server");
         const gateway = createLovableAiGatewayProvider(apiKey);
 
+        const webSearch = tool({
+          description:
+            "Search the live web for up-to-date facts, news, prices, scores and recent releases.",
+          inputSchema: z.object({
+            query: z.string().describe("Concise search query, prefer English or Arabic keywords"),
+          }),
+          execute: async ({ query }) => {
+            const { searchWeb } = await import("@/lib/web-search.server");
+            try {
+              const results = await searchWeb(query, 5);
+              return results.length ? { results } : { results: [], note: "no results" };
+            } catch (searchError) {
+              console.error("[chat] web search failed", searchError);
+              return { results: [], note: "search failed" };
+            }
+          },
+        });
+
         const result = streamText({
           model: gateway("google/gemini-3.6-flash"),
           system: SYSTEM_PROMPT,
           messages: await convertToModelMessages(uiMessages),
+          tools: { web_search: webSearch },
+          stopWhen: stepCountIs(4),
         });
 
         return result.toUIMessageStreamResponse({

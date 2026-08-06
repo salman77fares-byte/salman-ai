@@ -460,7 +460,7 @@ export function ChatWindow({
             maxFiles={4}
             className="rounded-full px-1.5 py-1"
           >
-            <div className="flex w-full items-center gap-1">
+            <div className="flex min-w-0 flex-1 basis-full items-center gap-1">
               <PromptInputSubmit
                 status={status}
                 className="order-last size-9 shrink-0 rounded-full brand-gradient-bg text-primary-foreground"

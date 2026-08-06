@@ -21,3 +21,20 @@ export function GuestChatProvider({ children }: { children: ReactNode }) {
 export function useGuestChat() {
   return useContext(GuestChatContext);
 }
+
+const NewChatContext = createContext<() => void>(() => {});
+
+/** Exposes the layout's "new chat" action to nested chat screens. */
+export function NewChatProvider({
+  onNewChat,
+  children,
+}: {
+  onNewChat: () => void;
+  children: ReactNode;
+}) {
+  return <NewChatContext.Provider value={onNewChat}>{children}</NewChatContext.Provider>;
+}
+
+export function useNewChat() {
+  return useContext(NewChatContext);
+}

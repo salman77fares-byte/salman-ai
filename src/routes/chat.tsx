@@ -7,8 +7,8 @@ import {
   useParams,
 } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
-import { LogIn, LogOut, Menu } from "lucide-react";
-import { useState } from "react";
+import { LogIn, LogOut, Menu, Rocket, Trash2 } from "lucide-react";
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
 
 import { AppSidebar } from "@/components/salman/AppSidebar";
@@ -33,6 +33,7 @@ import {
   type Conversation,
 } from "@/lib/chat.functions";
 import { GuestChatProvider, NewChatProvider, useGuestChat } from "@/lib/guest-chat";
+import { SALMAN_PROJECTS } from "@/lib/projects";
 import { useTheme } from "@/lib/theme";
 
 export const Route = createFileRoute("/chat")({
@@ -67,9 +68,32 @@ function ChatLayout() {
   const params = useParams({ strict: false }) as { conversationId?: string };
   const [mobileOpen, setMobileOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [fontScale, setFontScale] = useState("medium");
+  const [replyLang, setReplyLang] = useState("auto");
   const { theme, toggleTheme } = useTheme();
   const { session, user, isGuest } = useSession();
   const { resetGuestChat } = useGuestChat();
+
+  useEffect(() => {
+    const stored = localStorage.getItem("salman-font-scale");
+    if (stored) setFontScale(stored);
+    const lang = localStorage.getItem("salman-reply-lang");
+    if (lang) setReplyLang(lang);
+  }, []);
+
+  useEffect(() => {
+    const sizes: Record<string, string> = {
+      small: "15px",
+      medium: "16px",
+      large: "18px",
+    };
+    document.documentElement.style.fontSize = sizes[fontScale] ?? "16px";
+    localStorage.setItem("salman-font-scale", fontScale);
+  }, [fontScale]);
+
+  useEffect(() => {
+    localStorage.setItem("salman-reply-lang", replyLang);
+  }, [replyLang]);
 
   const fetchConversations = useServerFn(listConversations);
   const createFn = useServerFn(createConversation);
@@ -220,20 +244,105 @@ function ChatLayout() {
       </div>
 
       <Dialog open={settingsOpen} onOpenChange={setSettingsOpen}>
-        <DialogContent className="max-w-sm rounded-3xl">
+        <DialogContent className="max-h-[85vh] max-w-sm overflow-y-auto rounded-3xl">
           <DialogHeader>
             <DialogTitle>الإعدادات</DialogTitle>
             <DialogDescription>تخصيص تجربتك في Salman AI.</DialogDescription>
           </DialogHeader>
-          <div className="flex items-center justify-between rounded-2xl bg-secondary px-4 py-3">
-            <span className="text-sm font-bold">الوضع الليلي</span>
-            <Switch checked={theme === "dark"} onCheckedChange={toggleTheme} />
-          </div>
-          <div className="rounded-2xl bg-secondary px-4 py-3 text-xs leading-6 text-muted-foreground">
-            {isGuest
-              ? "أنت تستخدم التطبيق كزائر، سجّل الدخول لحفظ محادثاتك بشكل دائم."
-              : "يتم حفظ محادثاتك في حسابك الخاص، ولا يمكن لأي مستخدم آخر الوصول إليها."}
-          </div>
+
+          <section className="space-y-2">
+            <p className="text-xs font-extrabold text-muted-foreground">الحساب</p>
+            <div className="rounded-2xl bg-secondary px-4 py-3 text-xs leading-6">
+              {isGuest ? (
+                <span className="text-muted-foreground">
+                  أنت تستخدم التطبيق كزائر، سجّل الدخول لحفظ محادثاتك.
+                </span>
+              ) : (
+                <span dir="ltr" className="block truncate font-bold">
+                  {user?.email}
+                </span>
+              )}
+            </div>
+          </section>
+
+          <section className="space-y-2">
+            <p className="text-xs font-extrabold text-muted-foreground">التفضيلات</p>
+            <div className="flex items-center justify-between rounded-2xl bg-secondary px-4 py-3">
+              <span className="text-sm font-bold">الوضع الليلي</span>
+              <Switch checked={theme === "dark"} onCheckedChange={toggleTheme} />
+            </div>
+            <div className="flex items-center justify-between gap-2 rounded-2xl bg-secondary px-4 py-3">
+              <span className="text-sm font-bold">لغة الردود</span>
+              <select
+                value={replyLang}
+                onChange={(event) => setReplyLang(event.currentTarget.value)}
+                className="rounded-xl border border-border bg-background px-2 py-1 text-xs font-bold"
+              >
+                <option value="auto">تلقائي</option>
+                <option value="ar">العربية</option>
+                <option value="en">English</option>
+              </select>
+            </div>
+            <div className="flex items-center justify-between gap-2 rounded-2xl bg-secondary px-4 py-3">
+              <span className="text-sm font-bold">حجم الخط</span>
+              <select
+                value={fontScale}
+                onChange={(event) => setFontScale(event.currentTarget.value)}
+                className="rounded-xl border border-border bg-background px-2 py-1 text-xs font-bold"
+              >
+                <option value="small">صغير</option>
+                <option value="medium">متوسط</option>
+                <option value="large">كبير</option>
+              </select>
+            </div>
+          </section>
+
+          {!isGuest ? (
+            <section className="space-y-2">
+              <p className="text-xs font-extrabold text-muted-foreground">البيانات</p>
+              <Button
+                variant="outline"
+                className="w-full justify-start gap-2 rounded-2xl text-xs font-bold text-destructive"
+                onClick={() => clearAll.mutate()}
+              >
+                <Trash2 className="size-4" />
+                حذف كل المحادثات
+              </Button>
+            </section>
+          ) : null}
+
+          <section className="space-y-2">
+            <p className="text-xs font-extrabold text-muted-foreground">مشاريع سلمان</p>
+            <ul className="space-y-1 rounded-2xl bg-secondary px-4 py-3">
+              {SALMAN_PROJECTS.map((project) => (
+                <li key={project.name} className="text-xs leading-6">
+                  <span className="flex items-center gap-2 font-bold">
+                    <Rocket className="size-3.5 text-primary" />
+                    {project.name}
+                  </span>
+                  <span className="ps-6 text-muted-foreground">{project.description}</span>
+                </li>
+              ))}
+            </ul>
+          </section>
+
+          <section className="space-y-2">
+            <p className="text-xs font-extrabold text-muted-foreground">عن التطبيق</p>
+            <div className="space-y-2 rounded-2xl bg-secondary px-4 py-3 text-xs leading-6 text-muted-foreground">
+              <p>Salman AI — الإصدار 1.0. تطوير: سلمان فارس.</p>
+              <div className="flex flex-wrap gap-x-3 gap-y-1 font-bold text-primary">
+                <Link to="/privacy" onClick={() => setSettingsOpen(false)}>
+                  سياسة الخصوصية
+                </Link>
+                <Link to="/terms" onClick={() => setSettingsOpen(false)}>
+                  شروط الاستخدام
+                </Link>
+                <Link to="/delete-account" onClick={() => setSettingsOpen(false)}>
+                  حذف الحساب
+                </Link>
+              </div>
+            </div>
+          </section>
         </DialogContent>
       </Dialog>
     </div>

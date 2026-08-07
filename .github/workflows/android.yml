@@ -36,19 +36,22 @@ jobs:
       - name: Ensure Build Assets in .output/public (Fix Blank Screen)
         run: |
           mkdir -p .output/public
-          INDEX_PATH=$(find . -maxdepth 4 -name "index.html" -not -path "*/node_modules/*" -not -path "*/public/*" -not -path "*/.output/*" | head -n 1)
+          
+          # البحث عن ملف index.html ونسخ المجلد المحتوي عليه
+          INDEX_PATH=$(find . -name "index.html" -not -path "*/node_modules/*" -not -path "*/.output/*" | head -n 1)
+          
           if [ -n "$INDEX_PATH" ]; then
             BUILD_DIR=$(dirname "$INDEX_PATH")
             echo "Found web build assets in: $BUILD_DIR"
-            if [ "$BUILD_DIR" != "./.output/public" ] && [ "$BUILD_DIR" != ".output/public" ]; then
-              cp -r $BUILD_DIR/* .output/public/
-            fi
-          else
-            echo "Warning: index.html not found in subdirectories, checking public..."
-            if [ -d "public" ]; then
-              cp -r public/* .output/public/
-            fi
+            cp -r $BUILD_DIR/* .output/public/
           fi
+
+          # في حال عدم وجود index.html، يتم إنشاء ملف احتياطي لتفادي توقف Capacitor
+          if [ ! -f ".output/public/index.html" ]; then
+            echo "Creating fallback index.html"
+            echo '<!DOCTYPE html><html><head><meta charset="UTF-8"><script>window.location.href="https://salman-ai.lovable.app";</script></head><body></body></html>' > .output/public/index.html
+          fi
+
           ls -la .output/public/
 
       - name: Generate App Icons

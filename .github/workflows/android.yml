@@ -54,16 +54,30 @@ jobs:
 
           ls -la .output/public/
 
-      - name: Generate App Icons
+      - name: Generate Custom App Icons
+        # تم تعديل هذه الخطوة لضمان البحث عن الأيقونة في عدة مسارات محتملة وتوليدها بشكل صحيح
         run: |
+          mkdir -p assets
+          ICON_FOUND=false
+          
+          # التحقق من وجود الأيقونة في public/icon-512.png (المسار المفضل)
           if [ -f "public/icon-512.png" ]; then
-            mkdir -p assets
-            cp public/icon-512.png assets/icon-only.png
-            cp public/icon-512.png assets/icon-foreground.png
-            cp public/icon-512.png assets/icon-background.png
-            npx @capacitor/assets generate --android
+            echo "Found icon at public/icon-512.png"
+            cp public/icon-512.png assets/icon.png
+            ICON_FOUND=true
+          # التحقق من وجود أيقونة باسم icon.png في الجذر
+          elif [ -f "icon.png" ]; then
+            echo "Found icon at ./icon.png"
+            cp icon.png assets/icon.png
+            ICON_FOUND=true
           else
-            echo "Icon public/icon-512.png not found, skipping asset generation."
+            echo "::warning::Could not find custom icon file. Fallback to Capacitor default."
+          fi
+
+          # إذا تم العثور على الأيقونة المخصصة، قم بتوليد أصول أندرويد
+          if [ "$ICON_FOUND" = true ]; then
+            # استخدام الأمر المحدث لتوليد الأصول
+            npx @capacitor/assets generate --android
           fi
 
       - name: Capacitor Sync & Re-create Android Platform

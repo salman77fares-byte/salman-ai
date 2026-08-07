@@ -1,4 +1,3 @@
-import logo from "@/assets/salman-logo.png";
 import { cn } from "@/lib/utils";
 
 export function BrandMark({ className, size = 36 }: { className?: string; size?: number }) {
@@ -11,7 +10,7 @@ export function BrandMark({ className, size = 36 }: { className?: string; size?:
       style={{ width: size, height: size }}
     >
       <img
-        src={logo}
+        src="/logo.png"
         alt="شعار Salman AI"
         width={size}
         height={size}

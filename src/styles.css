@@ -380,7 +380,8 @@ pre code,
 
 /* Salman AI prompt bar: let the input group grow with the auto-expanding textarea. */
 form > .group\/input-group {
-  height: auto;
+  height: auto !important;
+  min-height: 2.75rem;
   align-items: flex-end;
   border-radius: 1.5rem;
   padding: 0.25rem 0.375rem;

@@ -45,11 +45,15 @@ jobs:
 
     - name: Configure Capacitor
       run: |
+        # هنا التعديل الجوهري لإضافة androidScheme
         cat << 'EOF' > capacitor.config.json
         {
           "appId": "com.salman.ai",
           "appName": "Salman AI",
           "webDir": "dist",
+          "server": {
+            "androidScheme": "https"
+          },
           "android": {
             "backgroundColor": "#0B0B0B"
           }

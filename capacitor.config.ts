@@ -3,18 +3,10 @@ import type { CapacitorConfig } from "@capacitor/cli";
 const config: CapacitorConfig = {
   appId: "com.salman.ai",
   appName: "Salman AI",
-  webDir: ".output/public", // يجعل التطبيق يقرأ الملفات المحملة داخل APK مباشرة
-
-  server: {
-    androidScheme: "https",
-    allowNavigation: [
-      "salman-ai.lovable.app",
-      "*.lovable.app"
-    ]
-  },
+  webDir: ".output/public",
 
   android: {
-    backgroundColor: "#0B0B0B", // يمنع البياض المؤقت ويزيد سرعة الاستجابة
+    backgroundColor: "#0B0B0B",
     allowMixedContent: true,
     captureInput: true
   }

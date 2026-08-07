@@ -379,7 +379,7 @@ pre code,
 }
 
 /* Salman AI prompt bar: let the input group grow with the auto-expanding textarea. */
-form:has(> [data-slot="input-group"]) > [data-slot="input-group"] {
+form > .group\/input-group {
   height: auto;
   align-items: flex-end;
   border-radius: 1.5rem;

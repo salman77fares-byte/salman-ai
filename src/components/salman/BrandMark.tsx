@@ -4,7 +4,7 @@ export function BrandMark({ className, size = 36 }: { className?: string; size?:
   return (
     <span
       className={cn(
-        "grid shrink-0 place-items-center rounded-xl bg-secondary/60 p-1 ring-1 ring-border",
+        "grid shrink-0 place-items-center rounded-xl overflow-hidden p-0 ring-1 ring-border",
         className,
       )}
       style={{ width: size, height: size }}
@@ -14,7 +14,7 @@ export function BrandMark({ className, size = 36 }: { className?: string; size?:
         alt="شعار Salman AI"
         width={size}
         height={size}
-        className="h-full w-full object-contain"
+        className="h-full w-full object-cover"
       />
     </span>
   );

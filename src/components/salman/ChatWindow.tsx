@@ -666,7 +666,7 @@ export function ChatWindow({
             accept={FILE_ACCEPT}
             multiple
             maxFiles={4}
-            className="rounded-3xl px-1.5 py-1"
+            className="!h-auto items-end rounded-3xl px-1.5 py-1"
           >
             <AttachmentPreviews />
             <div className="flex min-w-0 flex-1 basis-full items-end gap-1">

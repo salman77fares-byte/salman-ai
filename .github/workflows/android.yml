@@ -36,55 +36,33 @@ jobs:
       - name: Ensure Build Assets in .output/public (Fix Blank Screen)
         run: |
           mkdir -p .output/public
-          
-          # البحث عن ملف index.html ونسخ المجلد المحتوي عليه
           INDEX_PATH=$(find . -name "index.html" -not -path "*/node_modules/*" -not -path "*/.output/*" | head -n 1)
-          
           if [ -n "$INDEX_PATH" ]; then
             BUILD_DIR=$(dirname "$INDEX_PATH")
             echo "Found web build assets in: $BUILD_DIR"
             cp -r $BUILD_DIR/* .output/public/
           fi
-
-          # في حال عدم وجود index.html، يتم إنشاء ملف احتياطي لتفادي توقف Capacitor
           if [ ! -f ".output/public/index.html" ]; then
-            echo "Creating fallback index.html"
             echo '<!DOCTYPE html><html><head><meta charset="UTF-8"><script>window.location.href="https://salman-ai.lovable.app";</script></head><body></body></html>' > .output/public/index.html
           fi
-
           ls -la .output/public/
-
-      - name: Generate Custom App Icons
-        # تم تعديل هذه الخطوة لضمان البحث عن الأيقونة في عدة مسارات محتملة وتوليدها بشكل صحيح
-        run: |
-          mkdir -p assets
-          ICON_FOUND=false
-          
-          # التحقق من وجود الأيقونة في public/icon-512.png (المسار المفضل)
-          if [ -f "public/icon-512.png" ]; then
-            echo "Found icon at public/icon-512.png"
-            cp public/icon-512.png assets/icon.png
-            ICON_FOUND=true
-          # التحقق من وجود أيقونة باسم icon.png في الجذر
-          elif [ -f "icon.png" ]; then
-            echo "Found icon at ./icon.png"
-            cp icon.png assets/icon.png
-            ICON_FOUND=true
-          else
-            echo "::warning::Could not find custom icon file. Fallback to Capacitor default."
-          fi
-
-          # إذا تم العثور على الأيقونة المخصصة، قم بتوليد أصول أندرويد
-          if [ "$ICON_FOUND" = true ]; then
-            # استخدام الأمر المحدث لتوليد الأصول
-            npx @capacitor/assets generate --android
-          fi
 
       - name: Capacitor Sync & Re-create Android Platform
         run: |
           rm -rf android
           npx cap add android
           npx cap sync android
+
+      - name: Generate Custom App Icons
+        run: |
+          mkdir -p assets
+          if [ -f "public/icon-512.png" ]; then
+            cp public/icon-512.png assets/icon-only.png
+            cp public/icon-512.png assets/icon-foreground.png
+            cp public/icon-512.png assets/icon-background.png
+            cp public/icon-512.png assets/icon.png
+          fi
+          npx @capacitor/assets generate --android
 
       - name: Build Android APK
         run: |

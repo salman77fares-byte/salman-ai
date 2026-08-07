@@ -54,7 +54,11 @@ jobs:
       - name: Generate App Icons
         run: |
           if [ -f "public/icon-512.png" ]; then
-            npx @capacitor/assets generate --iconSource public/icon-512.png
+            mkdir -p assets
+            cp public/icon-512.png assets/icon-only.png
+            cp public/icon-512.png assets/icon-foreground.png
+            cp public/icon-512.png assets/icon-background.png
+            npx @capacitor/assets generate --android
           else
             echo "Icon public/icon-512.png not found, skipping asset generation."
           fi

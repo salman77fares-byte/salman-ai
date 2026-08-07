@@ -1,10 +1,10 @@
 /**
- * Builds a direct Pollinations AI image URL for a prompt.
- * `image.pollinations.ai/prompt/...` returns the raw image bytes, so it can be
- * used straight as an <img src>.
+ * Builds a direct Pollinations image URL using the free Flux.1-schnell model.
+ * `image.pollinations.ai/prompt/...` returns the raw image bytes, so the URL can
+ * be used straight as an <img src>.
  */
 export function buildPollinationsUrl(prompt: string, seed?: number): string {
   const cleaned = prompt.replace(/\s+/g, " ").trim().slice(0, 400);
   const finalSeed = seed ?? Math.floor(Math.random() * 100_000);
-  return `https://image.pollinations.ai/prompt/${encodeURIComponent(cleaned)}?width=1024&height=1024&nologo=true&seed=${finalSeed}`;
+  return `https://image.pollinations.ai/prompt/${encodeURIComponent(cleaned)}?width=1024&height=1024&model=flux&nologo=true&seed=${finalSeed}`;
 }

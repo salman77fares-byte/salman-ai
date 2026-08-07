@@ -1,4 +1,4 @@
-name: Build Offline Android APK
+name: Build Salman AI Offline APK
 
 on:
   push:
@@ -23,16 +23,14 @@ jobs:
 
     - name: Force Vite Production Build
       run: |
-        # بناء التطبيق محلياً وتوليد ملفات الويب الحقيقية
-        npx vite build --outDir dist
+        npx vite build --outDir dist || npm run build
 
-    - name: Ensure Local Config File
+    - name: Configure Capacitor for Salman AI
       run: |
-        # ضبط الإعدادات محلياً بدون أي سيرفر خارجي
         cat << 'EOF' > capacitor.config.json
         {
-          "appId": "app.lovable.zadalduat",
-          "appName": "زاد الدعاة",
+          "appId": "com.salman.ai",
+          "appName": "Salman AI",
           "webDir": "dist",
           "android": {
             "backgroundColor": "#0B0B0B"
@@ -49,14 +47,14 @@ jobs:
     - name: Fix Android Launcher Icons
       run: |
         rm -rf android/app/src/main/res/mipmap-anydpi-v26
-        ICON_SRC=$(find public src -name "*icon-512*.png" -o -name "*logo*.png" -o -name "*favicon*.png" | head -n 1)
-        if [ -z "$ICON_SRC" ]; then ICON_SRC="public/icon-512.png"; fi
+        ICON_SRC=$(find public src -name "*icon*.png" -o -name "*logo*.png" | head -n 1)
+        if [ -z "$ICON_SRC" ]; then ICON_SRC="public/favicon.ico"; fi
         
         for dir in android/app/src/main/res/mipmap-*; do
           if [ -d "$dir" ]; then
-            cp -f "$ICON_SRC" "$dir/ic_launcher.png"
-            cp -f "$ICON_SRC" "$dir/ic_launcher_round.png"
-            cp -f "$ICON_SRC" "$dir/ic_launcher_foreground.png"
+            cp -f "$ICON_SRC" "$dir/ic_launcher.png" 2>/dev/null || true
+            cp -f "$ICON_SRC" "$dir/ic_launcher_round.png" 2>/dev/null || true
+            cp -f "$ICON_SRC" "$dir/ic_launcher_foreground.png" 2>/dev/null || true
           fi
         done
 
@@ -72,8 +70,8 @@ jobs:
         chmod +x gradlew
         ./gradlew assembleDebug --no-daemon
 
-    - name: Upload APK
+    - name: Upload Salman AI APK
       uses: actions/upload-artifact@v4
       with:
-        name: zad-alduat-offline-apk
+        name: salman-ai-offline-apk
         path: android/app/build/outputs/apk/debug/app-debug.apk

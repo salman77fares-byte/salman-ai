@@ -1,0 +1,8 @@
+{
+  "appId": "com.salman.ai",
+  "appName": "Salman AI",
+  "webDir": "dist",
+  "android": {
+    "backgroundColor": "#0B0B0B"
+  }
+}

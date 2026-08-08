@@ -21,8 +21,10 @@ jobs:
     - name: Install Dependencies
       run: npm install --legacy-peer-deps
 
-    - name: Ensure Capacitor Config
+    - name: Ensure Dist Directory & Capacitor Config
       run: |
+        mkdir -p dist
+        touch dist/index.html
         cat << 'EOF' > capacitor.config.json
         {
           "appId": "com.salman.ai",

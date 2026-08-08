@@ -392,7 +392,7 @@ export function ChatWindow({
           stop: () => void;
           onresult: ((event: { results: ArrayLike<ArrayLike<{ transcript: string }>> }) => void) | null;
           onend: (() => void) | null;
-          onerror: (() => void) | null;
+          onerror: ((event: { error?: string }) => void) | null;
         })
       | undefined;
 
@@ -419,7 +419,15 @@ export function ChatWindow({
       }
     };
     recognition.onend = () => setListening(false);
-    recognition.onerror = () => setListening(false);
+    recognition.onerror = (event) => {
+      setListening(false);
+      if (event?.error === "not-allowed" || event?.error === "service-not-allowed") {
+        toast.error("يرجى السماح بالوصول للميكروفون لاستخدام هذه الميزة");
+      } else if (event?.error === "no-speech") {
+        toast.error("لم يتم التعرّف على أي كلام، حاول مرة أخرى.");
+      }
+    };
+
     recognitionRef.current = recognition;
     recognition.start();
     setListening(true);

@@ -312,19 +312,32 @@ function ChatLayout() {
           ) : null}
 
           <section className="space-y-2">
-            <p className="text-xs font-extrabold text-muted-foreground">مشاريع سلمان</p>
-            <ul className="space-y-1 rounded-2xl bg-secondary px-4 py-3">
+            <p className="text-xs font-extrabold text-muted-foreground">
+              🌐 مشاريع وخدمات سلمان
+            </p>
+            <ul className="space-y-1.5">
               {SALMAN_PROJECTS.map((project) => (
-                <li key={project.name} className="text-xs leading-6">
-                  <span className="flex items-center gap-2 font-bold">
-                    <Rocket className="size-3.5 text-primary" />
-                    {project.name}
-                  </span>
-                  <span className="ps-6 text-muted-foreground">{project.description}</span>
+                <li key={project.name}>
+                  <a
+                    href={project.url}
+                    target="_blank"
+                    rel="noreferrer noopener"
+                    className="flex items-center gap-3 rounded-2xl bg-secondary px-4 py-3 transition hover:bg-secondary/70"
+                  >
+                    <span className="text-lg">{project.emoji}</span>
+                    <span className="min-w-0">
+                      <span className="block truncate text-xs font-extrabold">{project.name}</span>
+                      <span className="block truncate text-[11px] text-muted-foreground">
+                        {project.description}
+                      </span>
+                    </span>
+                    <ExternalLink className="ms-auto size-3.5 shrink-0 text-primary" />
+                  </a>
                 </li>
               ))}
             </ul>
           </section>
+
 
           <section className="space-y-2">
             <p className="text-xs font-extrabold text-muted-foreground">عن التطبيق</p>

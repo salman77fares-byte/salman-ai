@@ -135,22 +135,6 @@ export function AppSidebar({
           ))
         )}
 
-        <div className="mt-4 border-t border-sidebar-border pt-3">
-          <p className="px-3 py-1.5 text-[11px] font-bold text-muted-foreground">
-            مشاريع سلمان
-          </p>
-          <ul className="space-y-0.5">
-            {SALMAN_PROJECTS.map((project) => (
-              <li key={project.name} className="rounded-lg px-3 py-2 hover:bg-sidebar-accent/60">
-                <p className="flex items-center gap-2 text-sm font-bold">
-                  <Rocket className="size-3.5 text-primary" />
-                  {project.name}
-                </p>
-                <p className="ps-6 text-[11px] text-muted-foreground">{project.description}</p>
-              </li>
-            ))}
-          </ul>
-        </div>
       </div>
 
       <Separator />

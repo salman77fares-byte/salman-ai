@@ -10,8 +10,10 @@ import {
   Pencil,
   Plus,
   RefreshCw,
+  Square,
   X,
 } from "lucide-react";
+
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { useQueryClient } from "@tanstack/react-query";
@@ -463,7 +465,7 @@ export function ChatWindow({
       ) : null}
 
       <Conversation className="min-h-0 flex-1">
-        <ConversationContent className="mx-auto w-full max-w-3xl gap-3 px-3 py-4 sm:gap-4 sm:px-4">
+        <ConversationContent className="mx-auto flex w-full max-w-3xl flex-col gap-3 px-3 py-4 text-start sm:gap-4 sm:px-4">
           {isEmpty ? (
             <div className="flex flex-col items-center justify-center py-10 text-center">
               <BrandMark size={64} className="shadow-glow" />
@@ -495,15 +497,16 @@ export function ChatWindow({
                 <Message
                   from={message.role}
                   key={message.id}
-                  // User messages sit on the left, Salman AI on the right.
+                  // RTL: user bubbles hug the right edge, Salman AI hugs the left.
                   className={cn(
-                    isUser ? "ml-0 mr-auto items-start" : "ml-auto mr-0 items-end",
+                    "flex w-full max-w-full flex-col",
+                    isUser ? "items-end text-right" : "items-start text-right",
                   )}
                 >
                   <div
                     className={cn(
-                      "flex w-full items-start gap-2.5",
-                      isUser ? "justify-start" : "justify-end",
+                      "flex max-w-[92%] items-start gap-2.5",
+                      isUser ? "self-end flex-row-reverse" : "self-start",
                     )}
                   >
                     {!isUser ? <BrandMark size={26} /> : null}
@@ -540,6 +543,7 @@ export function ChatWindow({
                           "group-[.is-assistant]:rounded-2xl group-[.is-assistant]:bg-secondary group-[.is-assistant]:px-3.5 group-[.is-assistant]:py-2.5",
                       )}
                     >
+
                       {fileParts.length > 0 ? (
                         <div className="flex flex-wrap gap-2">
                           {fileParts.map((part, fileIndex) =>
@@ -577,7 +581,8 @@ export function ChatWindow({
                     </MessageContent>
                   </div>
                   {message.role === "assistant" && text && !image ? (
-                    <MessageActions className="me-9 justify-end">
+                    <MessageActions className="ms-9 justify-start">
+
                       <MessageAction
                         label="نسخ الرسالة"
                         tooltip="نسخ الرسالة"
@@ -602,13 +607,15 @@ export function ChatWindow({
             })
           )}
 
-          {status === "submitted" || generatingImage ? (
-            <div className="flex items-center gap-2.5">
+          {showThinking ? (
+            <div className="flex items-center gap-2.5 self-start rounded-2xl border border-border/60 bg-secondary/60 px-3 py-2">
               <BrandMark size={26} />
-              <Shimmer className="text-[13px] font-bold">
+              <Shimmer className="text-[13px] font-extrabold">
                 {generatingImage
-                  ? "جاري رسم وتوليد صورتك بواسطة Salman AI..."
-                  : "... Salman AI يكتب الآن"}
+                  ? "🎨 جاري رسم وتوليد صورتك..."
+                  : status === "submitted"
+                    ? "🔍 جاري البحث في الويب..."
+                    : "✍️ جاري صياغة الإجابة..."}
               </Shimmer>
               <span className="flex gap-1">
                 <span className="salman-dot size-1.5 rounded-full bg-primary" />
@@ -623,6 +630,7 @@ export function ChatWindow({
               </span>
             </div>
           ) : null}
+
 
           {error || stalled ? (
             <div className="mx-auto flex flex-col items-center gap-2 rounded-2xl border border-destructive/30 bg-destructive/5 px-4 py-3 text-center">

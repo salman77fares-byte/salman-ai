@@ -7,7 +7,7 @@ import {
   useParams,
 } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
-import { LogIn, LogOut, Menu, Rocket, Trash2 } from "lucide-react";
+import { ExternalLink, LogIn, LogOut, Menu, Trash2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 

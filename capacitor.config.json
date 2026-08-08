@@ -3,7 +3,7 @@
   "appName": "Salman AI",
   "webDir": "dist",
   "server": {
-    "url": "https://salman-ai.lovable.app", 
+    "url": "https://salman-ai.lovable.app",
     "cleartext": true
   },
   "android": {

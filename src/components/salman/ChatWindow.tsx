@@ -672,11 +672,11 @@ export function ChatWindow({
             <div className="flex min-w-0 flex-1 basis-full items-end gap-1">
               <PromptInputSubmit
                 status={status}
+                onStop={stop}
+                aria-label={isBusy ? "إيقاف الرد" : "إرسال"}
                 className="order-last size-9 shrink-0 self-end rounded-full brand-gradient-bg text-primary-foreground"
               >
-                {status === "ready" || status === undefined ? (
-                  <ArrowUp className="size-4" />
-                ) : undefined}
+                {isBusy ? <Square className="size-3.5 fill-current" /> : <ArrowUp className="size-4" />}
               </PromptInputSubmit>
               <PromptInputTools className="shrink-0 gap-0.5 self-end">
                 <PlusMenu />
@@ -685,15 +685,20 @@ export function ChatWindow({
                   onClick={toggleVoice}
                   aria-label="الإدخال الصوتي"
                   variant={listening ? "default" : "ghost"}
-                  className="size-8 rounded-full"
+                  className={cn("size-8 rounded-full", listening && "animate-pulse")}
                 >
                   {listening ? <MicOff className="size-4" /> : <Mic className="size-4" />}
                 </PromptInputButton>
               </PromptInputTools>
               <PromptInputTextarea
                 ref={textareaRef}
-                placeholder="اكتب رسالتك... (Shift+Enter للإرسال)"
-                className="max-h-[120px] min-h-9 w-full min-w-0 flex-1 resize-none overflow-y-auto py-2 text-center text-[13px] leading-6"
+                placeholder="اكتب رسالتك إلى Salman AI..."
+                dir="auto"
+                autoCorrect="on"
+                autoCapitalize="sentences"
+                autoComplete="on"
+                spellCheck
+                className="max-h-[120px] min-h-9 w-full min-w-0 flex-1 resize-none overflow-y-auto py-2 text-[13px] leading-6"
                 rows={1}
                 onKeyDown={(event) => {
                   if (event.key !== "Enter" || event.nativeEvent.isComposing) return;
@@ -714,6 +719,12 @@ export function ChatWindow({
               />
             </div>
           </PromptInput>
+          {listening ? (
+            <p className="mt-1.5 text-center text-[11px] font-extrabold text-primary">
+              🎙️ جاري الاستماع...
+            </p>
+          ) : null}
+
           <p className="mt-1.5 pb-2 text-center text-[10px] text-muted-foreground">
             قد يخطئ Salman AI — تحقّق من المعلومات المهمة.
           </p>

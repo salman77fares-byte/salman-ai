@@ -402,9 +402,11 @@ export function ChatWindow({
     }
 
     const recognition = new Ctor();
+    const base = textareaRef.current?.value ?? "";
     recognition.lang = "ar-SA";
-    recognition.interimResults = false;
-    recognition.continuous = false;
+    // Live transcription: interim results stream into the textarea while speaking.
+    recognition.interimResults = true;
+    recognition.continuous = true;
     recognition.onresult = (event) => {
       let transcript = "";
       for (let i = 0; i < event.results.length; i += 1) {
@@ -412,12 +414,11 @@ export function ChatWindow({
       }
       const textarea = textareaRef.current;
       if (textarea) {
-        const next = `${textarea.value}${textarea.value ? " " : ""}${transcript}`;
-        textarea.value = next;
+        textarea.value = `${base}${base && transcript ? " " : ""}${transcript}`;
         textarea.dispatchEvent(new Event("input", { bubbles: true }));
-        textarea.focus();
       }
     };
+
     recognition.onend = () => setListening(false);
     recognition.onerror = (event) => {
       setListening(false);

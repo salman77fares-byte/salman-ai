@@ -469,7 +469,7 @@ export function ChatWindow({
   return (
     <div className="relative flex h-full min-h-0 flex-col overflow-x-hidden">
       {!isEmpty ? (
-        <div className="pointer-events-none absolute right-3 top-2 z-30">
+        <div className="pointer-events-none absolute right-3 top-2 z-40">
           <Button
             size="sm"
             variant="secondary"

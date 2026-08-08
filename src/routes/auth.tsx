@@ -1,7 +1,7 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
-import { Mail, Loader2 } from "lucide-react";
+import { Mail, Loader2, X } from "lucide-react";
 
 import { BrandMark } from "@/components/salman/BrandMark";
 import { Button } from "@/components/ui/button";
@@ -38,6 +38,20 @@ function AuthPage() {
     });
   }, [navigate]);
 
+  const arabicAuthError = (message: string): string => {
+    const text = message.toLowerCase();
+    if (text.includes("invalid login credentials")) return "بيانات الدخول غير صحيحة.";
+    if (text.includes("email not confirmed")) return "لم يتم تأكيد البريد الإلكتروني بعد.";
+    if (text.includes("already registered") || text.includes("already been registered"))
+      return "هذا البريد مسجّل مسبقاً، سجّل الدخول بدلاً من ذلك.";
+    if (text.includes("password")) return "كلمة المرور غير صالحة (٦ أحرف على الأقل).";
+    if (text.includes("rate limit") || text.includes("too many"))
+      return "محاولات كثيرة، حاول بعد قليل.";
+    if (text.includes("network") || text.includes("fetch"))
+      return "تعذّر الاتصال بالخدمة، تحقّق من الإنترنت.";
+    return "تعذّر إكمال العملية، حاول مرة أخرى.";
+  };
+
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
     if (!email.trim() || password.length < 6) {
@@ -66,7 +80,7 @@ function AuthPage() {
       }
       void navigate({ to: "/chat", replace: true });
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "تعذّر إكمال العملية.");
+      toast.error(arabicAuthError(error instanceof Error ? error.message : ""));
     } finally {
       setLoading(false);
     }
@@ -74,21 +88,34 @@ function AuthPage() {
 
   const handleGoogle = async () => {
     setLoading(true);
-    const result = await lovable.auth.signInWithOAuth("google", {
-      redirect_uri: window.location.origin,
-    });
-    if (result.error) {
+    try {
+      const result = await lovable.auth.signInWithOAuth("google", {
+        redirect_uri: window.location.origin,
+      });
+      if (result.error) {
+        setLoading(false);
+        toast.error("تعذّر تسجيل الدخول عبر Google، حاول مرة أخرى.");
+        return;
+      }
+      if (result.redirected) return;
+      void navigate({ to: "/chat", replace: true });
+    } catch {
       setLoading(false);
-      toast.error("تعذّر تسجيل الدخول عبر Google.");
-      return;
+      toast.error("تعذّر تسجيل الدخول عبر Google، حاول مرة أخرى.");
     }
-    if (result.redirected) return;
-    void navigate({ to: "/chat", replace: true });
   };
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-background px-4 py-10">
-      <div className="w-full max-w-md rounded-3xl border border-border bg-card p-7 shadow-soft">
+      <div className="relative w-full max-w-md rounded-3xl border border-border bg-card p-7 shadow-soft">
+        <button
+          type="button"
+          aria-label="إغلاق"
+          onClick={() => void navigate({ to: "/chat", replace: true })}
+          className="absolute left-4 top-4 rounded-full p-1.5 text-muted-foreground transition hover:bg-secondary hover:text-foreground"
+        >
+          <X className="size-4" />
+        </button>
         <div className="flex flex-col items-center text-center">
           <BrandMark size={54} className="shadow-glow" />
           <h1 className="mt-4 text-2xl font-extrabold">
@@ -98,6 +125,7 @@ function AuthPage() {
             للوصول إلى محادثاتك مع <span className="font-bold text-primary">Salman AI</span>
           </p>
         </div>
+
 
         {sentEmail ? (
           <div className="mt-6 rounded-2xl bg-secondary p-5 text-center">

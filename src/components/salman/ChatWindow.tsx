@@ -10,8 +10,10 @@ import {
   Pencil,
   Plus,
   RefreshCw,
+  Square,
   X,
 } from "lucide-react";
+
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { useQueryClient } from "@tanstack/react-query";
@@ -144,7 +146,7 @@ function AttachmentPreviews() {
   if (attachments.files.length === 0) return null;
 
   return (
-    <div className="flex w-full basis-full flex-wrap gap-2 px-2 pb-1.5 pt-1">
+    <div className="flex w-full basis-full flex-wrap gap-2 border-b border-border/70 bg-secondary/40 px-2 py-2">
       {attachments.files.map((file) => (
         <div
           key={file.id}
@@ -234,6 +236,15 @@ export function ChatWindow({
 
   const isBusy = status === "submitted" || status === "streaming" || generatingImage;
   const isEmpty = messages.length === 0;
+  const lastMessage = messages[messages.length - 1];
+  const lastAssistantEmpty =
+    lastMessage?.role === "assistant" &&
+    lastMessage.parts.every((part) => part.type !== "text" || part.text.length === 0);
+  const showThinking =
+    generatingImage ||
+    status === "submitted" ||
+    (status === "streaming" && (lastMessage?.role === "user" || lastAssistantEmpty));
+
 
   const focusInput = useCallback(() => {
     requestAnimationFrame(() => textareaRef.current?.focus());
@@ -381,7 +392,7 @@ export function ChatWindow({
           stop: () => void;
           onresult: ((event: { results: ArrayLike<ArrayLike<{ transcript: string }>> }) => void) | null;
           onend: (() => void) | null;
-          onerror: (() => void) | null;
+          onerror: ((event: { error?: string }) => void) | null;
         })
       | undefined;
 
@@ -391,9 +402,11 @@ export function ChatWindow({
     }
 
     const recognition = new Ctor();
+    const base = textareaRef.current?.value ?? "";
     recognition.lang = "ar-SA";
-    recognition.interimResults = false;
-    recognition.continuous = false;
+    // Live transcription: interim results stream into the textarea while speaking.
+    recognition.interimResults = true;
+    recognition.continuous = true;
     recognition.onresult = (event) => {
       let transcript = "";
       for (let i = 0; i < event.results.length; i += 1) {
@@ -401,14 +414,21 @@ export function ChatWindow({
       }
       const textarea = textareaRef.current;
       if (textarea) {
-        const next = `${textarea.value}${textarea.value ? " " : ""}${transcript}`;
-        textarea.value = next;
+        textarea.value = `${base}${base && transcript ? " " : ""}${transcript}`;
         textarea.dispatchEvent(new Event("input", { bubbles: true }));
-        textarea.focus();
       }
     };
+
     recognition.onend = () => setListening(false);
-    recognition.onerror = () => setListening(false);
+    recognition.onerror = (event) => {
+      setListening(false);
+      if (event?.error === "not-allowed" || event?.error === "service-not-allowed") {
+        toast.error("يرجى السماح بالوصول للميكروفون لاستخدام هذه الميزة");
+      } else if (event?.error === "no-speech") {
+        toast.error("لم يتم التعرّف على أي كلام، حاول مرة أخرى.");
+      }
+    };
+
     recognitionRef.current = recognition;
     recognition.start();
     setListening(true);
@@ -449,7 +469,7 @@ export function ChatWindow({
   return (
     <div className="relative flex h-full min-h-0 flex-col overflow-x-hidden">
       {!isEmpty ? (
-        <div className="pointer-events-none absolute right-3 top-2 z-30">
+        <div className="pointer-events-none absolute right-3 top-2 z-40">
           <Button
             size="sm"
             variant="secondary"
@@ -463,7 +483,7 @@ export function ChatWindow({
       ) : null}
 
       <Conversation className="min-h-0 flex-1">
-        <ConversationContent className="mx-auto w-full max-w-3xl gap-3 px-3 py-4 sm:gap-4 sm:px-4">
+        <ConversationContent className="mx-auto flex w-full max-w-3xl flex-col gap-3 px-3 py-4 text-start sm:gap-4 sm:px-4">
           {isEmpty ? (
             <div className="flex flex-col items-center justify-center py-10 text-center">
               <BrandMark size={64} className="shadow-glow" />
@@ -495,15 +515,16 @@ export function ChatWindow({
                 <Message
                   from={message.role}
                   key={message.id}
-                  // User messages sit on the left, Salman AI on the right.
+                  // RTL: user bubbles hug the right edge, Salman AI hugs the left.
                   className={cn(
-                    isUser ? "ml-0 mr-auto items-start" : "ml-auto mr-0 items-end",
+                    "flex w-full max-w-full flex-col",
+                    isUser ? "items-end text-right" : "items-start text-right",
                   )}
                 >
                   <div
                     className={cn(
-                      "flex w-full items-start gap-2.5",
-                      isUser ? "justify-start" : "justify-end",
+                      "flex max-w-[92%] items-start gap-2.5",
+                      isUser ? "self-end flex-row-reverse" : "self-start",
                     )}
                   >
                     {!isUser ? <BrandMark size={26} /> : null}
@@ -540,6 +561,7 @@ export function ChatWindow({
                           "group-[.is-assistant]:rounded-2xl group-[.is-assistant]:bg-secondary group-[.is-assistant]:px-3.5 group-[.is-assistant]:py-2.5",
                       )}
                     >
+
                       {fileParts.length > 0 ? (
                         <div className="flex flex-wrap gap-2">
                           {fileParts.map((part, fileIndex) =>
@@ -577,7 +599,8 @@ export function ChatWindow({
                     </MessageContent>
                   </div>
                   {message.role === "assistant" && text && !image ? (
-                    <MessageActions className="me-9 justify-end">
+                    <MessageActions className="ms-9 justify-start">
+
                       <MessageAction
                         label="نسخ الرسالة"
                         tooltip="نسخ الرسالة"
@@ -602,13 +625,15 @@ export function ChatWindow({
             })
           )}
 
-          {status === "submitted" || generatingImage ? (
-            <div className="flex items-center gap-2.5">
+          {showThinking ? (
+            <div className="flex items-center gap-2.5 self-start rounded-2xl border border-border/60 bg-secondary/60 px-3 py-2">
               <BrandMark size={26} />
-              <Shimmer className="text-[13px] font-bold">
+              <Shimmer className="text-[13px] font-extrabold">
                 {generatingImage
-                  ? "جاري رسم وتوليد صورتك بواسطة Salman AI..."
-                  : "... Salman AI يكتب الآن"}
+                  ? "🎨 جاري رسم وتوليد صورتك..."
+                  : status === "submitted"
+                    ? "🔍 جاري البحث في الويب..."
+                    : "✍️ جاري صياغة الإجابة..."}
               </Shimmer>
               <span className="flex gap-1">
                 <span className="salman-dot size-1.5 rounded-full bg-primary" />
@@ -623,6 +648,7 @@ export function ChatWindow({
               </span>
             </div>
           ) : null}
+
 
           {error || stalled ? (
             <div className="mx-auto flex flex-col items-center gap-2 rounded-2xl border border-destructive/30 bg-destructive/5 px-4 py-3 text-center">
@@ -672,11 +698,11 @@ export function ChatWindow({
             <div className="flex min-w-0 flex-1 basis-full items-end gap-1">
               <PromptInputSubmit
                 status={status}
+                onStop={stop}
+                aria-label={isBusy ? "إيقاف الرد" : "إرسال"}
                 className="order-last size-9 shrink-0 self-end rounded-full brand-gradient-bg text-primary-foreground"
               >
-                {status === "ready" || status === undefined ? (
-                  <ArrowUp className="size-4" />
-                ) : undefined}
+                {isBusy ? <Square className="size-3.5 fill-current" /> : <ArrowUp className="size-4" />}
               </PromptInputSubmit>
               <PromptInputTools className="shrink-0 gap-0.5 self-end">
                 <PlusMenu />
@@ -685,15 +711,20 @@ export function ChatWindow({
                   onClick={toggleVoice}
                   aria-label="الإدخال الصوتي"
                   variant={listening ? "default" : "ghost"}
-                  className="size-8 rounded-full"
+                  className={cn("size-8 rounded-full", listening && "animate-pulse")}
                 >
                   {listening ? <MicOff className="size-4" /> : <Mic className="size-4" />}
                 </PromptInputButton>
               </PromptInputTools>
               <PromptInputTextarea
                 ref={textareaRef}
-                placeholder="اكتب رسالتك... (Shift+Enter للإرسال)"
-                className="max-h-[120px] min-h-9 w-full min-w-0 flex-1 resize-none overflow-y-auto py-2 text-center text-[13px] leading-6"
+                placeholder="اكتب رسالتك إلى Salman AI..."
+                dir="auto"
+                autoCorrect="on"
+                autoCapitalize="sentences"
+                autoComplete="on"
+                spellCheck
+                className="max-h-[120px] min-h-9 w-full min-w-0 flex-1 resize-none overflow-y-auto py-2 text-[13px] leading-6"
                 rows={1}
                 onKeyDown={(event) => {
                   if (event.key !== "Enter" || event.nativeEvent.isComposing) return;
@@ -714,6 +745,12 @@ export function ChatWindow({
               />
             </div>
           </PromptInput>
+          {listening ? (
+            <p className="mt-1.5 text-center text-[11px] font-extrabold text-primary">
+              🎙️ جاري الاستماع...
+            </p>
+          ) : null}
+
           <p className="mt-1.5 pb-2 text-center text-[10px] text-muted-foreground">
             قد يخطئ Salman AI — تحقّق من المعلومات المهمة.
           </p>

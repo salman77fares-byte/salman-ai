@@ -5,7 +5,6 @@ import {
   LogOut,
   MessageSquare,
   Moon,
-  Rocket,
   Settings,
   Sun,
   Trash2,
@@ -17,7 +16,7 @@ import { Separator } from "@/components/ui/separator";
 import { useTheme } from "@/lib/theme";
 import { cn } from "@/lib/utils";
 import type { Conversation } from "@/lib/chat.functions";
-import { SALMAN_PROJECTS } from "@/lib/projects";
+
 
 type Group = { label: string; items: Conversation[] };
 

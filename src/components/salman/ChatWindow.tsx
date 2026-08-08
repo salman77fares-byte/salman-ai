@@ -146,7 +146,7 @@ function AttachmentPreviews() {
   if (attachments.files.length === 0) return null;
 
   return (
-    <div className="flex w-full basis-full flex-wrap gap-2 px-2 pb-1.5 pt-1">
+    <div className="flex w-full basis-full flex-wrap gap-2 border-b border-border/70 bg-secondary/40 px-2 py-2">
       {attachments.files.map((file) => (
         <div
           key={file.id}
@@ -236,6 +236,15 @@ export function ChatWindow({
 
   const isBusy = status === "submitted" || status === "streaming" || generatingImage;
   const isEmpty = messages.length === 0;
+  const lastMessage = messages[messages.length - 1];
+  const lastAssistantEmpty =
+    lastMessage?.role === "assistant" &&
+    lastMessage.parts.every((part) => part.type !== "text" || part.text.length === 0);
+  const showThinking =
+    generatingImage ||
+    status === "submitted" ||
+    (status === "streaming" && (lastMessage?.role === "user" || lastAssistantEmpty));
+
 
   const focusInput = useCallback(() => {
     requestAnimationFrame(() => textareaRef.current?.focus());

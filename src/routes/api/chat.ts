@@ -1,4 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { createOpenAI } from "@ai-sdk/openai";
 import { convertToModelMessages, stepCountIs, streamText, tool, type UIMessage } from "ai";
 import { z } from "zod";
 
@@ -14,8 +15,6 @@ const SYSTEM_PROMPT = `أنت "Salman AI"، مساعد ذكي عربي متقد�
 - لا تختلق أو تخمّن أحداثاً حيّة أبداً. إذا تعذّر جلب المعلومة من البحث، فاذكر ذلك بصراحة واطلب من المستخدم تحديد الاستعلام.
 - التاريخ الحالي: ${new Date().toISOString().slice(0, 10)}.`;
 
-
-
 type ChatRequestBody = {
   messages?: unknown;
   conversationId?: unknown;
@@ -28,16 +27,12 @@ function textOf(message: UIMessage): string {
     .trim();
 }
 
-async function generateConversationTitle(firstMessage: string): Promise<string> {
+async function generateConversationTitle(firstMessage: string, groqClient: any): Promise<string> {
   const fallback = firstMessage.replace(/\s+/g, " ").trim().slice(0, 50);
-  const apiKey = process.env["LOVABLE_API_KEY"];
-  if (!apiKey) return fallback;
   try {
     const { generateText } = await import("ai");
-    const { createLovableAiGatewayProvider } = await import("@/lib/ai-gateway.server");
-    const gateway = createLovableAiGatewayProvider(apiKey);
     const { text } = await generateText({
-      model: gateway("google/gemini-3.1-flash-lite"),
+      model: groqClient("llama-3.3-70b-versatile"),
       system:
         "اكتب عنواناً قصيراً جداً (٢ إلى ٥ كلمات) يصف موضوع رسالة المستخدم، بنفس لغة الرسالة. بدون علامات ترقيم في النهاية وبدون علامات تنصيص وبدون أي شرح.",
       prompt: firstMessage.slice(0, 500),
@@ -64,13 +59,22 @@ export const Route = createFileRoute("/api/chat")({
           return new Response("Bad request", { status: 400 });
         }
 
-        const apiKey = process.env["LOVABLE_API_KEY"];
-        if (!apiKey) return new Response("Missing LOVABLE_API_KEY", { status: 500 });
+        const groqApiKey = process.env["GROQ_API_KEY"] || "ضع_مفتاح_GROQ_هنا";
+        const tavilyApiKey = process.env["TAVILY_API_KEY"] || "ضع_مفتاح_TAVILY_هنا";
+
+        if (!groqApiKey || groqApiKey === "ضع_مفتاح_GROQ_هنا") {
+          return new Response("Missing GROQ_API_KEY", { status: 500 });
+        }
+
+        // إنشاء عميل Groq باستخدام محول OpenAI المتوافق
+        const groq = createOpenAI({
+          baseURL: "https://api.groq.com/openai/v1",
+          apiKey: groqApiKey,
+        });
 
         const uiMessages = messages as UIMessage[];
         const lastMessage = uiMessages[uiMessages.length - 1];
 
-        // Guests chat without persistence; signed-in users get their history saved.
         const persist = Boolean(token && conversationId);
         let supabase: Awaited<
           ReturnType<typeof import("@/lib/supabase-user.server").createUserClient>
@@ -99,9 +103,7 @@ export const Route = createFileRoute("/api/chat")({
           }
         }
 
-        const { createLovableAiGatewayProvider } = await import("@/lib/ai-gateway.server");
-        const gateway = createLovableAiGatewayProvider(apiKey);
-
+        // أداة البحث الحي في الويب عبر Tavily API
         const webSearch = tool({
           description:
             "Search the live web for up-to-date facts, news, prices, scores and recent releases.",
@@ -109,9 +111,22 @@ export const Route = createFileRoute("/api/chat")({
             query: z.string().describe("Concise search query, prefer English or Arabic keywords"),
           }),
           execute: async ({ query }) => {
-            const { searchWeb } = await import("@/lib/web-search.server");
             try {
-              const results = await searchWeb(query, 5);
+              if (!tavilyApiKey || tavilyApiKey === "ضع_مفتاح_TAVILY_هنا") {
+                return { results: [], note: "Tavily API key not configured" };
+              }
+              const response = await fetch("https://api.tavily.com/search", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  api_key: tavilyApiKey,
+                  query: query,
+                  search_depth: "basic",
+                  max_results: 5,
+                }),
+              });
+              const data = await response.json();
+              const results = data.results || [];
               return results.length ? { results } : { results: [], note: "no results" };
             } catch (searchError) {
               console.error("[chat] web search failed", searchError);
@@ -121,7 +136,7 @@ export const Route = createFileRoute("/api/chat")({
         });
 
         const result = streamText({
-          model: gateway("google/gemini-3.6-flash"),
+          model: groq("llama-3.3-70b-versatile"),
           system: SYSTEM_PROMPT,
           messages: await convertToModelMessages(uiMessages),
           tools: { web_search: webSearch },
@@ -130,14 +145,13 @@ export const Route = createFileRoute("/api/chat")({
           abortSignal: request.signal,
         });
 
-
         return result.toUIMessageStreamResponse({
           originalMessages: uiMessages,
           onFinish: async ({ responseMessage }) => {
             const db = supabase;
             if (!db) return;
             if (titleSeed) {
-              const title = await generateConversationTitle(titleSeed);
+              const title = await generateConversationTitle(titleSeed, groq);
               const { error: titleError } = await db
                 .from("conversations")
                 .update({ title, updated_at: new Date().toISOString() })
@@ -158,7 +172,6 @@ export const Route = createFileRoute("/api/chat")({
           },
         });
       },
-
     },
   },
 });

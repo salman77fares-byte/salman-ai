@@ -1,6 +1,6 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { Loader2, Send, Plus, Paperclip, X, Image as ImageIcon } from "lucide-react";
+import { Loader2, Send, Plus, Paperclip, X, Image as ImageIcon, Copy, Edit2, RotateCcw, PlusCircle } from "lucide-react";
 import { useEffect, useState, useRef } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -28,6 +28,12 @@ const QUICK_SUGGESTIONS = [
   "تلخيص نص مطول",
 ];
 
+const SEARCH_STATUSES = [
+  "جاري البحث في المصادر المحدثة...",
+  "جاري معالجة واستخراج البيانات...",
+  "جاري صياغة وكتابة الإجابة..."
+];
+
 function ChatIndexScreen() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
@@ -36,10 +42,13 @@ function ChatIndexScreen() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [isSending, setIsSending] = useState(false);
+  const [statusIndex, setStatusIndex] = useState(0);
+  const [activeActionIndex, setActiveActionIndex] = useState<number | null>(null);
   const [selectedFile, setSelectedFile] = useState<{ name: string; type: string; url: string; base64: string } | null>(null);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const pressTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -48,6 +57,110 @@ function ChatIndexScreen() {
   useEffect(() => {
     scrollToBottom();
   }, [messages, isSending]);
+
+  // تغيير نص الانتظار بشكل ديناميكي أثناء معالجة الطلب
+  useEffect(() => {
+    if (!isSending) {
+      setStatusIndex(0);
+      return;
+    }
+    const interval = setInterval(() => {
+      setStatusIndex((prev) => (prev + 1) % SEARCH_STATUSES.length);
+    }, 1800);
+
+    return () => clearInterval(interval);
+  }, [isSending]);
+
+  // بدء محادثة جديدة
+  const handleNewChat = () => {
+    setMessages([]);
+    setInput("");
+    setSelectedFile(null);
+    setActiveActionIndex(null);
+    toast.success("تم بدء محادثة جديدة");
+  };
+
+  // معالجة النقر المتواصل (Long Press)
+  const handleTouchStart = (index: number) => {
+    pressTimerRef.current = setTimeout(() => {
+      setActiveActionIndex(index);
+    }, 600); // 600 مللي ثانية للتفعيل
+  };
+
+  const handleTouchEnd = () => {
+    if (pressTimerRef.current) {
+      clearTimeout(pressTimerRef.current);
+    }
+  };
+
+  // نسخ النص
+  const handleCopy = (text: string) => {
+    navigator.clipboard.writeText(text);
+    toast.success("تم نسخ النص إلى الحافظة");
+    setActiveActionIndex(null);
+  };
+
+  // تعديل الرسالة
+  const handleEdit = (text: string, index: number) => {
+    setInput(text);
+    setActiveActionIndex(null);
+  };
+
+  // إعادة المحاولة
+  const handleRetry = (index: number) => {
+    setActiveActionIndex(null);
+    const historyToRetry = messages.slice(0, index + 1);
+    const lastUserMessage = historyToRetry[historyToRetry.length - 1];
+    if (lastUserMessage && lastUserMessage.role === "user") {
+      executeSend(historyToRetry);
+    }
+  };
+
+  const executeSend = async (chatHistory: Message[]) => {
+    setIsSending(true);
+    setMessages([...chatHistory, { role: "assistant", content: "" }]);
+
+    try {
+      const formattedHistory = chatHistory.map((m) => {
+        if (m.attachment?.base64 && m.attachment.type.startsWith("image/")) {
+          return {
+            role: m.role,
+            content: [
+              { type: "text", text: m.content || "حلل هذه الصورة واستخرج النص منها أو أجب بناءً عليها." },
+              { type: "image_url", image_url: { url: m.attachment.base64 } }
+            ]
+          };
+        }
+        return { role: m.role, content: m.content };
+      });
+
+      const fullResponse = await askSalmanAI(formattedHistory);
+
+      let currentText = "";
+      const words = fullResponse.split(" ");
+      
+      for (let i = 0; i < words.length; i++) {
+        currentText += (i === 0 ? "" : " ") + words[i];
+        const textToUpdate = currentText;
+        setMessages((prev) => {
+          const newMsgs = [...prev];
+          newMsgs[newMsgs.length - 1] = { role: "assistant", content: textToUpdate };
+          return newMsgs;
+        });
+        await new Promise((resolve) => setTimeout(resolve, 20));
+      }
+    } catch (error) {
+      console.error(error);
+      toast.error("تعذّر جلب الرد حالياً.");
+      setMessages((prev) => {
+        const newMsgs = [...prev];
+        newMsgs[newMsgs.length - 1] = { role: "assistant", content: "عذراً، حدث خطأ أثناء معالجة الطلب." };
+        return newMsgs;
+      });
+    } finally {
+      setIsSending(false);
+    }
+  };
 
   const handleSend = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
@@ -64,53 +177,8 @@ function ChatIndexScreen() {
     setMessages(updatedMessages);
     setInput("");
     setSelectedFile(null);
-    setIsSending(true);
 
-    setMessages((prev) => [...prev, { role: "assistant", content: "" }]);
-
-    try {
-      const formattedHistory = updatedMessages.map((m) => {
-        if (m.attachment?.base64 && m.attachment.type.startsWith("image/")) {
-          return {
-            role: m.role,
-            content: [
-              { type: "text", text: m.content || "حلل هذه الصورة واستخرج النص منها أو أجب بناءً عليها." },
-              { type: "image_url", image_url: { url: m.attachment.base64 } }
-            ]
-          };
-        }
-        return {
-          role: m.role,
-          content: m.content,
-        };
-      });
-
-      const fullResponse = await askSalmanAI(formattedHistory);
-
-      let currentText = "";
-      const words = fullResponse.split(" ");
-      
-      for (let i = 0; i < words.length; i++) {
-        currentText += (i === 0 ? "" : " ") + words[i];
-        const textToUpdate = currentText;
-        setMessages((prev) => {
-          const newMsgs = [...prev];
-          newMsgs[newMsgs.length - 1] = { role: "assistant", content: textToUpdate };
-          return newMsgs;
-        });
-        await new Promise((resolve) => setTimeout(resolve, 25));
-      }
-    } catch (error) {
-      console.error(error);
-      toast.error("تعذّر جلب الرد حالياً.");
-      setMessages((prev) => {
-        const newMsgs = [...prev];
-        newMsgs[newMsgs.length - 1] = { role: "assistant", content: "عذراً، حدث خطأ أثناء معالجة الطلب." };
-        return newMsgs;
-      });
-    } finally {
-      setIsSending(false);
-    }
+    await executeSend(updatedMessages);
   };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -151,26 +219,47 @@ function ChatIndexScreen() {
 
   return (
     <div className="flex h-full flex-col justify-between bg-background text-foreground" dir="rtl">
-      {/* منطقة المحادثة والرسائل */}
+      {/* شريط أعلى المحادثة يضم زر محادثة جديدة */}
+      <div className="flex items-center justify-between px-4 py-2 border-b border-border/50 bg-background/80 backdrop-blur">
+        <div className="flex items-center gap-2">
+          <BrandMark size={28} />
+          <span className="font-bold text-sm">Salman AI</span>
+        </div>
+        <Button
+          onClick={handleNewChat}
+          variant="outline"
+          size="sm"
+          className="rounded-xl flex items-center gap-1.5 text-xs border-border"
+        >
+          <PlusCircle className="size-4 text-[#2dd4bf]" />
+          محادثة جديدة
+        </Button>
+      </div>
+
+      {/* منطقة الرسائل */}
       <div className="flex-1 overflow-y-auto space-y-4 px-3 py-3">
         {messages.length === 0 ? (
           <div className="flex h-full flex-col items-center justify-center text-center space-y-3 mt-8">
             <BrandMark size={56} />
             <h2 className="text-lg font-bold">مرحباً بك مع Salman AI</h2>
             <p className="text-sm text-muted-foreground max-w-xs">
-              أسألني أي شيء، وسأجيبك بتنسيق واضح ومنظم.
+              أسألني أي شيء، أرفق صوراً، واستفد من خيارات النقر المطول على الرسائل.
             </p>
           </div>
         ) : (
           messages.map((msg, idx) => (
             <div
               key={idx}
-              className={`flex w-full ${
-                msg.role === "user" ? "justify-end" : "justify-start"
+              className={`flex flex-col w-full ${
+                msg.role === "user" ? "items-end" : "items-start"
               }`}
             >
               <div
-                className={`w-fit max-w-[88%] px-4 py-3 text-sm leading-relaxed text-right whitespace-pre-wrap break-words ${
+                onTouchStart={() => handleTouchStart(idx)}
+                onTouchEnd={handleTouchEnd}
+                onMouseDown={() => handleTouchStart(idx)}
+                onMouseUp={handleTouchEnd}
+                className={`relative w-fit max-w-[88%] px-4 py-3 text-sm leading-relaxed text-right whitespace-pre-wrap break-words cursor-pointer select-none ${
                   msg.role === "user"
                     ? "bg-[#2dd4bf] text-slate-950 font-medium rounded-2xl rounded-tr-none shadow-sm"
                     : "bg-slate-800/90 text-slate-100 rounded-2xl rounded-tl-none border border-slate-700/60 shadow-sm"
@@ -193,7 +282,6 @@ function ChatIndexScreen() {
                   </div>
                 )}
 
-                {/* دعم تنسيق Markdown والفواصل المنظمة */}
                 {msg.role === "assistant" ? (
                   <div className="prose prose-invert prose-sm max-w-none space-y-2 leading-relaxed">
                     <ReactMarkdown remarkPlugins={[remarkGfm]}>
@@ -204,20 +292,59 @@ function ChatIndexScreen() {
                   msg.content
                 )}
               </div>
+
+              {/* قائمة الإجراءات عند النقر المتواصل */}
+              {activeActionIndex === idx && (
+                <div className="flex items-center gap-1 mt-1.5 p-1 bg-slate-900 border border-slate-700 rounded-xl shadow-lg z-10 animate-in fade-in zoom-in-95">
+                  <button
+                    onClick={() => handleCopy(msg.content)}
+                    className="flex items-center gap-1 text-xs px-2 py-1 rounded-lg hover:bg-slate-800 text-slate-200"
+                  >
+                    <Copy className="size-3.5" />
+                    نسخ
+                  </button>
+                  {msg.role === "user" && (
+                    <>
+                      <button
+                        onClick={() => handleEdit(msg.content, idx)}
+                        className="flex items-center gap-1 text-xs px-2 py-1 rounded-lg hover:bg-slate-800 text-slate-200"
+                      >
+                        <Edit2 className="size-3.5" />
+                        تعديل
+                      </button>
+                      <button
+                        onClick={() => handleRetry(idx)}
+                        className="flex items-center gap-1 text-xs px-2 py-1 rounded-lg hover:bg-slate-800 text-slate-200"
+                      >
+                        <RotateCcw className="size-3.5" />
+                        إعادة المحاولة
+                      </button>
+                    </>
+                  )}
+                  <button
+                    onClick={() => setActiveActionIndex(null)}
+                    className="text-slate-500 hover:text-slate-300 px-1"
+                  >
+                    <X className="size-3.5" />
+                  </button>
+                </div>
+              )}
             </div>
           ))
         )}
+
+        {/* النص المتغير ديناميكياً أثناء المعالجة */}
         {isSending && messages[messages.length - 1]?.content === "" && (
           <div className="flex w-full justify-start">
-            <div className="w-fit max-w-[85%] px-4 py-3 text-sm bg-slate-800/90 text-slate-400 rounded-2xl rounded-tl-none border border-slate-700/60 animate-pulse text-right">
-              جاري كتابة الإجابة وتنسيقها...
+            <div className="w-fit max-w-[85%] px-4 py-3 text-sm bg-slate-800/90 text-[#2dd4bf] rounded-2xl rounded-tl-none border border-slate-700/60 animate-pulse text-right font-medium">
+              {SEARCH_STATUSES[statusIndex]}
             </div>
           </div>
         )}
         <div ref={messagesEndRef} />
       </div>
 
-      {/* الشريط السفلي */}
+      {/* الشريط السفلي للإدخال */}
       <div className="p-2 border-t border-border bg-background/95 space-y-2">
         <div className="flex items-center gap-2 overflow-x-auto pb-1 no-scrollbar">
           {QUICK_SUGGESTIONS.map((item, i) => (
@@ -254,6 +381,7 @@ function ChatIndexScreen() {
         )}
 
         <div className="flex items-center gap-2">
+          {/* حقل النص وزر المرفقات */}
           <div className="relative flex-1 flex items-center rounded-2xl border border-border bg-background focus-within:ring-2 focus-within:ring-[#2dd4bf]">
             <input
               type="file"
@@ -280,6 +408,7 @@ function ChatIndexScreen() {
             />
           </div>
 
+          {/* زر الإرسال الموجه للأعلى */}
           <Button
             type="button"
             onClick={() => handleSend()}
@@ -287,7 +416,7 @@ function ChatIndexScreen() {
             size="icon"
             className="rounded-2xl shrink-0 bg-[#2dd4bf] hover:bg-[#26b8a5] text-slate-950 h-11 w-11"
           >
-            <Send className="size-4 rotate-180" />
+            <Send className="size-4 -rotate-90" />
           </Button>
         </div>
       </div>

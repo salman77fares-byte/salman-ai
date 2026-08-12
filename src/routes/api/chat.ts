@@ -16,13 +16,9 @@ export const Route = createFileRoute("/api/chat")({
           const body = await request.json();
           const messages = body.messages || [];
 
-          // قراءة المفاتيح بأمان من متغيرات البيئة
-          const groqApiKey = process.env.GROQ_API_KEY;
-          const tavilyApiKey = process.env.TAVILY_API_KEY;
-
-          if (!groqApiKey) {
-            throw new Error("GROQ_API_KEY is missing from environment variables.");
-          }
+          // قراءة المتغيرات بطريقة Vite القياسية
+          const groqApiKey = import.meta.env.VITE_GROQ_API_KEY || "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";
+          const tavilyApiKey = import.meta.env.VITE_TAVILY_API_KEY || "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";
 
           const groq = createOpenAICompatible({
             name: "groq",
@@ -32,14 +28,12 @@ export const Route = createFileRoute("/api/chat")({
             },
           });
 
-          // أداة البحث مع معالجة حذر للأخطاء لتفادي توقف الرد
           const webSearch = tool({
             description: "Search the live web for facts, news, and real-time updates.",
             parameters: z.object({
               query: z.string().describe("Search query keywords"),
             }),
             execute: async ({ query }) => {
-              if (!tavilyApiKey) return { results: [] };
               try {
                 const res = await fetch("https://api.tavily.com/search", {
                   method: "POST",
@@ -61,7 +55,6 @@ export const Route = createFileRoute("/api/chat")({
             },
           });
 
-          // إنشاء بث النصوص
           const result = streamText({
             model: groq("llama-3.3-70b-versatile"),
             system: SYSTEM_PROMPT,

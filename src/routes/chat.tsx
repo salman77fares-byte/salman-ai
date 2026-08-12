@@ -43,7 +43,7 @@ export const Route = createFileRoute("/chat")({
       { title: "المحادثة — Salman AI" },
       {
         name: "description",
-        content: "تحدّث مع Salman AI بالعربية والإنجليزية، ابدأ كزائر أو احفظ محادثاتك بحسابك.",
+        content: "تحدّث مع Salman AI، من تطوير المهندس سلمان فارس. ابدأ كزائر أو احفظ محادثاتك بحسابك.",
       },
       { property: "og:title", content: "المحادثة — Salman AI" },
       { property: "og:description", content: "تحدّث مع Salman AI بالعربية والإنجليزية." },
@@ -338,11 +338,10 @@ function ChatLayout() {
             </ul>
           </section>
 
-
           <section className="space-y-2">
             <p className="text-xs font-extrabold text-muted-foreground">عن التطبيق</p>
             <div className="space-y-2 rounded-2xl bg-secondary px-4 py-3 text-xs leading-6 text-muted-foreground">
-              <p>Salman AI — الإصدار 1.0. تطوير: سلمان فارس.</p>
+              <p>Salman AI — الإصدار 1.0. تطوير: المهندس سلمان فارس.</p>
               <div className="flex flex-wrap gap-x-3 gap-y-1 font-bold text-primary">
                 <Link to="/privacy" onClick={() => setSettingsOpen(false)}>
                   سياسة الخصوصية

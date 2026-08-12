@@ -16,10 +16,14 @@ export const Route = createFileRoute("/api/chat")({
           const body = await request.json();
           const messages = body.messages || [];
 
-          const groqApiKey = process.env["GROQ_API_KEY"] || "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";
-          const tavilyApiKey = process.env["TAVILY_API_KEY"] || "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";
+          // قراءة المفاتيح بأمان من متغيرات البيئة
+          const groqApiKey = process.env.GROQ_API_KEY;
+          const tavilyApiKey = process.env.TAVILY_API_KEY;
 
-          // استخدام الحزمة المثبتة في package.json عندك مباشرة
+          if (!groqApiKey) {
+            throw new Error("GROQ_API_KEY is missing from environment variables.");
+          }
+
           const groq = createOpenAICompatible({
             name: "groq",
             baseURL: "https://api.groq.com/openai/v1",
@@ -28,13 +32,14 @@ export const Route = createFileRoute("/api/chat")({
             },
           });
 
-          // أداة البحث عن طريق Tavily
+          // أداة البحث مع معالجة حذر للأخطاء لتفادي توقف الرد
           const webSearch = tool({
             description: "Search the live web for facts, news, and real-time updates.",
             parameters: z.object({
               query: z.string().describe("Search query keywords"),
             }),
             execute: async ({ query }) => {
+              if (!tavilyApiKey) return { results: [] };
               try {
                 const res = await fetch("https://api.tavily.com/search", {
                   method: "POST",
@@ -46,15 +51,17 @@ export const Route = createFileRoute("/api/chat")({
                     max_results: 3,
                   }),
                 });
+                if (!res.ok) return { results: [] };
                 const data = await res.json();
                 return { results: data.results || [] };
               } catch (e) {
+                console.error("Tavily Search Error:", e);
                 return { results: [] };
               }
             },
           });
 
-          // إنشاء بث النصوص باستخدام الدالة المتوافقة مع الإصدار المثبت لديك
+          // إنشاء بث النصوص
           const result = streamText({
             model: groq("llama-3.3-70b-versatile"),
             system: SYSTEM_PROMPT,
@@ -63,11 +70,21 @@ export const Route = createFileRoute("/api/chat")({
             maxSteps: 3,
           });
 
-          return result.toDataStreamResponse();
+          return result.toDataStreamResponse({
+            headers: {
+              "Content-Type": "text/plain; charset=utf-8",
+            },
+          });
 
         } catch (err: any) {
           console.error("Chat API Error:", err);
-          return new Response(JSON.stringify({ error: err.message }), { status: 500 });
+          return new Response(
+            JSON.stringify({ error: err.message || "An unexpected error occurred" }), 
+            { 
+              status: 500,
+              headers: { "Content-Type": "application/json" }
+            }
+          );
         }
       },
     },

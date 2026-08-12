@@ -76,15 +76,15 @@ export const Route = createFileRoute("/api/chat")({
           const groqData = await groqRes.json();
           const replyText = groqData.choices[0]?.message?.content || "لم يتم استلام رد.";
 
-          return new Response(
-            JSON.stringify({
-              id: Date.now().toString(),
-              role: "assistant",
-              content: replyText,
-              parts: [{ type: "text", text: replyText }]
-            }),
-            { headers: { "Content-Type": "application/json" } }
-          );
+          // تنسيق الرد كـ Text Stream متوافق مع Vercel AI SDK / TanStack
+          const streamData = `0:${JSON.stringify(replyText)}\n`;
+
+          return new Response(streamData, {
+            headers: {
+              "Content-Type": "text/plain; charset=utf-8",
+              "x-vercel-ai-ui-stream": "1"
+            }
+          });
 
         } catch (err: any) {
           return new Response(JSON.stringify({ error: err.message }), { status: 500 });

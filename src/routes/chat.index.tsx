@@ -2,6 +2,8 @@ import { useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { Loader2, Send, Plus, Paperclip, X, Image as ImageIcon } from "lucide-react";
 import { useEffect, useState, useRef } from "react";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import { toast } from "sonner";
 
 import { BrandMark } from "@/components/salman/BrandMark";
@@ -16,7 +18,7 @@ export const Route = createFileRoute("/chat/")({
 interface Message {
   role: "user" | "assistant";
   content: string;
-  attachment?: { name: string; type: string; url: string };
+  attachment?: { name: string; type: string; url: string; base64?: string };
 }
 
 const QUICK_SUGGESTIONS = [
@@ -34,7 +36,7 @@ function ChatIndexScreen() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [isSending, setIsSending] = useState(false);
-  const [selectedFile, setSelectedFile] = useState<{ name: string; type: string; url: string; base64?: string } | null>(null);
+  const [selectedFile, setSelectedFile] = useState<{ name: string; type: string; url: string; base64: string } | null>(null);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -47,43 +49,44 @@ function ChatIndexScreen() {
     scrollToBottom();
   }, [messages, isSending]);
 
-  // إرسال الرسالة ومعالجة تأثير الكتابة التدريجية
   const handleSend = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     if ((!input.trim() && !selectedFile) || isSending) return;
 
+    const currentAttachment = selectedFile;
     const userMessage: Message = {
       role: "user",
       content: input.trim(),
-      attachment: selectedFile ? { name: selectedFile.name, type: selectedFile.type, url: selectedFile.url } : undefined,
+      attachment: currentAttachment ? { ...currentAttachment } : undefined,
     };
 
     const updatedMessages = [...messages, userMessage];
     setMessages(updatedMessages);
     setInput("");
-    const currentAttachment = selectedFile;
     setSelectedFile(null);
     setIsSending(true);
 
-    // إضافة رسالة المساعد فارغة لبدء تأثير التأثير التدريجي
     setMessages((prev) => [...prev, { role: "assistant", content: "" }]);
 
     try {
-      // إعداد المطالبة مع تفاصيل الملف إن وجد
-      let fullPrompt = userMessage.content;
-      if (currentAttachment) {
-        fullPrompt = `[تم إرفاق ملف/صورة: ${currentAttachment.name}]\n${fullPrompt}`;
-      }
+      const formattedHistory = updatedMessages.map((m) => {
+        if (m.attachment?.base64 && m.attachment.type.startsWith("image/")) {
+          return {
+            role: m.role,
+            content: [
+              { type: "text", text: m.content || "حلل هذه الصورة واستخرج النص منها أو أجب بناءً عليها." },
+              { type: "image_url", image_url: { url: m.attachment.base64 } }
+            ]
+          };
+        }
+        return {
+          role: m.role,
+          content: m.content,
+        };
+      });
 
-      const formattedHistory = updatedMessages.map((m) => ({
-        role: m.role,
-        content: m.content,
-      }));
-
-      // جلب الرد الكامل من الخدمة (مع دعم البحث والتحديثات)
       const fullResponse = await askSalmanAI(formattedHistory);
 
-      // تطبيق تأثير الكتابة التدريجية (Typewriter Effect)
       let currentText = "";
       const words = fullResponse.split(" ");
       
@@ -95,7 +98,7 @@ function ChatIndexScreen() {
           newMsgs[newMsgs.length - 1] = { role: "assistant", content: textToUpdate };
           return newMsgs;
         });
-        await new Promise((resolve) => setTimeout(resolve, 35)); // سرعة الظهور التدريجي
+        await new Promise((resolve) => setTimeout(resolve, 25));
       }
     } catch (error) {
       console.error(error);
@@ -110,13 +113,12 @@ function ChatIndexScreen() {
     }
   };
 
-  // معالجة اختيار الملفات والصور
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    if (file.size > 10 * 1024 * 1024) {
-      toast.error("حجم الملف كبير جداً (الحد الأقصى 10 ميجابايت)");
+    if (file.size > 8 * 1024 * 1024) {
+      toast.error("حجم الملف يجب ألا يتجاوز 8 ميجابايت");
       return;
     }
 
@@ -148,15 +150,15 @@ function ChatIndexScreen() {
   }
 
   return (
-    <div className="flex h-full flex-col justify-between bg-background text-foreground dir-rtl">
-      {/* منطقة المحادثة */}
+    <div className="flex h-full flex-col justify-between bg-background text-foreground" dir="rtl">
+      {/* منطقة المحادثة والرسائل */}
       <div className="flex-1 overflow-y-auto space-y-4 px-3 py-3">
         {messages.length === 0 ? (
           <div className="flex h-full flex-col items-center justify-center text-center space-y-3 mt-8">
             <BrandMark size={56} />
             <h2 className="text-lg font-bold">مرحباً بك مع Salman AI</h2>
             <p className="text-sm text-muted-foreground max-w-xs">
-              أسألني أي شيء، أرفق صوراً أو مستندات، وسأساعدك فوراً.
+              أسألني أي شيء، وسأجيبك بتنسيق واضح ومنظم.
             </p>
           </div>
         ) : (
@@ -168,7 +170,7 @@ function ChatIndexScreen() {
               }`}
             >
               <div
-                className={`w-fit max-w-[85%] px-4 py-3 text-sm leading-relaxed text-right whitespace-pre-wrap break-words ${
+                className={`w-fit max-w-[88%] px-4 py-3 text-sm leading-relaxed text-right whitespace-pre-wrap break-words ${
                   msg.role === "user"
                     ? "bg-[#2dd4bf] text-slate-950 font-medium rounded-2xl rounded-tr-none shadow-sm"
                     : "bg-slate-800/90 text-slate-100 rounded-2xl rounded-tl-none border border-slate-700/60 shadow-sm"
@@ -180,7 +182,7 @@ function ChatIndexScreen() {
                       <img
                         src={msg.attachment.url}
                         alt="attachment"
-                        className="h-20 w-auto rounded-lg object-cover"
+                        className="h-24 w-auto rounded-lg object-cover"
                       />
                     ) : (
                       <div className="flex items-center gap-1.5 font-bold">
@@ -190,7 +192,17 @@ function ChatIndexScreen() {
                     )}
                   </div>
                 )}
-                {msg.content}
+
+                {/* دعم تنسيق Markdown والفواصل المنظمة */}
+                {msg.role === "assistant" ? (
+                  <div className="prose prose-invert prose-sm max-w-none space-y-2 leading-relaxed">
+                    <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                      {msg.content}
+                    </ReactMarkdown>
+                  </div>
+                ) : (
+                  msg.content
+                )}
               </div>
             </div>
           ))
@@ -198,23 +210,20 @@ function ChatIndexScreen() {
         {isSending && messages[messages.length - 1]?.content === "" && (
           <div className="flex w-full justify-start">
             <div className="w-fit max-w-[85%] px-4 py-3 text-sm bg-slate-800/90 text-slate-400 rounded-2xl rounded-tl-none border border-slate-700/60 animate-pulse text-right">
-              جاري التفكير وتحليل البيانات...
+              جاري كتابة الإجابة وتنسيقها...
             </div>
           </div>
         )}
         <div ref={messagesEndRef} />
       </div>
 
-      {/* الجزء السفلي: الاقتراحات وصندوق الإدخال */}
+      {/* الشريط السفلي */}
       <div className="p-2 border-t border-border bg-background/95 space-y-2">
-        {/* شريط الاقتراحات السريعة فوق الكيبورد */}
         <div className="flex items-center gap-2 overflow-x-auto pb-1 no-scrollbar">
           {QUICK_SUGGESTIONS.map((item, i) => (
             <button
               key={i}
-              onClick={() => {
-                setInput(item);
-              }}
+              onClick={() => setInput(item)}
               className="shrink-0 rounded-full border border-border bg-secondary/80 px-3 py-1.5 text-xs font-semibold text-muted-foreground hover:bg-secondary hover:text-foreground transition"
             >
               {item}
@@ -222,7 +231,6 @@ function ChatIndexScreen() {
           ))}
         </div>
 
-        {/* معاينة الملف المرفق قبل الإرسال */}
         {selectedFile && (
           <div className="flex items-center justify-between rounded-xl bg-secondary px-3 py-2 text-xs">
             <div className="flex items-center gap-2 truncate">
@@ -245,29 +253,8 @@ function ChatIndexScreen() {
           </div>
         )}
 
-        {/* نموذج الإدخال مع الأزرار */}
-        <form onSubmit={handleSend} className="flex items-end gap-2">
-          {/* زر الإرسال */}
-          <Button
-            type="submit"
-            disabled={isSending || (!input.trim() && !selectedFile)}
-            size="icon"
-            className="rounded-2xl shrink-0 bg-[#2dd4bf] hover:bg-[#26b8a5] text-slate-950 h-11 w-11"
-          >
-            <Send className="size-4 rotate-180" />
-          </Button>
-
-          {/* صندوق النص وزر الإرفاق */}
+        <div className="flex items-center gap-2">
           <div className="relative flex-1 flex items-center rounded-2xl border border-border bg-background focus-within:ring-2 focus-within:ring-[#2dd4bf]">
-            <textarea
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              placeholder="اكتب رسالتك لـ Salman AI..."
-              rows={1}
-              className="w-full resize-none bg-transparent py-3 pr-4 pl-10 text-sm text-right focus:outline-none max-h-32 min-h-[44px]"
-            />
-
-            {/* زر الـ + للإرفاق على الجهة اليسرى داخل الإدخال */}
             <input
               type="file"
               ref={fileInputRef}
@@ -278,13 +265,31 @@ function ChatIndexScreen() {
             <button
               type="button"
               onClick={() => fileInputRef.current?.click()}
-              className="absolute left-2 text-muted-foreground hover:text-foreground p-1.5 rounded-xl hover:bg-secondary transition"
+              className="absolute right-2 text-muted-foreground hover:text-foreground p-2 rounded-xl hover:bg-secondary transition"
               title="إرفاق صورة أو ملف"
             >
               <Plus className="size-5" />
             </button>
+
+            <textarea
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              placeholder="اكتب رسالتك لـ Salman AI..."
+              rows={1}
+              className="w-full resize-none bg-transparent py-3 pr-11 pl-4 text-sm text-right focus:outline-none max-h-32 min-h-[44px]"
+            />
           </div>
-        </form>
+
+          <Button
+            type="button"
+            onClick={() => handleSend()}
+            disabled={isSending || (!input.trim() && !selectedFile)}
+            size="icon"
+            className="rounded-2xl shrink-0 bg-[#2dd4bf] hover:bg-[#26b8a5] text-slate-950 h-11 w-11"
+          >
+            <Send className="size-4 rotate-180" />
+          </Button>
+        </div>
       </div>
     </div>
   );

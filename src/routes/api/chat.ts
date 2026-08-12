@@ -19,7 +19,6 @@ export const Route = createFileRoute("/api/chat")({
             return new Response("Missing GROQ_API_KEY", { status: 500 });
           }
 
-          // تحويل وتجهيز الرسائل
           const formattedMessages = messages.map((m: any) => {
             if (typeof m.content === "string") return { role: m.role, content: m.content };
             const textPart = m.parts?.find((p: any) => p.type === "text");
@@ -31,7 +30,6 @@ export const Route = createFileRoute("/api/chat")({
             content: SYSTEM_PROMPT
           });
 
-          // إرسال الطلب المباشر لـ Groq فوراً بدون إبطاء البحث
           const groqRes = await fetch("https://api.groq.com/openai/v1/chat/completions", {
             method: "POST",
             headers: {
@@ -51,12 +49,22 @@ export const Route = createFileRoute("/api/chat")({
           }
 
           const groqData = await groqRes.json();
-          const replyText = groqData.choices[0]?.message?.content || "أهلاً بك! كيف يمكنني مساعدتك اليوم؟";
+          const replyText = groqData.choices[0]?.message?.content || "أهلاً بك! كيف يمكنني مساعدتك؟";
 
-          // إرجاع النص بصيغة متوافقة ومباشرة تظهر فوراً على الشاشة
-          return new Response(replyText, {
+          // صيغة البث المعتمدة لـ Vercel AI SDK v3/v4 (Text Stream Format)
+          const encoder = new TextEncoder();
+          const stream = new ReadableStream({
+            start(controller) {
+              // إرسال كتل النصوص وفق بروتوكول AI SDK (0:"نص")
+              controller.enqueue(encoder.encode(`0:${JSON.stringify(replyText)}\n`));
+              controller.close();
+            }
+          });
+
+          return new Response(stream, {
             headers: {
-              "Content-Type": "text/plain; charset=utf-8"
+              "Content-Type": "text/plain; charset=utf-8",
+              "x-vercel-ai-ui-stream": "1"
             }
           });
 

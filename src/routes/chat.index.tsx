@@ -1,6 +1,6 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { Loader2, Send, Plus, Paperclip, X, Image as ImageIcon, Copy, Edit2, RotateCcw, PlusCircle } from "lucide-react";
+import { Loader2, Send, Plus, Paperclip, X, Image as ImageIcon, Copy, Edit2, RotateCcw, PlusCircle, LogIn } from "lucide-react";
 import { useEffect, useState, useRef } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -28,10 +28,18 @@ const QUICK_SUGGESTIONS = [
   "تلخيص نص مطول",
 ];
 
+// حالات الانتظار المخصصة للبحث
 const SEARCH_STATUSES = [
   "جاري البحث في المصادر المحدثة...",
-  "جاري معالجة واستخراج البيانات...",
-  "جاري صياغة وكتابة الإجابة..."
+  "جاري تحليل البيانات...",
+  "جاري صياغة الإجابة..."
+];
+
+// حالات الانتظار المحادثة العادية
+const CHAT_STATUSES = [
+  "Salman يكتب الآن...",
+  "جاري التفكير في الرد...",
+  "جاري تجهيز الإجابة..."
 ];
 
 function ChatIndexScreen() {
@@ -43,6 +51,7 @@ function ChatIndexScreen() {
   const [input, setInput] = useState("");
   const [isSending, setIsSending] = useState(false);
   const [statusIndex, setStatusIndex] = useState(0);
+  const [activeStatuses, setActiveStatuses] = useState<string[]>(CHAT_STATUSES);
   const [activeActionIndex, setActiveActionIndex] = useState<number | null>(null);
   const [selectedFile, setSelectedFile] = useState<{ name: string; type: string; url: string; base64: string } | null>(null);
 
@@ -58,20 +67,19 @@ function ChatIndexScreen() {
     scrollToBottom();
   }, [messages, isSending]);
 
-  // تغيير نص الانتظار بشكل ديناميكي أثناء معالجة الطلب
+  // تحديث حالات الانتظار بصورة دورية
   useEffect(() => {
     if (!isSending) {
       setStatusIndex(0);
       return;
     }
     const interval = setInterval(() => {
-      setStatusIndex((prev) => (prev + 1) % SEARCH_STATUSES.length);
-    }, 1800);
+      setStatusIndex((prev) => (prev + 1) % activeStatuses.length);
+    }, 1500);
 
     return () => clearInterval(interval);
-  }, [isSending]);
+  }, [isSending, activeStatuses]);
 
-  // بدء محادثة جديدة
   const handleNewChat = () => {
     setMessages([]);
     setInput("");
@@ -80,11 +88,10 @@ function ChatIndexScreen() {
     toast.success("تم بدء محادثة جديدة");
   };
 
-  // معالجة النقر المتواصل (Long Press)
   const handleTouchStart = (index: number) => {
     pressTimerRef.current = setTimeout(() => {
       setActiveActionIndex(index);
-    }, 600); // 600 مللي ثانية للتفعيل
+    }, 600);
   };
 
   const handleTouchEnd = () => {
@@ -93,30 +100,31 @@ function ChatIndexScreen() {
     }
   };
 
-  // نسخ النص
   const handleCopy = (text: string) => {
     navigator.clipboard.writeText(text);
     toast.success("تم نسخ النص إلى الحافظة");
     setActiveActionIndex(null);
   };
 
-  // تعديل الرسالة
-  const handleEdit = (text: string, index: number) => {
+  const handleEdit = (text: string) => {
     setInput(text);
     setActiveActionIndex(null);
   };
 
-  // إعادة المحاولة
   const handleRetry = (index: number) => {
     setActiveActionIndex(null);
     const historyToRetry = messages.slice(0, index + 1);
     const lastUserMessage = historyToRetry[historyToRetry.length - 1];
     if (lastUserMessage && lastUserMessage.role === "user") {
-      executeSend(historyToRetry);
+      executeSend(historyToRetry, lastUserMessage.content);
     }
   };
 
-  const executeSend = async (chatHistory: Message[]) => {
+  const executeSend = async (chatHistory: Message[], userQuery: string) => {
+    // تحديد نوع الانتظار بناءً على نص السؤال
+    const isSearchQuery = /بحث|أخبار|أحدث|ابحث|معلومات|مصادر/i.test(userQuery);
+    setActiveStatuses(isSearchQuery ? SEARCH_STATUSES : CHAT_STATUSES);
+
     setIsSending(true);
     setMessages([...chatHistory, { role: "assistant", content: "" }]);
 
@@ -167,9 +175,10 @@ function ChatIndexScreen() {
     if ((!input.trim() && !selectedFile) || isSending) return;
 
     const currentAttachment = selectedFile;
+    const userText = input.trim();
     const userMessage: Message = {
       role: "user",
-      content: input.trim(),
+      content: userText,
       attachment: currentAttachment ? { ...currentAttachment } : undefined,
     };
 
@@ -178,7 +187,7 @@ function ChatIndexScreen() {
     setInput("");
     setSelectedFile(null);
 
-    await executeSend(updatedMessages);
+    await executeSend(updatedMessages, userText);
   };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -219,29 +228,35 @@ function ChatIndexScreen() {
 
   return (
     <div className="flex h-full flex-col justify-between bg-background text-foreground" dir="rtl">
-      {/* شريط أعلى المحادثة يضم زر محادثة جديدة */}
-      <div className="flex items-center justify-between px-4 py-2 border-b border-border/50 bg-background/80 backdrop-blur">
-        <div className="flex items-center gap-2">
-          <BrandMark size={28} />
-          <span className="font-bold text-sm">Salman AI</span>
-        </div>
+      {/* هيدر أضخم وأكبر مع زر تسجيل دخول أصغر ومساحة للشعار */}
+      <div className="flex items-center justify-between px-5 py-4 border-b border-border/50 bg-background/80 backdrop-blur min-h-[64px]">
         <Button
           onClick={handleNewChat}
           variant="outline"
           size="sm"
-          className="rounded-xl flex items-center gap-1.5 text-xs border-border"
+          className="rounded-xl flex items-center gap-1.5 text-xs border-border px-3 py-1.5"
         >
           <PlusCircle className="size-4 text-[#2dd4bf]" />
           محادثة جديدة
         </Button>
+
+        {/* زر تسجيل الدخول بصحبة حجم أصغر متناسق */}
+        <Button
+          variant="secondary"
+          size="sm"
+          className="rounded-lg text-[11px] h-8 px-2.5 font-medium flex items-center gap-1 bg-amber-500/10 text-amber-500 hover:bg-amber-500/20"
+        >
+          <LogIn className="size-3" />
+          تسجيل الدخول
+        </Button>
       </div>
 
       {/* منطقة الرسائل */}
-      <div className="flex-1 overflow-y-auto space-y-4 px-3 py-3">
+      <div className="flex-1 overflow-y-auto space-y-5 px-4 py-4">
         {messages.length === 0 ? (
           <div className="flex h-full flex-col items-center justify-center text-center space-y-3 mt-8">
-            <BrandMark size={56} />
-            <h2 className="text-lg font-bold">مرحباً بك مع Salman AI</h2>
+            <BrandMark size={64} />
+            <h2 className="text-xl font-bold">مرحباً بك مع Salman AI</h2>
             <p className="text-sm text-muted-foreground max-w-xs">
               أسألني أي شيء، أرفق صوراً، واستفد من خيارات النقر المطول على الرسائل.
             </p>
@@ -254,43 +269,52 @@ function ChatIndexScreen() {
                 msg.role === "user" ? "items-end" : "items-start"
               }`}
             >
-              <div
-                onTouchStart={() => handleTouchStart(idx)}
-                onTouchEnd={handleTouchEnd}
-                onMouseDown={() => handleTouchStart(idx)}
-                onMouseUp={handleTouchEnd}
-                className={`relative w-fit max-w-[88%] px-4 py-3 text-sm leading-relaxed text-right whitespace-pre-wrap break-words cursor-pointer select-none ${
-                  msg.role === "user"
-                    ? "bg-[#2dd4bf] text-slate-950 font-medium rounded-2xl rounded-tr-none shadow-sm"
-                    : "bg-slate-800/90 text-slate-100 rounded-2xl rounded-tl-none border border-slate-700/60 shadow-sm"
-                }`}
-              >
-                {msg.attachment && (
-                  <div className="mb-2 flex items-center gap-2 rounded-xl bg-black/10 p-2 text-xs">
-                    {msg.attachment.type.startsWith("image/") ? (
-                      <img
-                        src={msg.attachment.url}
-                        alt="attachment"
-                        className="h-24 w-auto rounded-lg object-cover"
-                      />
-                    ) : (
-                      <div className="flex items-center gap-1.5 font-bold">
-                        <Paperclip className="size-4" />
-                        <span className="truncate max-w-[180px]">{msg.attachment.name}</span>
-                      </div>
-                    )}
+              <div className="flex items-start gap-2.5 max-w-[88%]">
+                {/* الشعار المخصص لرد المساعد الذكي */}
+                {msg.role === "assistant" && (
+                  <div className="shrink-0 mt-1">
+                    <BrandMark size={32} />
                   </div>
                 )}
 
-                {msg.role === "assistant" ? (
-                  <div className="prose prose-invert prose-sm max-w-none space-y-2 leading-relaxed">
-                    <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                      {msg.content}
-                    </ReactMarkdown>
-                  </div>
-                ) : (
-                  msg.content
-                )}
+                <div
+                  onTouchStart={() => handleTouchStart(idx)}
+                  onTouchEnd={handleTouchEnd}
+                  onMouseDown={() => handleTouchStart(idx)}
+                  onMouseUp={handleTouchEnd}
+                  className={`relative w-fit px-4 py-3 text-sm leading-relaxed text-right whitespace-pre-wrap break-words cursor-pointer select-none ${
+                    msg.role === "user"
+                      ? "bg-[#2dd4bf] text-slate-950 font-medium rounded-2xl rounded-br-none shadow-sm"
+                      : "bg-slate-800/90 text-slate-100 rounded-2xl rounded-tl-none border border-slate-700/60 shadow-sm"
+                  }`}
+                >
+                  {msg.attachment && (
+                    <div className="mb-2 flex items-center gap-2 rounded-xl bg-black/10 p-2 text-xs">
+                      {msg.attachment.type.startsWith("image/") ? (
+                        <img
+                          src={msg.attachment.url}
+                          alt="attachment"
+                          className="h-24 w-auto rounded-lg object-cover"
+                        />
+                      ) : (
+                        <div className="flex items-center gap-1.5 font-bold">
+                          <Paperclip className="size-4" />
+                          <span className="truncate max-w-[180px]">{msg.attachment.name}</span>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {msg.role === "assistant" ? (
+                    <div className="prose prose-invert prose-sm max-w-none space-y-3 leading-relaxed prose-p:my-1.5 prose-ul:my-2 prose-li:my-0.5">
+                      <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                        {msg.content}
+                      </ReactMarkdown>
+                    </div>
+                  ) : (
+                    msg.content
+                  )}
+                </div>
               </div>
 
               {/* قائمة الإجراءات عند النقر المتواصل */}
@@ -306,7 +330,7 @@ function ChatIndexScreen() {
                   {msg.role === "user" && (
                     <>
                       <button
-                        onClick={() => handleEdit(msg.content, idx)}
+                        onClick={() => handleEdit(msg.content)}
                         className="flex items-center gap-1 text-xs px-2 py-1 rounded-lg hover:bg-slate-800 text-slate-200"
                       >
                         <Edit2 className="size-3.5" />
@@ -333,11 +357,14 @@ function ChatIndexScreen() {
           ))
         )}
 
-        {/* النص المتغير ديناميكياً أثناء المعالجة */}
+        {/* مؤشر الانتظار المتغير حسب نوع الطلب */}
         {isSending && messages[messages.length - 1]?.content === "" && (
-          <div className="flex w-full justify-start">
+          <div className="flex w-full justify-start items-center gap-2.5">
+            <div className="shrink-0">
+              <BrandMark size={32} />
+            </div>
             <div className="w-fit max-w-[85%] px-4 py-3 text-sm bg-slate-800/90 text-[#2dd4bf] rounded-2xl rounded-tl-none border border-slate-700/60 animate-pulse text-right font-medium">
-              {SEARCH_STATUSES[statusIndex]}
+              {activeStatuses[statusIndex]}
             </div>
           </div>
         )}
@@ -381,7 +408,6 @@ function ChatIndexScreen() {
         )}
 
         <div className="flex items-center gap-2">
-          {/* حقل النص وزر المرفقات */}
           <div className="relative flex-1 flex items-center rounded-2xl border border-border bg-background focus-within:ring-2 focus-within:ring-[#2dd4bf]">
             <input
               type="file"
@@ -408,7 +434,6 @@ function ChatIndexScreen() {
             />
           </div>
 
-          {/* زر الإرسال الموجه للأعلى */}
           <Button
             type="button"
             onClick={() => handleSend()}

@@ -14,48 +14,24 @@ export const Route = createFileRoute("/api/chat")({
           const messages = body.messages || [];
 
           const groqApiKey = process.env["GROQ_API_KEY"] || "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";
-          const tavilyApiKey = process.env["TAVILY_API_KEY"] || "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";
 
           if (!groqApiKey) {
-            return new Response(JSON.stringify({ error: "Missing GROQ_API_KEY" }), { status: 500 });
+            return new Response("Missing GROQ_API_KEY", { status: 500 });
           }
 
+          // تحويل وتجهيز الرسائل
           const formattedMessages = messages.map((m: any) => {
             if (typeof m.content === "string") return { role: m.role, content: m.content };
             const textPart = m.parts?.find((p: any) => p.type === "text");
             return { role: m.role, content: textPart ? textPart.text : "" };
           });
 
-          const lastUserMessage = formattedMessages.filter((m: any) => m.role === "user").pop()?.content || "";
-
-          let searchContext = "";
-          if (tavilyApiKey && lastUserMessage) {
-            try {
-              const searchRes = await fetch("https://api.tavily.com/search", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                  api_key: tavilyApiKey,
-                  query: lastUserMessage,
-                  search_depth: "basic",
-                  max_results: 3
-                })
-              });
-              const searchData = await searchRes.json();
-              if (searchData.results?.length > 0) {
-                searchContext = "\n\nReal-time Web Results:\n" + 
-                  searchData.results.map((r: any) => `- ${r.title}: ${r.content}`).join("\n");
-              }
-            } catch (e) {
-              console.warn("Tavily search skipped:", e);
-            }
-          }
-
           formattedMessages.unshift({
             role: "system",
-            content: SYSTEM_PROMPT + searchContext
+            content: SYSTEM_PROMPT
           });
 
+          // إرسال الطلب المباشر لـ Groq فوراً بدون إبطاء البحث
           const groqRes = await fetch("https://api.groq.com/openai/v1/chat/completions", {
             method: "POST",
             headers: {
@@ -64,30 +40,28 @@ export const Route = createFileRoute("/api/chat")({
             },
             body: JSON.stringify({
               model: "llama-3.3-70b-versatile",
-              messages: formattedMessages
+              messages: formattedMessages,
+              temperature: 0.7
             })
           });
 
           if (!groqRes.ok) {
             const errText = await groqRes.text();
-            return new Response(JSON.stringify({ error: `Groq Error: ${errText}` }), { status: 500 });
+            return new Response(`Groq Error: ${errText}`, { status: 500 });
           }
 
           const groqData = await groqRes.json();
-          const replyText = groqData.choices[0]?.message?.content || "لم يتم استلام رد.";
+          const replyText = groqData.choices[0]?.message?.content || "أهلاً بك! كيف يمكنني مساعدتك اليوم؟";
 
-          // تنسيق الرد كـ Text Stream متوافق مع Vercel AI SDK / TanStack
-          const streamData = `0:${JSON.stringify(replyText)}\n`;
-
-          return new Response(streamData, {
+          // إرجاع النص بصيغة متوافقة ومباشرة تظهر فوراً على الشاشة
+          return new Response(replyText, {
             headers: {
-              "Content-Type": "text/plain; charset=utf-8",
-              "x-vercel-ai-ui-stream": "1"
+              "Content-Type": "text/plain; charset=utf-8"
             }
           });
 
         } catch (err: any) {
-          return new Response(JSON.stringify({ error: err.message }), { status: 500 });
+          return new Response(err.message || "حدث خطأ غير متوقع", { status: 500 });
         }
       }
     }

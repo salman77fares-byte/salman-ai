@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { convertToModelMessages, stepCountIs, streamText, tool, type UIMessage } from "ai";
-import { createOpenAI } from "@ai-sdk/openai";
+import { convertToCoreMessages, streamText, tool } from "ai";
+import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
 import { z } from "zod";
 
 const SYSTEM_PROMPT = `أنت "Salman AI"، مساعد ذكي عربي متقدّم بشخصية واثقة وعملية.
@@ -8,37 +8,30 @@ const SYSTEM_PROMPT = `أنت "Salman AI"، مساعد ذكي عربي متقد�
 - أسلوبك: عربي احترافي حديث وودّي مع وضوح تقني. ابدأ بالإجابة مباشرة، بلا مقدمات روبوتية وبلا حشو.
 - التاريخ الحالي: ${new Date().toISOString().slice(0, 10)}.`;
 
-type ChatRequestBody = {
-  messages?: unknown;
-};
-
 export const Route = createFileRoute("/api/chat")({
   server: {
     handlers: {
       POST: async ({ request }) => {
         try {
-          const body = (await request.json()) as ChatRequestBody;
-          const messages = body.messages;
-
-          if (!Array.isArray(messages)) {
-            return new Response("Bad request", { status: 400 });
-          }
+          const body = await request.json();
+          const messages = body.messages || [];
 
           const groqApiKey = process.env["GROQ_API_KEY"] || "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";
           const tavilyApiKey = process.env["TAVILY_API_KEY"] || "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";
 
-          // إعداد العميل لـ Groq باستخدام محول OpenAI المدمج
-          const groq = createOpenAI({
+          // استخدام الحزمة المثبتة في package.json عندك مباشرة
+          const groq = createOpenAICompatible({
+            name: "groq",
             baseURL: "https://api.groq.com/openai/v1",
-            apiKey: groqApiKey,
+            headers: {
+              Authorization: `Bearer ${groqApiKey}`,
+            },
           });
 
-          const uiMessages = messages as UIMessage[];
-
-          // أداة البحث في الويب عبر Tavily
+          // أداة البحث عن طريق Tavily
           const webSearch = tool({
-            description: "Search the live web for up-to-date facts, news, scores, and releases.",
-            inputSchema: z.object({
+            description: "Search the live web for facts, news, and real-time updates.",
+            parameters: z.object({
               query: z.string().describe("Search query keywords"),
             }),
             execute: async ({ query }) => {
@@ -56,28 +49,24 @@ export const Route = createFileRoute("/api/chat")({
                 const data = await res.json();
                 return { results: data.results || [] };
               } catch (e) {
-                return { results: [], note: "search failed" };
+                return { results: [] };
               }
             },
           });
 
-          // إنشاء بث مباشر متوافق 100% مع الواجهة
+          // إنشاء بث النصوص باستخدام الدالة المتوافقة مع الإصدار المثبت لديك
           const result = streamText({
             model: groq("llama-3.3-70b-versatile"),
             system: SYSTEM_PROMPT,
-            messages: await convertToModelMessages(uiMessages),
+            messages: convertToCoreMessages(messages),
             tools: { web_search: webSearch },
-            toolChoice: "auto",
-            stopWhen: stepCountIs(4),
-            abortSignal: request.signal,
+            maxSteps: 3,
           });
 
-          return result.toUIMessageStreamResponse({
-            originalMessages: uiMessages,
-          });
+          return result.toDataStreamResponse();
 
         } catch (err: any) {
-          console.error("Chat Error:", err);
+          console.error("Chat API Error:", err);
           return new Response(JSON.stringify({ error: err.message }), { status: 500 });
         }
       },

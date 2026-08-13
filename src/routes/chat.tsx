@@ -1,6 +1,7 @@
 import { createFileRoute, Outlet, useNavigate } from "@tanstack/react-router";
 import {
   LogIn,
+  LogOut,
   Menu,
   Settings,
   Sun,
@@ -10,6 +11,12 @@ import {
   BookOpen,
   ShoppingBag,
   Smartphone,
+  ShieldCheck,
+  FileText,
+  Trash2,
+  Sparkles,
+  Volume2,
+  RotateCcw,
 } from "lucide-react";
 import { useState } from "react";
 
@@ -22,16 +29,46 @@ export const Route = createFileRoute("/chat")({
 
 function ChatLayout() {
   const navigate = useNavigate();
+  
+  // حالات التحكم الرئيسية
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isDarkMode, setIsDarkMode] = useState(true);
 
+  // حالات التفضيلات والتخصيص
+  const [fontSize, setFontSize] = useState<"small" | "medium" | "large">("medium");
+  const [responseLang, setResponseLang] = useState("auto");
+  const [selectedModel, setSelectedModel] = useState("fast");
+  const [creativity, setCreativity] = useState("balanced");
+  const [autoPlayAudio, setAutoPlayAudio] = useState(false);
+
+  // حالات النوافذ المنبثقة للسياسات
+  const [activePolicyModal, setActivePolicyModal] = useState<"privacy" | "terms" | "delete" | null>(null);
+
+  const handleAuthAction = () => {
+    if (isLoggedIn) {
+      setIsLoggedIn(false);
+    } else {
+      void navigate({ to: "/auth" });
+    }
+  };
+
+  // حاسبة حجم الخط البرمجية
+  const getFontSizeClass = () => {
+    switch (fontSize) {
+      case "small": return "text-sm";
+      case "large": return "text-lg";
+      default: return "text-base";
+    }
+  };
+
   return (
-    <div className="flex h-screen w-full flex-col bg-[#0b101b] text-foreground" dir="rtl">
+    <div className={`flex h-screen w-full flex-col bg-[#0b101b] text-foreground ${getFontSizeClass()}`} dir="rtl">
       {/* الهيدر الرئيسي */}
       <header className="flex h-14 w-full items-center justify-between border-b border-slate-800/80 bg-[#0b101b] px-3 shrink-0 z-20">
         
-        {/* الطرف الأيمن */}
+        {/* الجانب الأيمن */}
         <div className="flex items-center gap-2">
           <Button
             variant="ghost"
@@ -53,14 +90,18 @@ function ChatLayout() {
           </div>
         </div>
 
-        {/* الطرف الأيسر */}
+        {/* الجانب الأيسر */}
         <div className="shrink-0">
           <Button
-            onClick={() => void navigate({ to: "/auth" })}
-            className="h-8 rounded-full bg-gradient-to-r from-[#5eead4] via-[#facc15] to-[#f59e0b] px-3.5 text-xs font-extrabold text-slate-950 shadow-sm hover:opacity-95 transition-all flex items-center gap-1.5 border-0 whitespace-nowrap"
+            onClick={handleAuthAction}
+            className={`h-8 rounded-full px-3.5 text-xs font-extrabold shadow-sm hover:opacity-95 transition-all flex items-center gap-1.5 border-0 whitespace-nowrap ${
+              isLoggedIn
+                ? "bg-rose-500/15 text-rose-400 hover:bg-rose-500/25 border border-rose-500/30"
+                : "bg-gradient-to-r from-[#5eead4] via-[#facc15] to-[#f59e0b] text-slate-950"
+            }`}
           >
-            <span>تسجيل الدخول</span>
-            <LogIn className="size-3.5 rotate-180" />
+            <span>{isLoggedIn ? "تسجيل الخروج" : "تسجيل الدخول"}</span>
+            {isLoggedIn ? <LogOut className="size-3.5" /> : <LogIn className="size-3.5 rotate-180" />}
           </Button>
         </div>
 
@@ -96,19 +137,21 @@ function ChatLayout() {
             </Button>
           </div>
 
-          <div className="text-center py-10 px-2 space-y-2">
-            <p className="text-sm font-semibold text-slate-300">
-              سجّل الدخول لحفظ محادثاتك وعرض سجّلك هنا.
+          <div className="text-center py-6 px-2 space-y-2">
+            <p className="text-xs font-semibold text-slate-300">
+              {isLoggedIn
+                ? "مرحباً بك مجدداً! محادثاتك وسجّلك محفوظ بنجاح."
+                : "سجّل الدخول لحفظ محادثاتك وعرض سجّلك هنا."}
             </p>
           </div>
         </div>
 
-        <div className="space-y-3 pt-4 border-t border-slate-800/80">
+        <div className="space-y-2.5 pt-4 border-t border-slate-800/80">
           <button
             onClick={() => setIsDarkMode(!isDarkMode)}
-            className="w-full flex items-center justify-start gap-3 px-3 py-2.5 rounded-xl text-slate-300 hover:bg-slate-800/60 text-sm font-medium transition"
+            className="w-full flex items-center justify-start gap-3 px-3 py-2.5 rounded-xl text-slate-300 hover:bg-slate-800/60 text-xs font-medium transition"
           >
-            {isDarkMode ? <Sun className="size-5 text-amber-400" /> : <Moon className="size-5 text-indigo-400" />}
+            {isDarkMode ? <Sun className="size-4 text-amber-400" /> : <Moon className="size-4 text-indigo-400" />}
             <span>{isDarkMode ? "الوضع النهاري" : "الوضع الليلي"}</span>
           </button>
 
@@ -117,26 +160,33 @@ function ChatLayout() {
               setIsSidebarOpen(false);
               setIsSettingsOpen(true);
             }}
-            className="w-full flex items-center justify-start gap-3 px-3 py-2.5 rounded-xl text-slate-300 hover:bg-slate-800/60 text-sm font-medium transition"
+            className="w-full flex items-center justify-start gap-3 px-3 py-2.5 rounded-xl text-slate-300 hover:bg-slate-800/60 text-xs font-medium transition"
           >
-            <Settings className="size-5 text-slate-400" />
+            <Settings className="size-4 text-slate-400" />
             <span>الإعدادات</span>
           </button>
 
           <Button
-            onClick={() => void navigate({ to: "/auth" })}
-            className="w-full h-11 rounded-2xl bg-gradient-to-r from-[#5eead4] via-[#facc15] to-[#f59e0b] text-slate-950 font-bold text-sm shadow-md hover:opacity-95 transition flex items-center justify-center gap-2 border-0"
+            onClick={() => {
+              setIsSidebarOpen(false);
+              handleAuthAction();
+            }}
+            className={`w-full h-10 rounded-2xl font-bold text-xs shadow-md transition flex items-center justify-center gap-2 border-0 ${
+              isLoggedIn
+                ? "bg-rose-500/20 text-rose-400 hover:bg-rose-500/30 border border-rose-500/30"
+                : "bg-gradient-to-r from-[#5eead4] via-[#facc15] to-[#f59e0b] text-slate-950"
+            }`}
           >
-            <span>تسجيل الدخول</span>
-            <LogIn className="size-4 rotate-180" />
+            <span>{isLoggedIn ? "تسجيل الخروج" : "تسجيل الدخول"}</span>
+            {isLoggedIn ? <LogOut className="size-4" /> : <LogIn className="size-4 rotate-180" />}
           </Button>
         </div>
       </aside>
 
-      {/* نافذة الإعدادات */}
+      {/* نافذة الإعدادات الشاملة */}
       {isSettingsOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
-          <div className="w-full max-w-md max-h-[90vh] overflow-y-auto bg-[#0d1424] border border-slate-800 rounded-3xl p-5 text-slate-100 shadow-2xl space-y-5 animate-in fade-in zoom-in-95">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-md">
+          <div className="w-full max-w-md max-h-[90vh] overflow-y-auto bg-[#0d1424] border border-slate-800 rounded-3xl p-5 text-slate-100 shadow-2xl space-y-5">
             
             <div className="flex items-center justify-between border-b border-slate-800/80 pb-3">
               <div>
@@ -153,52 +203,107 @@ function ChatLayout() {
               </Button>
             </div>
 
+            {/* الحساب */}
             <div className="space-y-2">
               <span className="text-xs font-bold text-slate-400">الحساب</span>
               <div className="p-3.5 rounded-2xl bg-slate-900/80 border border-slate-800 text-xs text-slate-300 leading-relaxed">
-                أنت تستخدم التطبيق كزائر، سجّل الدخول لحفظ محادثاتك.
+                {isLoggedIn
+                  ? "أنت مسجل الدخول حالياً. يتم حفظ جميع المحادثات وتفضيلات الحساب تلقائياً."
+                  : "أنت تستخدم التطبيق كزائر، سجّل الدخول لحفظ محادثاتك."}
               </div>
             </div>
 
+            {/* إعدادات النموذج والذكاء الاصطناعي */}
             <div className="space-y-3">
-              <span className="text-xs font-bold text-slate-400">التفضيلات</span>
+              <span className="text-xs font-bold text-slate-400 flex items-center gap-1">
+                <Sparkles className="size-3.5 text-amber-400" /> إعدادات الذكاء الاصطناعي
+              </span>
+
+              <div className="flex items-center justify-between p-3.5 rounded-2xl bg-slate-900/80 border border-slate-800">
+                <span className="text-xs font-semibold">نموذج الإجابة</span>
+                <select
+                  value={selectedModel}
+                  onChange={(e) => setSelectedModel(e.target.value)}
+                  className="bg-slate-950 border border-slate-800 text-xs rounded-xl px-3 py-1.5 focus:outline-none text-slate-200"
+                >
+                  <option value="fast">Salman AI Fast (سريع)</option>
+                  <option value="pro">Salman AI Pro (دقيق)</option>
+                </select>
+              </div>
+
+              <div className="flex items-center justify-between p-3.5 rounded-2xl bg-slate-900/80 border border-slate-800">
+                <span className="text-xs font-semibold">نمط الرد</span>
+                <select
+                  value={creativity}
+                  onChange={(e) => setCreativity(e.target.value)}
+                  className="bg-slate-950 border border-slate-800 text-xs rounded-xl px-3 py-1.5 focus:outline-none text-slate-200"
+                >
+                  <option value="precise">دقيق ومباشر</option>
+                  <option value="balanced">متوازن</option>
+                  <option value="creative">مبدع وموسع</option>
+                </select>
+              </div>
+            </div>
+
+            {/* التفضيلات والتصميم */}
+            <div className="space-y-3">
+              <span className="text-xs font-bold text-slate-400">التفضيلات والعرض</span>
               
               <div className="flex items-center justify-between p-3.5 rounded-2xl bg-slate-900/80 border border-slate-800">
-                <span className="text-sm font-semibold">الوضع الليلي</span>
+                <span className="text-xs font-semibold">الوضع الليلي</span>
                 <input
                   type="checkbox"
                   checked={isDarkMode}
                   onChange={(e) => setIsDarkMode(e.target.checked)}
-                  className="toggle toggle-accent cursor-pointer accent-[#2dd4bf] h-5 w-9"
+                  className="cursor-pointer accent-[#2dd4bf] h-5 w-9"
                 />
               </div>
 
               <div className="flex items-center justify-between p-3.5 rounded-2xl bg-slate-900/80 border border-slate-800">
-                <span className="text-sm font-semibold">لغة الردود</span>
-                <select className="bg-slate-950 border border-slate-800 text-xs rounded-xl px-3 py-1.5 focus:outline-none">
-                  <option>تلقائي</option>
-                  <option>العربية</option>
-                  <option>English</option>
+                <span className="text-xs font-semibold">لغة الردود</span>
+                <select
+                  value={responseLang}
+                  onChange={(e) => setResponseLang(e.target.value)}
+                  className="bg-slate-950 border border-slate-800 text-xs rounded-xl px-3 py-1.5 focus:outline-none text-slate-200"
+                >
+                  <option value="auto">تلقائي</option>
+                  <option value="ar">العربية</option>
+                  <option value="en">English</option>
                 </select>
               </div>
 
               <div className="flex items-center justify-between p-3.5 rounded-2xl bg-slate-900/80 border border-slate-800">
-                <span className="text-sm font-semibold">حجم الخط</span>
-                <select className="bg-slate-950 border border-slate-800 text-xs rounded-xl px-3 py-1.5 focus:outline-none">
-                  <option>متوسط</option>
-                  <option>صغير</option>
-                  <option>كبير</option>
+                <span className="text-xs font-semibold">حجم الخط</span>
+                <select
+                  value={fontSize}
+                  onChange={(e) => setFontSize(e.target.value as "small" | "medium" | "large")}
+                  className="bg-slate-950 border border-slate-800 text-xs rounded-xl px-3 py-1.5 focus:outline-none text-slate-200"
+                >
+                  <option value="small">صغير</option>
+                  <option value="medium">متوسط</option>
+                  <option value="large">كبير</option>
                 </select>
+              </div>
+
+              <div className="flex items-center justify-between p-3.5 rounded-2xl bg-slate-900/80 border border-slate-800">
+                <span className="text-xs font-semibold flex items-center gap-1.5">
+                  <Volume2 className="size-4 text-cyan-400" /> القراءة الصوتية تلقائياً
+                </span>
+                <input
+                  type="checkbox"
+                  checked={autoPlayAudio}
+                  onChange={(e) => setAutoPlayAudio(e.target.checked)}
+                  className="cursor-pointer accent-[#2dd4bf] h-5 w-9"
+                />
               </div>
             </div>
 
-            {/* مشاريع وخدمات سلمان - الروابط المحدثة */}
+            {/* مشاريع وخدمات سلمان */}
             <div className="space-y-2.5">
               <span className="text-xs font-bold text-slate-400 flex items-center gap-1">
                 🌐 مشاريع وخدمات سلمان
               </span>
 
-              {/* زاد الدعاة */}
               <a
                 href="https://zad-alduat.lovable.app"
                 target="_blank"
@@ -207,17 +312,16 @@ function ChatLayout() {
               >
                 <div className="flex items-center gap-3">
                   <div className="p-2 rounded-xl bg-slate-800 text-blue-400">
-                    <BookOpen className="size-5" />
+                    <BookOpen className="size-4" />
                   </div>
                   <div>
-                    <h4 className="text-sm font-bold text-slate-200">زاد الدعاة</h4>
-                    <p className="text-[11px] text-slate-400">منصة محتوى دعوي ومكتبة موارد</p>
+                    <h4 className="text-xs font-bold text-slate-200">زاد الدعاة</h4>
+                    <p className="text-[10px] text-slate-400">منصة محتوى دعوي ومكتبة موارد</p>
                   </div>
                 </div>
-                <ExternalLink className="size-4 text-slate-500" />
+                <ExternalLink className="size-3.5 text-slate-500" />
               </a>
 
-              {/* متجر كنز */}
               <a
                 href="https://kanzstore.lovable.app/"
                 target="_blank"
@@ -226,17 +330,16 @@ function ChatLayout() {
               >
                 <div className="flex items-center gap-3">
                   <div className="p-2 rounded-xl bg-slate-800 text-cyan-400">
-                    <ShoppingBag className="size-5" />
+                    <ShoppingBag className="size-4" />
                   </div>
                   <div>
-                    <h4 className="text-sm font-bold text-slate-200">متجر كنز</h4>
-                    <p className="text-[11px] text-slate-400">متجر إلكتروني للمنتجات المختارة</p>
+                    <h4 className="text-xs font-bold text-slate-200">متجر كنز</h4>
+                    <p className="text-[10px] text-slate-400">متجر إلكتروني للمنتجات المختارة</p>
                   </div>
                 </div>
-                <ExternalLink className="size-4 text-slate-500" />
+                <ExternalLink className="size-3.5 text-slate-500" />
               </a>
 
-              {/* متجر سلمان فارس */}
               <a
                 href="https://salmanfares-ai.lovable.app"
                 target="_blank"
@@ -245,25 +348,32 @@ function ChatLayout() {
               >
                 <div className="flex items-center gap-3">
                   <div className="p-2 rounded-xl bg-slate-800 text-amber-400">
-                    <Smartphone className="size-5" />
+                    <Smartphone className="size-4" />
                   </div>
                   <div>
-                    <h4 className="text-sm font-bold text-slate-200">متجر سلمان فارس</h4>
-                    <p className="text-[11px] text-slate-400">متجر تقني للأجهزة والملحقات</p>
+                    <h4 className="text-xs font-bold text-slate-200">متجر سلمان فارس</h4>
+                    <p className="text-[10px] text-slate-400">متجر تقني للأجهزة والملحقات</p>
                   </div>
                 </div>
-                <ExternalLink className="size-4 text-slate-500" />
+                <ExternalLink className="size-3.5 text-slate-500" />
               </a>
             </div>
 
+            {/* عن التطبيق */}
             <div className="space-y-2 pt-2">
               <span className="text-xs font-bold text-slate-400">عن التطبيق</span>
-              <div className="p-4 rounded-2xl bg-slate-900/80 border border-slate-800 text-xs text-slate-400 space-y-3">
+              <div className="p-3.5 rounded-2xl bg-slate-900/80 border border-slate-800 text-xs text-slate-400 space-y-3">
                 <p>Salman AI — الإصدار 1.0. تطوير: سلمان فارس.</p>
-                <div className="flex items-center gap-3 text-[#2dd4bf] font-medium pt-1">
-                  <button className="hover:underline">سياسة الخصوصية</button>
-                  <button className="hover:underline">شروط الاستخدام</button>
-                  <button className="hover:underline text-rose-400">حذف الحساب</button>
+                <div className="flex items-center justify-between text-[#2dd4bf] font-medium pt-1 text-[11px]">
+                  <button onClick={() => setActivePolicyModal("privacy")} className="hover:underline flex items-center gap-1">
+                    <ShieldCheck className="size-3.5" /> سياسة الخصوصية
+                  </button>
+                  <button onClick={() => setActivePolicyModal("terms")} className="hover:underline flex items-center gap-1">
+                    <FileText className="size-3.5" /> شروط الاستخدام
+                  </button>
+                  <button onClick={() => setActivePolicyModal("delete")} className="hover:underline text-rose-400 flex items-center gap-1">
+                    <Trash2 className="size-3.5" /> حذف الحساب
+                  </button>
                 </div>
               </div>
             </div>
@@ -272,10 +382,70 @@ function ChatLayout() {
         </div>
       )}
 
+      {/* نوافذ الشروط والسياسات والحذف */}
+      {activePolicyModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
+          <div className="w-full max-w-sm bg-[#0d1424] border border-slate-800 rounded-3xl p-5 text-slate-200 space-y-4">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-2">
+              <h4 className="font-bold text-sm text-white">
+                {activePolicyModal === "privacy" && "سياسة الخصوصية"}
+                {activePolicyModal === "terms" && "شروط الاستخدام"}
+                {activePolicyModal === "delete" && "حذف الحساب"}
+              </h4>
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => setActivePolicyModal(null)}
+                className="size-7 rounded-full text-slate-400"
+              >
+                <X className="size-4" />
+              </Button>
+            </div>
+            
+            <div className="text-xs text-slate-300 leading-relaxed space-y-2">
+              {activePolicyModal === "privacy" && (
+                <p>نحن نحترم خصوصيتك بالكامل. جميع بيانات محادثاتك تشفر وتخزن بشكل آمن فقط عند تسجيل دخولك بحسابك الشخصي.</p>
+              )}
+              {activePolicyModal === "terms" && (
+                <p>استخدامك لتطبيق Salman AI يعني موافقتك على عدم إساءة استخدام المنصة وتوليد المحتوى المخالف للقوانين العامة.</p>
+              )}
+              {activePolicyModal === "delete" && (
+                <div className="space-y-3">
+                  <p className="text-rose-400 font-semibold">هل أنت تأكد من رغبتك في حذف الحساب؟ سيؤدي ذلك إلى حذف كافة المحادثات نهائياً.</p>
+                  <Button
+                    onClick={() => {
+                      setIsLoggedIn(false);
+                      setActivePolicyModal(null);
+                      setIsSettingsOpen(false);
+                    }}
+                    className="w-full bg-rose-600 hover:bg-rose-700 text-white font-bold h-9 rounded-xl text-xs"
+                  >
+                    تأكيد حذف الحساب
+                  </Button>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* منطقة المحادثة */}
       <main className="flex-1 overflow-hidden relative flex flex-col bg-[#0b101b]">
         <Outlet />
       </main>
+
+      {/* إشعار الزائر فوق صندوق الرسائل */}
+      {!isLoggedIn && (
+        <div className="w-full border-t border-slate-800/80 bg-[#0b101b]/95 py-2 px-4 text-center text-xs text-slate-300 backdrop-blur z-10 flex items-center justify-center gap-1.5 shrink-0">
+          <span>تنبيه: محادثة كزائر - لن يتم حفظ السجل</span>
+          <button
+            onClick={() => void navigate({ to: "/auth" })}
+            className="text-[#2dd4bf] font-bold hover:underline"
+          >
+            تسجيل الدخول
+          </button>
+        </div>
+      )}
     </div>
   );
 }

@@ -10,7 +10,7 @@ import {
   Copy,
   Edit2,
   RotateCcw,
-  PlusCircle,
+  AlertCircle,
 } from "lucide-react";
 import { useEffect, useState, useRef } from "react";
 import ReactMarkdown from "react-markdown";
@@ -228,10 +228,13 @@ function ChatIndexScreen() {
     );
   }
 
+  // نعتبر المستخدم زاراً إذا لم توجد جلسة نشطة
+  const isVisitor = !session;
+
   return (
     <div className="flex h-full flex-col justify-between bg-background text-foreground" dir="rtl">
-      {/* شريط الإجراء العلوي للبدء بمحادثة جديدة */}
-      <div className="flex items-center justify-start px-4 py-2">
+      {/* شريط الإجراء العلوي للبدء بمحادثة جديدة (زر واحد غير مكرر) */}
+      <div className="flex items-center justify-start px-4 py-2 shrink-0">
         <Button
           onClick={handleNewChat}
           variant="outline"
@@ -353,8 +356,26 @@ function ChatIndexScreen() {
         <div ref={messagesEndRef} />
       </div>
 
-      {/* الشريط السفلي للإدخال */}
-      <div className="p-2 border-t border-border bg-background/95 space-y-2">
+      {/* الشريط السفلي للإدخال والاقتراحات وتنبيه الزائر فوقها تماماً */}
+      <div className="p-2 border-t border-border bg-background/95 space-y-2 shrink-0">
+        
+        {/* إشعار الزائر: تم نقله ليصبح هنا فوق الاقتراحات ومربع الإرسال تماماً */}
+        {isVisitor && (
+          <div className="w-full py-1.5 px-3 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-between text-[11px] text-amber-300/90 shadow-sm">
+            <div className="flex items-center gap-1.5">
+              <AlertCircle className="size-3.5 text-amber-400 shrink-0" />
+              <span>تنبيه: محادثة كزائر — لن يتم حفظ السجل.</span>
+            </div>
+            <button
+              onClick={() => void navigate({ to: "/auth" })}
+              className="font-bold text-[#2dd4bf] hover:underline whitespace-nowrap"
+            >
+              تسجيل الدخول
+            </button>
+          </div>
+        )}
+
+        {/* اقتراحات الذكاء الاصطناعي */}
         <div className="flex items-center gap-2 overflow-x-auto pb-1 no-scrollbar">
           {QUICK_SUGGESTIONS.map((item, i) => (
             <button

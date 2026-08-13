@@ -13,44 +13,44 @@ function ChatLayout() {
 
   return (
     <div className="flex h-screen w-full flex-col bg-[#0b101b] text-foreground" dir="rtl">
-      {/* الهيدر الرئيسي المتوافق تماماً مع التصميم المطلوب */}
-      <header className="flex h-16 w-full items-center justify-between border-b border-slate-800/80 bg-[#0b101b] px-4 shrink-0 z-20">
+      {/* الهيدر الرئيسي المنسق بالكامل */}
+      <header className="flex h-14 w-full items-center justify-between border-b border-slate-800/80 bg-[#0b101b] px-3 shrink-0 z-20">
         
-        {/* أقصى اليمين: أيقونة القائمة الجانبية وشعار Salman AI */}
-        <div className="flex items-center gap-3">
+        {/* الطرف الأيمن: القائمة ثم الشعار والاسم بجانب بعضهما تماماً */}
+        <div className="flex items-center gap-2">
           <Button
             variant="ghost"
             size="icon"
-            className="size-9 rounded-xl hover:bg-slate-800/60 text-slate-200 p-0"
+            className="size-8 rounded-lg hover:bg-slate-800/60 text-slate-200 p-0 shrink-0"
           >
-            <Menu className="size-6" />
+            <Menu className="size-5" />
           </Button>
 
           <div 
             onClick={() => void navigate({ to: "/chat" })}
-            className="flex items-center gap-2 cursor-pointer select-none"
+            className="flex items-center gap-2 cursor-pointer select-none shrink-0"
           >
-            <span className="text-xl font-bold tracking-tight text-white font-sans">
+            <BrandMark size={30} />
+            <span className="text-base font-black tracking-tight text-white whitespace-nowrap">
               Salman AI
             </span>
-            <BrandMark size={36} />
           </div>
         </div>
 
-        {/* أقصى اليسار: زر تسجيل الدخول بالتدرج الذهبي الكبير */}
-        <div>
+        {/* الطرف الأيسر: زر تسجيل الدخول المدمج والأنيق */}
+        <div className="shrink-0">
           <Button
             onClick={() => void navigate({ to: "/auth" })}
-            className="h-10 rounded-full bg-gradient-to-r from-[#5eead4] via-[#facc15] to-[#f59e0b] px-5 text-sm font-bold text-slate-950 shadow-md hover:opacity-95 transition-all flex items-center gap-2 border-0"
+            className="h-8 rounded-full bg-gradient-to-r from-[#5eead4] via-[#facc15] to-[#f59e0b] px-3.5 text-xs font-extrabold text-slate-950 shadow-sm hover:opacity-95 transition-all flex items-center gap-1.5 border-0 whitespace-nowrap"
           >
-            <LogIn className="size-4 rotate-180" />
             <span>تسجيل الدخول</span>
+            <LogIn className="size-3.5 rotate-180" />
           </Button>
         </div>
 
       </header>
 
-      {/* منطقة محتوى المحادثة */}
+      {/* منطقة المحادثة */}
       <main className="flex-1 overflow-hidden relative flex flex-col bg-[#0b101b]">
         <Outlet />
       </main>

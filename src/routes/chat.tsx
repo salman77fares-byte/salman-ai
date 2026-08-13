@@ -1,362 +1,454 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQueryClient } from "@tanstack/react-query";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import {
-  createFileRoute,
-  Link,
-  Outlet,
-  useNavigate,
-  useParams,
-} from "@tanstack/react-router";
-import { useServerFn } from "@tanstack/react-start";
-import { ExternalLink, LogIn, LogOut, Menu, Trash2 } from "lucide-react";
-import { useEffect, useState } from "react";
+  Loader2,
+  Send,
+  Plus,
+  Paperclip,
+  X,
+  Image as ImageIcon,
+  Copy,
+  Edit2,
+  RotateCcw,
+  PlusCircle,
+  LogIn,
+} from "lucide-react";
+import { useEffect, useState, useRef } from "react";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import { toast } from "sonner";
 
-import { AppSidebar } from "@/components/salman/AppSidebar";
 import { BrandMark } from "@/components/salman/BrandMark";
 import { Button } from "@/components/ui/button";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import { Sheet, SheetContent } from "@/components/ui/sheet";
-import { Switch } from "@/components/ui/switch";
 import { useSession } from "@/hooks/useSession";
-import { supabase } from "@/integrations/supabase/client";
-import {
-  clearAllConversations,
-  createConversation,
-  deleteConversation,
-  listConversations,
-  type Conversation,
-} from "@/lib/chat.functions";
-import { GuestChatProvider, NewChatProvider, useGuestChat } from "@/lib/guest-chat";
-import { SALMAN_PROJECTS } from "@/lib/projects";
-import { useTheme } from "@/lib/theme";
+import { askSalmanAI } from "@/lib/aiService";
 
-export const Route = createFileRoute("/chat")({
-  ssr: false,
-  head: () => ({
-    meta: [
-      { title: "المحادثة — Salman AI" },
-      {
-        name: "description",
-        content: "تحدّث مع Salman AI، من تطوير المهندس سلمان فارس. ابدأ كزائر أو احفظ محادثاتك بحسابك.",
-      },
-      { property: "og:title", content: "المحادثة — Salman AI" },
-      { property: "og:description", content: "تحدّث مع Salman AI بالعربية والإنجليزية." },
-      { property: "og:type", content: "website" },
-      { name: "twitter:card", content: "summary_large_image" },
-    ],
-  }),
-  component: ChatRoute,
+export const Route = createFileRoute("/chat/")({
+  component: ChatIndexScreen,
 });
 
-function ChatRoute() {
-  return (
-    <GuestChatProvider>
-      <ChatLayout />
-    </GuestChatProvider>
-  );
+interface Message {
+  role: "user" | "assistant";
+  content: string;
+  attachment?: { name: string; type: string; url: string; base64?: string };
 }
 
-function ChatLayout() {
+const QUICK_SUGGESTIONS = [
+  "أحدث الأخبار الرياضية",
+  "اشرح لي فكرة مشروع",
+  "كتابة كود برمجي",
+  "تلخيص نص مطول",
+];
+
+const SEARCH_STATUSES = [
+  "جاري البحث في المصادر المحدثة...",
+  "جاري تحليل البيانات...",
+  "جاري صياغة الإجابة...",
+];
+
+const CHAT_STATUSES = [
+  "Salman يكتب الآن...",
+  "جاري التفكير في الرد...",
+  "جاري تجهيز الإجابة...",
+];
+
+function ChatIndexScreen() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const params = useParams({ strict: false }) as { conversationId?: string };
-  const [mobileOpen, setMobileOpen] = useState(false);
-  const [settingsOpen, setSettingsOpen] = useState(false);
-  const [fontScale, setFontScale] = useState("medium");
-  const [replyLang, setReplyLang] = useState("auto");
-  const { theme, toggleTheme } = useTheme();
-  const { session, user, isGuest } = useSession();
-  const { resetGuestChat } = useGuestChat();
+  const { session, loading } = useSession();
+
+  const [messages, setMessages] = useState<Message[]>([]);
+  const [input, setInput] = useState("");
+  const [isSending, setIsSending] = useState(false);
+  const [statusIndex, setStatusIndex] = useState(0);
+  const [activeStatuses, setActiveStatuses] = useState<string[]>(CHAT_STATUSES);
+  const [activeActionIndex, setActiveActionIndex] = useState<number | null>(null);
+  const [selectedFile, setSelectedFile] = useState<{
+    name: string;
+    type: string;
+    url: string;
+    base64: string;
+  } | null>(null);
+
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const pressTimerRef = useRef<NodeJS.Timeout | null>(null);
+
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  };
 
   useEffect(() => {
-    const stored = localStorage.getItem("salman-font-scale");
-    if (stored) setFontScale(stored);
-    const lang = localStorage.getItem("salman-reply-lang");
-    if (lang) setReplyLang(lang);
-  }, []);
+    scrollToBottom();
+  }, [messages, isSending]);
 
   useEffect(() => {
-    const sizes: Record<string, string> = {
-      small: "15px",
-      medium: "16px",
-      large: "18px",
-    };
-    document.documentElement.style.fontSize = sizes[fontScale] ?? "16px";
-    localStorage.setItem("salman-font-scale", fontScale);
-  }, [fontScale]);
-
-  useEffect(() => {
-    localStorage.setItem("salman-reply-lang", replyLang);
-  }, [replyLang]);
-
-  const fetchConversations = useServerFn(listConversations);
-  const createFn = useServerFn(createConversation);
-  const deleteFn = useServerFn(deleteConversation);
-  const clearFn = useServerFn(clearAllConversations);
-
-  const { data: conversations = [] } = useQuery<Conversation[]>({
-    queryKey: ["conversations"],
-    queryFn: () => fetchConversations(),
-    enabled: Boolean(session),
-  });
-
-  const invalidate = () => queryClient.invalidateQueries({ queryKey: ["conversations"] });
-
-  const newChat = useMutation({
-    mutationFn: () => createFn(),
-    onSuccess: async (conversation) => {
-      await invalidate();
-      setMobileOpen(false);
-      void navigate({
-        to: "/chat/$conversationId",
-        params: { conversationId: conversation.id },
-      });
-    },
-    onError: () => toast.error("تعذّر إنشاء محادثة جديدة."),
-  });
-
-  const startNewChat = () => {
-    if (isGuest) {
-      resetGuestChat();
-      setMobileOpen(false);
-      void navigate({ to: "/chat" });
+    if (!isSending) {
+      setStatusIndex(0);
       return;
     }
-    newChat.mutate();
+    const interval = setInterval(() => {
+      setStatusIndex((prev) => (prev + 1) % activeStatuses.length);
+    }, 1500);
+
+    return () => clearInterval(interval);
+  }, [isSending, activeStatuses]);
+
+  const handleNewChat = () => {
+    setMessages([]);
+    setInput("");
+    setSelectedFile(null);
+    setActiveActionIndex(null);
+    toast.success("تم بدء محادثة جديدة");
   };
 
-  const removeChat = useMutation({
-    mutationFn: (conversationId: string) => deleteFn({ data: { conversationId } }),
-    onSuccess: async (_result, conversationId) => {
-      await invalidate();
-      toast.success("تم حذف المحادثة");
-      if (params.conversationId === conversationId) void navigate({ to: "/chat" });
-    },
-    onError: () => toast.error("تعذّر حذف المحادثة."),
-  });
-
-  const clearAll = useMutation({
-    mutationFn: () => clearFn(),
-    onSuccess: async () => {
-      await invalidate();
-      toast.success("تم حذف كل المحادثات");
-      void navigate({ to: "/chat" });
-    },
-    onError: () => toast.error("تعذّر حذف المحادثات."),
-  });
-
-  const signOut = async () => {
-    await queryClient.cancelQueries();
-    queryClient.clear();
-    await supabase.auth.signOut();
-    void navigate({ to: "/chat", replace: true });
+  const handleTouchStart = (index: number) => {
+    pressTimerRef.current = setTimeout(() => {
+      setActiveActionIndex(index);
+    }, 600);
   };
 
-  const sidebar = (onClose?: () => void) => (
-    <AppSidebar
-      conversations={conversations}
-      activeId={params.conversationId}
-      isGuest={isGuest}
-      userEmail={user?.email ?? null}
-      onDeleteConversation={(id) => removeChat.mutate(id)}
-      onClearAll={() => clearAll.mutate()}
-      onOpenSettings={() => {
-        setSettingsOpen(true);
-        onClose?.();
-      }}
-      onSignOut={() => void signOut()}
-      onClose={onClose}
-    />
-  );
+  const handleTouchEnd = () => {
+    if (pressTimerRef.current) {
+      clearTimeout(pressTimerRef.current);
+    }
+  };
+
+  const handleCopy = (text: string) => {
+    navigator.clipboard.writeText(text);
+    toast.success("تم نسخ النص إلى الحافظة");
+    setActiveActionIndex(null);
+  };
+
+  const handleEdit = (text: string) => {
+    setInput(text);
+    setActiveActionIndex(null);
+  };
+
+  const handleRetry = (index: number) => {
+    setActiveActionIndex(null);
+    const historyToRetry = messages.slice(0, index + 1);
+    const lastUserMessage = historyToRetry[historyToRetry.length - 1];
+    if (lastUserMessage && lastUserMessage.role === "user") {
+      executeSend(historyToRetry, lastUserMessage.content);
+    }
+  };
+
+  const executeSend = async (chatHistory: Message[], userQuery: string) => {
+    const isSearchQuery = /بحث|أخبار|أحدث|ابحث|معلومات|مصادر/i.test(userQuery);
+    setActiveStatuses(isSearchQuery ? SEARCH_STATUSES : CHAT_STATUSES);
+
+    setIsSending(true);
+
+    try {
+      // إعداد سجل الرسائل بأسلوب متوافق تماماً مع الخدمة
+      const formattedHistory = chatHistory.map((m) => {
+        let textContent = m.content;
+        if (m.attachment) {
+          textContent += `\n[مرفق ملف: ${m.attachment.name}]`;
+        }
+        return {
+          role: m.role,
+          content: textContent,
+        };
+      });
+
+      const fullResponse = await askSalmanAI(formattedHistory);
+
+      // إضافة رد المساعد دفعة واحدة لتفادي مشاكل الحلقات النصية
+      setMessages((prev) => [
+        ...prev,
+        { role: "assistant", content: fullResponse },
+      ]);
+    } catch (error) {
+      console.error("Execute Send Error:", error);
+      toast.error("تعذّر جلب الرد حالياً.");
+      setMessages((prev) => [
+        ...prev,
+        {
+          role: "assistant",
+          content: "عذراً، حدث خطأ أثناء معالجة الطلب. يرجى المحاولة لاحقاً.",
+        },
+      ]);
+    } finally {
+      setIsSending(false);
+    }
+  };
+
+  const handleSend = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    if ((!input.trim() && !selectedFile) || isSending) return;
+
+    const currentAttachment = selectedFile;
+    const userText = input.trim();
+    const userMessage: Message = {
+      role: "user",
+      content: userText,
+      attachment: currentAttachment ? { ...currentAttachment } : undefined,
+    };
+
+    const updatedMessages = [...messages, userMessage];
+    setMessages(updatedMessages);
+    setInput("");
+    setSelectedFile(null);
+
+    await executeSend(updatedMessages, userText);
+  };
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (file.size > 8 * 1024 * 1024) {
+      toast.error("حجم الملف يجب ألا يتجاوز 8 ميجابايت");
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      setSelectedFile({
+        name: file.name,
+        type: file.type,
+        url: URL.createObjectURL(file),
+        base64: reader.result as string,
+      });
+    };
+    reader.readAsDataURL(file);
+  };
+
+  if (loading) {
+    return (
+      <div className="flex h-full flex-col items-center justify-center gap-4 px-6 text-center">
+        <BrandMark size={64} className="shadow-glow" />
+        <h1 className="text-xl font-extrabold">
+          مرحباً بك، أنا <span className="brand-gradient-text">Salman AI</span>
+        </h1>
+        <p className="flex items-center gap-2 text-sm text-muted-foreground">
+          <Loader2 className="size-4 animate-spin" />
+          جارٍ التجهيز...
+        </p>
+      </div>
+    );
+  }
 
   return (
-    <div dir="rtl" className="flex h-screen w-full overflow-hidden bg-background text-right">
-      <aside className="hidden w-72 shrink-0 border-e border-sidebar-border md:block">
-        {sidebar()}
-      </aside>
-
-      <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
-        <SheetContent
-          side="right"
-          className="w-[68%] max-w-[260px] p-0 [&>button]:hidden"
+    <div className="flex h-full flex-col justify-between bg-background text-foreground" dir="rtl">
+      {/* الشريط العلوي الهيدر */}
+      <div className="flex items-center justify-between px-5 py-4 border-b border-border/50 bg-background/80 backdrop-blur min-h-[64px]">
+        <Button
+          onClick={handleNewChat}
+          variant="outline"
+          size="sm"
+          className="rounded-xl flex items-center gap-1.5 text-xs border-border px-3 py-1.5"
         >
-          {sidebar(() => setMobileOpen(false))}
-        </SheetContent>
-      </Sheet>
+          <PlusCircle className="size-4 text-[#2dd4bf]" />
+          محادثة جديدة
+        </Button>
 
-      <div className="flex min-w-0 flex-1 flex-col">
-        <header className="safe-top shrink-0 border-b border-border bg-background/95 px-3 py-3 backdrop-blur sm:px-5">
-          <div className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-2">
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => setMobileOpen(true)}
-              aria-label="فتح القائمة"
-              className="md:hidden"
-            >
-              <Menu className="size-5" />
-            </Button>
-            <div className="flex min-w-0 items-center gap-2.5">
-              <BrandMark size={40} />
-              <span className="truncate text-lg font-extrabold sm:text-xl">Salman AI</span>
-            </div>
-            {isGuest ? (
-              <Button
-                asChild
-                size="sm"
-                className="shrink-0 gap-1.5 rounded-xl brand-gradient-bg text-xs font-extrabold text-primary-foreground hover:opacity-90"
-              >
-                <Link to="/auth">
-                  <LogIn className="size-3.5" />
-                  تسجيل الدخول
-                </Link>
-              </Button>
-            ) : (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => void signOut()}
-                className="shrink-0 gap-1.5 rounded-xl text-xs font-bold"
-              >
-                <LogOut className="size-3.5" />
-                تسجيل الخروج
-              </Button>
-            )}
-          </div>
-          {!isGuest && user?.email ? (
-            <p className="mt-1.5 truncate text-[11px] text-muted-foreground" dir="ltr">
-              {user.email}
-            </p>
-          ) : null}
-        </header>
-
-        <main className="min-h-0 flex-1">
-          <NewChatProvider onNewChat={startNewChat}>
-            <Outlet />
-          </NewChatProvider>
-        </main>
+        <Button
+          variant="secondary"
+          size="sm"
+          onClick={() => void navigate({ to: "/auth" })}
+          className="rounded-lg text-[11px] h-8 px-2.5 font-medium flex items-center gap-1 bg-amber-500/10 text-amber-500 hover:bg-amber-500/20"
+        >
+          <LogIn className="size-3" />
+          تسجيل الدخول
+        </Button>
       </div>
 
-      <Dialog open={settingsOpen} onOpenChange={setSettingsOpen}>
-        <DialogContent dir="rtl" className="max-h-[85vh] max-w-sm overflow-y-auto rounded-3xl text-right">
-          <DialogHeader className="text-right">
-            <DialogTitle>الإعدادات</DialogTitle>
-            <DialogDescription>تخصيص تجربتك في Salman AI.</DialogDescription>
-          </DialogHeader>
+      {/* منطقة الرسائل */}
+      <div className="flex-1 overflow-y-auto space-y-5 px-4 py-4">
+        {messages.length === 0 ? (
+          <div className="flex h-full flex-col items-center justify-center text-center space-y-3 mt-8">
+            <BrandMark size={64} />
+            <h2 className="text-xl font-bold">مرحباً بك مع Salman AI</h2>
+            <p className="text-sm text-muted-foreground max-w-xs">
+              أسألني أي شيء، أرفق صوراً، واستفد من خيارات النقر المطول على الرسائل.
+            </p>
+          </div>
+        ) : (
+          messages.map((msg, idx) => (
+            <div
+              key={idx}
+              className={`flex flex-col w-full ${
+                msg.role === "user" ? "items-end" : "items-start"
+              }`}
+            >
+              <div className="flex items-start gap-2.5 max-w-[88%]">
+                {msg.role === "assistant" && (
+                  <div className="shrink-0 mt-1">
+                    <BrandMark size={32} />
+                  </div>
+                )}
 
-          <section className="space-y-2">
-            <p className="text-xs font-extrabold text-muted-foreground">الحساب</p>
-            <div className="rounded-2xl bg-secondary px-4 py-3 text-xs leading-6">
-              {isGuest ? (
-                <span className="text-muted-foreground">
-                  أنت تستخدم التطبيق كزائر، سجّل الدخول لحفظ محادثاتك.
-                </span>
-              ) : (
-                <span dir="ltr" className="block truncate font-bold">
-                  {user?.email}
-                </span>
+                <div
+                  onTouchStart={() => handleTouchStart(idx)}
+                  onTouchEnd={handleTouchEnd}
+                  onMouseDown={() => handleTouchStart(idx)}
+                  onMouseUp={handleTouchEnd}
+                  className={`relative w-fit px-4 py-3 text-sm leading-relaxed text-right whitespace-pre-wrap break-words cursor-pointer select-none ${
+                    msg.role === "user"
+                      ? "bg-[#2dd4bf] text-slate-950 font-medium rounded-2xl rounded-br-none shadow-sm"
+                      : "bg-slate-800/90 text-slate-100 rounded-2xl rounded-tl-none border border-slate-700/60 shadow-sm"
+                  }`}
+                >
+                  {msg.attachment && (
+                    <div className="mb-2 flex items-center gap-2 rounded-xl bg-black/10 p-2 text-xs">
+                      {msg.attachment.type.startsWith("image/") ? (
+                        <img
+                          src={msg.attachment.url}
+                          alt="attachment"
+                          className="h-24 w-auto rounded-lg object-cover"
+                        />
+                      ) : (
+                        <div className="flex items-center gap-1.5 font-bold">
+                          <Paperclip className="size-4" />
+                          <span className="truncate max-w-[180px]">{msg.attachment.name}</span>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {msg.role === "assistant" ? (
+                    <div className="prose prose-invert prose-sm max-w-none space-y-3 leading-relaxed prose-p:my-1.5 prose-ul:my-2 prose-li:my-0.5">
+                      <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                        {msg.content}
+                      </ReactMarkdown>
+                    </div>
+                  ) : (
+                    msg.content
+                  )}
+                </div>
+              </div>
+
+              {/* قائمة الخيارات عند النقر المطول */}
+              {activeActionIndex === idx && (
+                <div className="flex items-center gap-1 mt-1.5 p-1 bg-slate-900 border border-slate-700 rounded-xl shadow-lg z-10 animate-in fade-in zoom-in-95">
+                  <button
+                    onClick={() => handleCopy(msg.content)}
+                    className="flex items-center gap-1 text-xs px-2 py-1 rounded-lg hover:bg-slate-800 text-slate-200"
+                  >
+                    <Copy className="size-3.5" />
+                    نسخ
+                  </button>
+                  {msg.role === "user" && (
+                    <>
+                      <button
+                        onClick={() => handleEdit(msg.content)}
+                        className="flex items-center gap-1 text-xs px-2 py-1 rounded-lg hover:bg-slate-800 text-slate-200"
+                      >
+                        <Edit2 className="size-3.5" />
+                        تعديل
+                      </button>
+                      <button
+                        onClick={() => handleRetry(idx)}
+                        className="flex items-center gap-1 text-xs px-2 py-1 rounded-lg hover:bg-slate-800 text-slate-200"
+                      >
+                        <RotateCcw className="size-3.5" />
+                        إعادة المحاولة
+                      </button>
+                    </>
+                  )}
+                  <button
+                    onClick={() => setActiveActionIndex(null)}
+                    className="text-slate-500 hover:text-slate-300 px-1"
+                  >
+                    <X className="size-3.5" />
+                  </button>
+                </div>
               )}
             </div>
-          </section>
+          ))
+        )}
 
-          <section className="space-y-2">
-            <p className="text-xs font-extrabold text-muted-foreground">التفضيلات</p>
-            <div className="flex items-center justify-between rounded-2xl bg-secondary px-4 py-3">
-              <span className="text-sm font-bold">الوضع الليلي</span>
-              <Switch checked={theme === "dark"} onCheckedChange={toggleTheme} />
+        {/* مؤشر الانتظار عند جلب الرد */}
+        {isSending && (
+          <div className="flex w-full justify-start items-center gap-2.5">
+            <div className="shrink-0">
+              <BrandMark size={32} />
             </div>
-            <div className="flex items-center justify-between gap-2 rounded-2xl bg-secondary px-4 py-3">
-              <span className="text-sm font-bold">لغة الردود</span>
-              <select
-                value={replyLang}
-                onChange={(event) => setReplyLang(event.currentTarget.value)}
-                className="rounded-xl border border-border bg-background px-2 py-1 text-xs font-bold"
-              >
-                <option value="auto">تلقائي</option>
-                <option value="ar">العربية</option>
-                <option value="en">English</option>
-              </select>
+            <div className="w-fit max-w-[85%] px-4 py-3 text-sm bg-slate-800/90 text-[#2dd4bf] rounded-2xl rounded-tl-none border border-slate-700/60 animate-pulse text-right font-medium">
+              {activeStatuses[statusIndex]}
             </div>
-            <div className="flex items-center justify-between gap-2 rounded-2xl bg-secondary px-4 py-3">
-              <span className="text-sm font-bold">حجم الخط</span>
-              <select
-                value={fontScale}
-                onChange={(event) => setFontScale(event.currentTarget.value)}
-                className="rounded-xl border border-border bg-background px-2 py-1 text-xs font-bold"
-              >
-                <option value="small">صغير</option>
-                <option value="medium">متوسط</option>
-                <option value="large">كبير</option>
-              </select>
-            </div>
-          </section>
+          </div>
+        )}
+        <div ref={messagesEndRef} />
+      </div>
 
-          {!isGuest ? (
-            <section className="space-y-2">
-              <p className="text-xs font-extrabold text-muted-foreground">البيانات</p>
-              <Button
-                variant="outline"
-                className="w-full justify-start gap-2 rounded-2xl text-xs font-bold text-destructive"
-                onClick={() => clearAll.mutate()}
-              >
-                <Trash2 className="size-4" />
-                حذف كل المحادثات
-              </Button>
-            </section>
-          ) : null}
+      {/* الشريط السفلي للإدخال */}
+      <div className="p-2 border-t border-border bg-background/95 space-y-2">
+        <div className="flex items-center gap-2 overflow-x-auto pb-1 no-scrollbar">
+          {QUICK_SUGGESTIONS.map((item, i) => (
+            <button
+              key={i}
+              onClick={() => setInput(item)}
+              className="shrink-0 rounded-full border border-border bg-secondary/80 px-3 py-1.5 text-xs font-semibold text-muted-foreground hover:bg-secondary hover:text-foreground transition"
+            >
+              {item}
+            </button>
+          ))}
+        </div>
 
-          <section className="space-y-2">
-            <p className="text-xs font-extrabold text-muted-foreground">
-              🌐 مشاريع وخدمات سلمان
-            </p>
-            <ul className="space-y-1.5">
-              {SALMAN_PROJECTS.map((project) => (
-                <li key={project.name}>
-                  <a
-                    href={project.url}
-                    target="_blank"
-                    rel="noreferrer noopener"
-                    className="flex items-center gap-3 rounded-2xl bg-secondary px-4 py-3 transition hover:bg-secondary/70"
-                  >
-                    <span className="text-lg">{project.emoji}</span>
-                    <span className="min-w-0 flex-1">
-                      <span className="block truncate text-xs font-extrabold">{project.name}</span>
-                      <span className="block truncate text-[11px] text-muted-foreground">
-                        {project.description}
-                      </span>
-                    </span>
-                    <ExternalLink className="me-auto size-3.5 shrink-0 text-primary" />
-                  </a>
-                </li>
-              ))}
-            </ul>
-          </section>
-
-          <section className="space-y-2">
-            <p className="text-xs font-extrabold text-muted-foreground">عن التطبيق</p>
-            <div className="space-y-2 rounded-2xl bg-secondary px-4 py-3 text-xs leading-6 text-muted-foreground">
-              <p>Salman AI — الإصدار 1.0. تطوير: المهندس سلمان فارس.</p>
-              <div className="flex flex-wrap gap-x-3 gap-y-1 font-bold text-primary">
-                <Link to="/privacy" onClick={() => setSettingsOpen(false)}>
-                  سياسة الخصوصية
-                </Link>
-                <Link to="/terms" onClick={() => setSettingsOpen(false)}>
-                  شروط الاستخدام
-                </Link>
-                <Link to="/delete-account" onClick={() => setSettingsOpen(false)}>
-                  حذف الحساب
-                </Link>
-              </div>
+        {selectedFile && (
+          <div className="flex items-center justify-between rounded-xl bg-secondary px-3 py-2 text-xs">
+            <div className="flex items-center gap-2 truncate">
+              {selectedFile.type.startsWith("image/") ? (
+                <ImageIcon className="size-4 text-primary shrink-0" />
+              ) : (
+                <Paperclip className="size-4 text-primary shrink-0" />
+              )}
+              <span className="truncate max-w-[200px] font-bold">{selectedFile.name}</span>
             </div>
-          </section>
-        </DialogContent>
-      </Dialog>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="size-6 rounded-full"
+              onClick={() => setSelectedFile(null)}
+            >
+              <X className="size-3.5" />
+            </Button>
+          </div>
+        )}
+
+        <div className="flex items-center gap-2">
+          <div className="relative flex-1 flex items-center rounded-2xl border border-border bg-background focus-within:ring-2 focus-within:ring-[#2dd4bf]">
+            <input
+              type="file"
+              ref={fileInputRef}
+              onChange={handleFileChange}
+              className="hidden"
+              accept="image/*,.pdf,.doc,.docx,.txt"
+            />
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              className="absolute right-2 text-muted-foreground hover:text-foreground p-2 rounded-xl hover:bg-secondary transition"
+              title="إرفاق صورة أو ملف"
+            >
+              <Plus className="size-5" />
+            </button>
+
+            <textarea
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              placeholder="اكتب رسالتك لـ Salman AI..."
+              rows={1}
+              className="w-full resize-none bg-transparent py-3 pr-11 pl-4 text-sm text-right focus:outline-none max-h-32 min-h-[44px]"
+            />
+          </div>
+
+          <Button
+            type="button"
+            onClick={() => handleSend()}
+            disabled={isSending || (!input.trim() && !selectedFile)}
+            size="icon"
+            className="rounded-2xl shrink-0 bg-[#2dd4bf] hover:bg-[#26b8a5] text-slate-950 h-11 w-11"
+          >
+            <Send className="size-4 -rotate-90" />
+          </Button>
+        </div>
+      </div>
     </div>
   );
 }

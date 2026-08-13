@@ -1,30 +1,114 @@
-// src/lib/aiService.ts
+export async function askSalmanAI(messages: { role: string; content: any }[]) {
+  const groqApiKey = import.meta.env.VITE_GROQ_API_KEY || "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";
+  const tavilyApiKey = import.meta.env.VITE_TAVILY_API_KEY || "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";
 
-export async function askSalmanAI(messages: { role: string; content: string }[]) {
+  // استخراج آخر سؤال للمستخدم
+  const lastUserMsg = [...messages].reverse().find((m) => m.role === "user");
+  let userQuery = "";
+  
+  if (lastUserMsg) {
+    if (typeof lastUserMsg.content === "string") {
+      userQuery = lastUserMsg.content;
+    } else if (Array.isArray(lastUserMsg.content)) {
+      const textItem = lastUserMsg.content.find((item: any) => item.type === "text" || typeof item === "string");
+      userQuery = typeof textItem === "string" ? textItem : textItem?.text || "";
+    }
+  }
+
+  let searchResultsContext = "";
+
+  // فحص ما إذا كان السؤال يتطلب البحث عبر الإنترنت
+  const isSearchQuery = /بحث|أخبار|أحدث|ابحث|معلومات|مصادر|رياضة|مباراة|اليوم|سعر/i.test(userQuery);
+
+  if (isSearchQuery && userQuery.trim() !== "") {
+    try {
+      const tavilyResponse = await fetch("https://api.tavily.com/search", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          api_key: tavilyApiKey.trim(),
+          query: userQuery,
+          search_depth: "basic",
+          include_answer: true,
+          max_results: 5,
+        }),
+      });
+
+      if (tavilyResponse.ok) {
+        const tavilyData = await tavilyResponse.json();
+        if (tavilyData.results && tavilyData.results.length > 0) {
+          searchResultsContext = "\n\n[معلومات حديثة تم جلبها مباشرة من البحث]:\n" +
+            tavilyData.results.map((r: any, i: number) => `${i + 1}. ${r.title}: ${r.content}`).join("\n");
+        }
+      }
+    } catch (err) {
+      console.warn("تنبيه: تعذر جلب نتائج البحث من Tavily:", err);
+    }
+  }
+
+  const systemPrompt = {
+    role: "system",
+    content: `أنت "Salman AI"، مساعد ذكي عربي متقدّم بشخصية واثقة وعملية.
+- مطوّرك ومؤسسك هو "المهندس سلمان فارس" فقط. إذا سُئلت عن هويتك أو قدراتك، قدّم نفسك بأسلوب مميّز: أنك Salman AI، من تطوير المهندس سلمان فارس، ولا تنسب نفسك لأي شركة أو جهة أخرى.
+- أسلوبك: عربي احترافي حديث وودّي مع وضوح تقني. ابدأ بالإجابة مباشرة دون مقدمات روبوتية.
+- استعن بالمعلومات المحدثة المرفقة في طلبات البحث للإجابة بدقة وبأسلوب منظم يضم مسافات وأسطر واضحة.
+- التاريخ الحالي: ${new Date().toISOString().slice(0, 10)}.`
+  };
+
+  // تنظيف الرسائل وتحويل المحتوى إلى String نقي متوافق تماماً مع Groq API
+  const formattedMessages = messages
+    .filter((m) => m.role === "user" || m.role === "assistant")
+    .map((m, index) => {
+      let contentStr = "";
+
+      if (typeof m.content === "string") {
+        contentStr = m.content;
+      } else if (Array.isArray(m.content)) {
+        contentStr = m.content
+          .map((item: any) => (typeof item === "string" ? item : item.text || ""))
+          .join(" ");
+      } else {
+        contentStr = String(m.content || "");
+      }
+
+      // إرفاق سياق البحث في نهاية آخر رسالة للمستخدم
+      if (index === messages.length - 1 && searchResultsContext) {
+        contentStr += searchResultsContext;
+      }
+
+      return {
+        role: m.role,
+        content: contentStr.trim() || "..."
+      };
+    });
+
   try {
-    const response = await fetch("/api/chat", { // أو الرابط الخاص بـ API الخادم لديك
+    const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
       method: "POST",
       headers: {
+        "Authorization": `Bearer ${groqApiKey.trim()}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        messages,
-        systemPrompt: `أنت "Salman AI"، مساعد ذكي عربي متقدّم بشخصية واثقة، عملية، وودودة جداً.
-- مطوّرك ومؤسسك هو "المهندس سلمان فارس" فقط.
-- استخدم الإيموجيات المناسبة (✨, 🚀, 💡, 📌, 🎯) لتجميل النص.
-- نظّم الإجابات في فقرات متباعدة وقوائم جليّة بأسلوب واضح وممتع.
-- التاريخ الحالي: ${new Date().toISOString().slice(0, 10)}.`,
+        model: "llama-3.3-70b-versatile",
+        messages: [systemPrompt, ...formattedMessages],
+        temperature: 0.5,
+        max_tokens: 2048,
       }),
     });
 
     if (!response.ok) {
-      throw new Error("Failed to fetch response");
+      const errData = await response.json().catch(() => ({}));
+      console.error("Groq API Error Detail:", errData);
+      return `حدث خطأ أثناء معالجة الطلب. (رمز: ${response.status})`;
     }
 
     const data = await response.json();
-    return data.reply || data.choices?.[0]?.message?.content || "لم يتم استلام رد مناسب.";
-  } catch (error) {
-    console.error("AI Service Error:", error);
-    throw error;
+    return data.choices[0]?.message?.content || "لم يتم استلام رد.";
+  } catch (error: any) {
+    console.error("Fetch Exception:", error);
+    return `تعذر الاتصال بالخادم: ${error.message || "خطأ في الشبكة"}`;
   }
 }

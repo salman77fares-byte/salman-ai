@@ -12,11 +12,11 @@ import {
   Paperclip,
   X
 } from "lucide-react";
-import { askSalmanAI } from "../../lib/aiService";
+import { askSalmanAI } from "../lib/aiService";
 import { toast } from "sonner";
 
-// تعريف مسار TanStack Router
-export const Route = createFileRoute('/chat/')({
+// تعريف مسار الصفحة الرئيسية في TanStack Router
+export const Route = createFileRoute('/')({
   component: ChatPage,
 });
 
@@ -108,11 +108,16 @@ function ChatPage() {
       {/* منطقة المحادثة */}
       <main className="flex-1 overflow-y-auto px-4 py-6 space-y-6 max-w-4xl w-full mx-auto">
         {messages.length === 0 ? (
-          <div className="flex flex-col items-center justify-center h-full text-center space-y-6">
-            <div className="w-20 h-20 rounded-3xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center">
+          <div className="flex flex-col items-center justify-center h-full text-center space-y-4 my-auto">
+            <div className="w-20 h-20 rounded-3xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center shadow-lg shadow-emerald-500/5">
               <Sparkles className="w-10 h-10 text-emerald-400 animate-pulse" />
             </div>
-            <h2 className="text-2xl font-bold text-white">أهلاً بك في Salman AI</h2>
+            <div>
+              <h2 className="text-2xl font-bold text-white mb-2">مرحباً بك مع Salman AI</h2>
+              <p className="text-slate-400 text-sm max-w-md">
+                مساعدك الذكي لإنجاز مشاريعك، كتابة الأكواد، وتحليل الأفكار بكفاءة 🚀
+              </p>
+            </div>
           </div>
         ) : (
           messages.map((msg) => (
@@ -151,3 +156,5 @@ function ChatPage() {
     </div>
   );
 }
+
+export default ChatPage;

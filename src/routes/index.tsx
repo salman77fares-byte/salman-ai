@@ -209,7 +209,7 @@ function ChatIndexScreen() {
 
   if (loading) {
     return (
-      <div className="flex h-full flex-col items-center justify-center gap-4 px-6 text-center">
+      <div className="flex h-screen flex-col items-center justify-center gap-4 px-6 text-center bg-background">
         <BrandMark size={72} className="shadow-glow animate-pulse" />
         <h1 className="text-2xl font-extrabold">
           مرحباً بك، أنا <span className="brand-gradient-text">Salman AI</span> ✨
@@ -223,10 +223,10 @@ function ChatIndexScreen() {
   }
 
   return (
-    <div className="flex h-full flex-col justify-between bg-background text-foreground relative" dir="rtl">
+    <div className="flex h-screen flex-col justify-between bg-background text-foreground relative overflow-hidden" dir="rtl">
       
-      {/* 1. الهيدر الرئيسي المرتفع بدعم كامل للشعار */}
-      <header className="flex items-center justify-between px-6 py-4 border-b border-border/60 bg-background/90 backdrop-blur-md min-h-[82px] shadow-sm z-10">
+      {/* 1. الهيدر الوحيد والأساسي للصفحة */}
+      <header className="flex items-center justify-between px-6 py-4 border-b border-border/60 bg-background/90 backdrop-blur-md min-h-[80px] z-10 shrink-0">
         <div className="flex items-center gap-3">
           <BrandMark size={48} />
           <span className="font-extrabold text-2xl tracking-wide text-white">Salman AI</span>
@@ -242,20 +242,20 @@ function ChatIndexScreen() {
         </Button>
       </header>
 
-      {/* 2. فقاعة زر "محادثة جديدة" الثابتة يسار الشاشة */}
-      <div className="absolute top-[96px] left-4 z-20">
+      {/* 2. فقاعة "محادثة جديدة" الثابتة يسار الشاشة أسفل الهيدر */}
+      <div className="absolute top-[92px] left-4 z-20">
         <Button
           onClick={handleNewChat}
           size="sm"
-          className="rounded-2xl flex items-center gap-2 text-xs font-bold border border-emerald-500/40 bg-emerald-950/80 text-emerald-400 hover:bg-emerald-900 shadow-lg backdrop-blur-md px-4 py-2.5"
+          className="rounded-2xl flex items-center gap-2 text-xs font-bold border border-emerald-500/40 bg-emerald-950/80 text-emerald-400 hover:bg-emerald-900 shadow-lg backdrop-blur-md px-3.5 py-2"
         >
           <PlusCircle className="size-4" />
           <span>محادثة جديدة</span>
         </Button>
       </div>
 
-      {/* 3. منطقة عرض المحادثة والرسائل */}
-      <div className="flex-1 overflow-y-auto space-y-6 px-4 pt-14 pb-6">
+      {/* 3. منطقة الشات والأجوبة */}
+      <div className="flex-1 overflow-y-auto space-y-6 px-4 pt-12 pb-6">
         {messages.length === 0 ? (
           <div className="flex h-full flex-col items-center justify-center text-center space-y-4 my-auto">
             <BrandMark size={88} className="shadow-lg shadow-emerald-500/10" />
@@ -285,7 +285,6 @@ function ChatIndexScreen() {
                     : "w-full max-w-[94%] bg-[#131f33] text-slate-100 rounded-2xl rounded-tr-none border border-slate-800 shadow-md self-end"
                 }`}
               >
-                {/* إرفاق الصور */}
                 {msg.attachment && (
                   <div className="mb-3 flex items-center gap-2 rounded-xl bg-black/20 p-2 text-xs">
                     {msg.attachment.type.startsWith("image/") ? (
@@ -303,7 +302,6 @@ function ChatIndexScreen() {
                   </div>
                 )}
 
-                {/* نص الرسالة */}
                 {msg.role === "assistant" ? (
                   <div className="prose prose-invert prose-sm max-w-none space-y-3 leading-relaxed prose-p:my-1.5 prose-ul:my-2 prose-li:my-0.5 text-slate-100">
                     <ReactMarkdown remarkPlugins={[remarkGfm]}>
@@ -315,7 +313,6 @@ function ChatIndexScreen() {
                 )}
               </div>
 
-              {/* قائمة الإجراءات عند الضغط المطول */}
               {activeActionIndex === idx && (
                 <div className="flex items-center gap-1 mt-2 p-1.5 bg-slate-900 border border-slate-700 rounded-xl shadow-xl z-10 animate-in fade-in zoom-in-95">
                   <button
@@ -355,7 +352,6 @@ function ChatIndexScreen() {
           ))
         )}
 
-        {/* حالة التفكير والصياغة */}
         {isSending && messages[messages.length - 1]?.content === "" && (
           <div className="flex w-full justify-end">
             <div className="w-fit max-w-[90%] px-5 py-3.5 text-sm bg-[#131f33] text-[#2dd4bf] rounded-2xl rounded-tr-none border border-slate-800 animate-pulse text-right font-medium shadow-md">
@@ -367,7 +363,7 @@ function ChatIndexScreen() {
       </div>
 
       {/* 4. حقل الإدخال السفلي */}
-      <footer className="p-3 border-t border-border bg-background/95 space-y-2">
+      <footer className="p-3 border-t border-border bg-background/95 space-y-2 shrink-0">
         <div className="flex items-center gap-2 overflow-x-auto pb-1 no-scrollbar">
           {QUICK_SUGGESTIONS.map((item, i) => (
             <button

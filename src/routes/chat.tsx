@@ -13,7 +13,6 @@ import {
   FileText,
   Trash2,
   Sparkles,
-  AlertCircle,
 } from "lucide-react";
 import { useState } from "react";
 
@@ -169,29 +168,34 @@ function ChatLayout() {
         </div>
       </aside>
 
-      {/* الشاشة الرئيسية */}
+      {/* نافذة الإعدادات */}
+      {isSettingsOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-md">
+          <div className="w-full max-w-md max-h-[90vh] overflow-y-auto bg-[#0d1424] border border-slate-800 rounded-3xl p-5 text-slate-100 shadow-2xl space-y-5">
+            <div className="flex items-center justify-between border-b border-slate-800/80 pb-3">
+              <div>
+                <h3 className="text-lg font-bold text-white">الإعدادات</h3>
+                <p className="text-xs text-slate-400">تخصيص تجربتك في Salman AI.</p>
+              </div>
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => setIsSettingsOpen(false)}
+                className="size-8 rounded-full text-slate-400 hover:text-white hover:bg-slate-800"
+              >
+                <X className="size-5" />
+              </Button>
+            </div>
+            {/* باقي خيارات الإعدادات كما هي */}
+          </div>
+        </div>
+      )}
+
+      {/* الشاشة الرئيسية تحتوي فقط على الـ Outlet لنقل تحكم الاقتراحات والإشعار للملف الداخلي */}
       <main className="flex-1 overflow-hidden relative flex flex-col bg-[#0b101b] w-full">
-        <div className="flex-1 overflow-y-auto w-full p-2 sm:p-4">
+        <div className="flex-1 overflow-y-auto w-full p-2 sm:p-4 flex flex-col">
           <Outlet />
         </div>
-
-        {/* شريط التنبيه متموضع فوق الاقتراحات ومربع الإرسال مباشرة */}
-        {!isLoggedIn && (
-          <div className="w-full px-3 py-1.5 shrink-0 bg-[#0b101b]">
-            <div className="w-full py-1.5 px-3 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-between text-[11px] text-amber-300/90">
-              <div className="flex items-center gap-1.5">
-                <AlertCircle className="size-3.5 text-amber-400 shrink-0" />
-                <span>تنبيه: محادثة كزائر — لن يتم حفظ السجل.</span>
-              </div>
-              <button
-                onClick={() => void navigate({ to: "/auth" })}
-                className="font-bold text-[#2dd4bf] hover:underline whitespace-nowrap"
-              >
-                تسجيل الدخول
-              </button>
-            </div>
-          </div>
-        )}
       </main>
     </div>
   );

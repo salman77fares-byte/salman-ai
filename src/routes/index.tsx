@@ -210,12 +210,12 @@ function ChatIndexScreen() {
   if (loading) {
     return (
       <div className="flex h-screen flex-col items-center justify-center gap-4 px-6 text-center bg-background">
-        <BrandMark size={72} className="shadow-glow animate-pulse" />
-        <h1 className="text-2xl font-extrabold">
+        <BrandMark size={56} className="shadow-glow animate-pulse" />
+        <h1 className="text-xl font-extrabold">
           مرحباً بك، أنا <span className="brand-gradient-text">Salman AI</span> ✨
         </h1>
-        <p className="flex items-center gap-2 text-sm text-muted-foreground">
-          <Loader2 className="size-4 animate-spin text-[#2dd4bf]" />
+        <p className="flex items-center gap-2 text-xs text-muted-foreground">
+          <Loader2 className="size-3.5 animate-spin text-[#2dd4bf]" />
           جارٍ التجهيز...
         </p>
       </div>
@@ -225,43 +225,43 @@ function ChatIndexScreen() {
   return (
     <div className="flex h-screen flex-col justify-between bg-background text-foreground relative overflow-hidden" dir="rtl">
       
-      {/* 1. الهيدر الوحيد والأساسي للصفحة */}
-      <header className="flex items-center justify-between px-6 py-4 border-b border-border/60 bg-background/90 backdrop-blur-md min-h-[80px] z-10 shrink-0">
-        <div className="flex items-center gap-3">
-          <BrandMark size={48} />
-          <span className="font-extrabold text-2xl tracking-wide text-white">Salman AI</span>
+      {/* 1. هيدر نحيف ومضغوط بالكامل (Compact Header) */}
+      <header className="flex items-center justify-between px-4 py-2.5 border-b border-border/50 bg-background/90 backdrop-blur-md h-[56px] z-10 shrink-0">
+        <div className="flex items-center gap-2">
+          <BrandMark size={32} />
+          <span className="font-extrabold text-lg tracking-wide text-white">Salman AI</span>
         </div>
 
         <Button
           variant="secondary"
           size="sm"
-          className="rounded-xl text-xs h-10 px-4 font-semibold flex items-center gap-2 bg-amber-500/10 text-amber-500 hover:bg-amber-500/20"
+          className="rounded-lg text-[11px] h-8 px-3 font-medium flex items-center gap-1.5 bg-amber-500/10 text-amber-500 hover:bg-amber-500/20"
         >
-          <LogIn className="size-4" />
+          <LogIn className="size-3.5" />
           <span>تسجيل الدخول</span>
         </Button>
       </header>
 
-      {/* 2. فقاعة "محادثة جديدة" الثابتة يسار الشاشة أسفل الهيدر */}
-      <div className="absolute top-[92px] left-4 z-20">
+      {/* 2. زر "محادثة جديدة" مضغوط وأنيق يتمركز يسار الشاشة تحت الهيدر مباشرة */}
+      <div className="absolute top-[64px] left-3 z-20">
         <Button
           onClick={handleNewChat}
           size="sm"
-          className="rounded-2xl flex items-center gap-2 text-xs font-bold border border-emerald-500/40 bg-emerald-950/80 text-emerald-400 hover:bg-emerald-900 shadow-lg backdrop-blur-md px-3.5 py-2"
+          className="rounded-xl flex items-center gap-1.5 text-[11px] h-7 font-bold border border-emerald-500/30 bg-emerald-950/80 text-emerald-400 hover:bg-emerald-900 shadow-sm backdrop-blur-md px-2.5"
         >
-          <PlusCircle className="size-4" />
+          <PlusCircle className="size-3.5" />
           <span>محادثة جديدة</span>
         </Button>
       </div>
 
-      {/* 3. منطقة الشات والأجوبة */}
-      <div className="flex-1 overflow-y-auto space-y-6 px-4 pt-12 pb-6">
+      {/* 3. منطقة الشات متناسقة المسافات */}
+      <div className="flex-1 overflow-y-auto space-y-5 px-3 pt-9 pb-4">
         {messages.length === 0 ? (
-          <div className="flex h-full flex-col items-center justify-center text-center space-y-4 my-auto">
-            <BrandMark size={88} className="shadow-lg shadow-emerald-500/10" />
+          <div className="flex h-full flex-col items-center justify-center text-center space-y-3 my-auto">
+            <BrandMark size={68} className="shadow-lg shadow-emerald-500/10" />
             <div>
-              <h2 className="text-2xl font-bold text-white mb-2">مرحباً بك مع Salman AI ✨</h2>
-              <p className="text-sm text-slate-400 max-w-sm leading-relaxed">
+              <h2 className="text-xl font-bold text-white mb-1">مرحباً بك مع Salman AI ✨</h2>
+              <p className="text-xs text-slate-400 max-w-xs leading-relaxed">
                 مساعدك الذكي لإنجاز مشاريعك، كتابة الأكواد، وتحليل الأفكار بكفاءة 🚀
               </p>
             </div>
@@ -279,31 +279,31 @@ function ChatIndexScreen() {
                 onTouchEnd={handleTouchEnd}
                 onMouseDown={() => handleTouchStart(idx)}
                 onMouseUp={handleTouchEnd}
-                className={`relative px-5 py-4 text-sm leading-relaxed text-right whitespace-pre-wrap break-words cursor-pointer select-none transition-all ${
+                className={`relative px-4 py-3 text-xs sm:text-sm leading-relaxed text-right whitespace-pre-wrap break-words cursor-pointer select-none transition-all ${
                   msg.role === "user"
-                    ? "w-fit max-w-[85%] bg-[#2dd4bf] text-slate-950 font-semibold rounded-2xl rounded-tl-none shadow-md self-start"
-                    : "w-full max-w-[94%] bg-[#131f33] text-slate-100 rounded-2xl rounded-tr-none border border-slate-800 shadow-md self-end"
+                    ? "w-fit max-w-[85%] bg-[#2dd4bf] text-slate-950 font-semibold rounded-2xl rounded-tl-none shadow-sm self-start"
+                    : "w-full max-w-[94%] bg-[#131f33] text-slate-100 rounded-2xl rounded-tr-none border border-slate-800 shadow-sm self-end"
                 }`}
               >
                 {msg.attachment && (
-                  <div className="mb-3 flex items-center gap-2 rounded-xl bg-black/20 p-2 text-xs">
+                  <div className="mb-2 flex items-center gap-2 rounded-lg bg-black/20 p-1.5 text-[11px]">
                     {msg.attachment.type.startsWith("image/") ? (
                       <img
                         src={msg.attachment.url}
                         alt="attachment"
-                        className="h-32 w-auto rounded-lg object-cover"
+                        className="h-28 w-auto rounded-md object-cover"
                       />
                     ) : (
-                      <div className="flex items-center gap-2 font-bold">
-                        <Paperclip className="size-4 text-emerald-400" />
-                        <span className="truncate max-w-[200px]">{msg.attachment.name}</span>
+                      <div className="flex items-center gap-1.5 font-bold">
+                        <Paperclip className="size-3.5 text-emerald-400" />
+                        <span className="truncate max-w-[180px]">{msg.attachment.name}</span>
                       </div>
                     )}
                   </div>
                 )}
 
                 {msg.role === "assistant" ? (
-                  <div className="prose prose-invert prose-sm max-w-none space-y-3 leading-relaxed prose-p:my-1.5 prose-ul:my-2 prose-li:my-0.5 text-slate-100">
+                  <div className="prose prose-invert prose-xs max-w-none space-y-2 leading-relaxed text-slate-100">
                     <ReactMarkdown remarkPlugins={[remarkGfm]}>
                       {msg.content}
                     </ReactMarkdown>
@@ -314,37 +314,37 @@ function ChatIndexScreen() {
               </div>
 
               {activeActionIndex === idx && (
-                <div className="flex items-center gap-1 mt-2 p-1.5 bg-slate-900 border border-slate-700 rounded-xl shadow-xl z-10 animate-in fade-in zoom-in-95">
+                <div className="flex items-center gap-1 mt-1.5 p-1 bg-slate-900 border border-slate-700 rounded-lg shadow-lg z-10 animate-in fade-in zoom-in-95">
                   <button
                     onClick={() => handleCopy(msg.content)}
-                    className="flex items-center gap-1 text-xs px-2.5 py-1.5 rounded-lg hover:bg-slate-800 text-slate-200"
+                    className="flex items-center gap-1 text-[11px] px-2 py-1 rounded-md hover:bg-slate-800 text-slate-200"
                   >
-                    <Copy className="size-3.5" />
+                    <Copy className="size-3" />
                     نسخ
                   </button>
                   {msg.role === "user" && (
                     <>
                       <button
                         onClick={() => handleEdit(msg.content)}
-                        className="flex items-center gap-1 text-xs px-2.5 py-1.5 rounded-lg hover:bg-slate-800 text-slate-200"
+                        className="flex items-center gap-1 text-[11px] px-2 py-1 rounded-md hover:bg-slate-800 text-slate-200"
                       >
-                        <Edit2 className="size-3.5" />
+                        <Edit2 className="size-3" />
                         تعديل
                       </button>
                       <button
                         onClick={() => handleRetry(idx)}
-                        className="flex items-center gap-1 text-xs px-2.5 py-1.5 rounded-lg hover:bg-slate-800 text-slate-200"
+                        className="flex items-center gap-1 text-[11px] px-2 py-1 rounded-md hover:bg-slate-800 text-slate-200"
                       >
-                        <RotateCcw className="size-3.5" />
+                        <RotateCcw className="size-3" />
                         إعادة المحاولة
                       </button>
                     </>
                   )}
                   <button
                     onClick={() => setActiveActionIndex(null)}
-                    className="text-slate-500 hover:text-slate-300 px-1.5"
+                    className="text-slate-500 hover:text-slate-300 px-1"
                   >
-                    <X className="size-3.5" />
+                    <X className="size-3" />
                   </button>
                 </div>
               )}
@@ -354,7 +354,7 @@ function ChatIndexScreen() {
 
         {isSending && messages[messages.length - 1]?.content === "" && (
           <div className="flex w-full justify-end">
-            <div className="w-fit max-w-[90%] px-5 py-3.5 text-sm bg-[#131f33] text-[#2dd4bf] rounded-2xl rounded-tr-none border border-slate-800 animate-pulse text-right font-medium shadow-md">
+            <div className="w-fit max-w-[90%] px-4 py-2.5 text-xs bg-[#131f33] text-[#2dd4bf] rounded-xl rounded-tr-none border border-slate-800 animate-pulse text-right font-medium shadow-sm">
               {activeStatuses[statusIndex]}
             </div>
           </div>
@@ -362,14 +362,14 @@ function ChatIndexScreen() {
         <div ref={messagesEndRef} />
       </div>
 
-      {/* 4. حقل الإدخال السفلي */}
-      <footer className="p-3 border-t border-border bg-background/95 space-y-2 shrink-0">
-        <div className="flex items-center gap-2 overflow-x-auto pb-1 no-scrollbar">
+      {/* 4. حقل الإدخال السفلي المريح */}
+      <footer className="p-2.5 border-t border-border bg-background/95 space-y-2 shrink-0">
+        <div className="flex items-center gap-1.5 overflow-x-auto pb-0.5 no-scrollbar">
           {QUICK_SUGGESTIONS.map((item, i) => (
             <button
               key={i}
               onClick={() => setInput(item)}
-              className="shrink-0 rounded-full border border-slate-800 bg-slate-900/80 px-3.5 py-1.5 text-xs font-medium text-slate-300 hover:bg-slate-800 hover:text-white transition"
+              className="shrink-0 rounded-full border border-slate-800 bg-slate-900/80 px-3 py-1 text-[11px] font-medium text-slate-300 hover:bg-slate-800 hover:text-white transition"
             >
               {item}
             </button>
@@ -377,29 +377,29 @@ function ChatIndexScreen() {
         </div>
 
         {selectedFile && (
-          <div className="flex items-center justify-between rounded-xl bg-slate-800 px-3 py-2 text-xs">
+          <div className="flex items-center justify-between rounded-lg bg-slate-800 px-2.5 py-1.5 text-xs">
             <div className="flex items-center gap-2 truncate">
               {selectedFile.type.startsWith("image/") ? (
-                <ImageIcon className="size-4 text-[#2dd4bf] shrink-0" />
+                <ImageIcon className="size-3.5 text-[#2dd4bf] shrink-0" />
               ) : (
-                <Paperclip className="size-4 text-[#2dd4bf] shrink-0" />
+                <Paperclip className="size-3.5 text-[#2dd4bf] shrink-0" />
               )}
-              <span className="truncate max-w-[200px] font-bold">{selectedFile.name}</span>
+              <span className="truncate max-w-[180px] font-bold text-[11px]">{selectedFile.name}</span>
             </div>
             <Button
               type="button"
               variant="ghost"
               size="icon"
-              className="size-6 rounded-full"
+              className="size-5 rounded-full"
               onClick={() => setSelectedFile(null)}
             >
-              <X className="size-3.5" />
+              <X className="size-3" />
             </Button>
           </div>
         )}
 
         <div className="flex items-center gap-2">
-          <div className="relative flex-1 flex items-center rounded-2xl border border-slate-700 bg-slate-900/90 focus-within:ring-2 focus-within:ring-[#2dd4bf]">
+          <div className="relative flex-1 flex items-center rounded-xl border border-slate-700 bg-slate-900/90 focus-within:ring-1 focus-within:ring-[#2dd4bf]">
             <input
               type="file"
               ref={fileInputRef}
@@ -410,10 +410,10 @@ function ChatIndexScreen() {
             <button
               type="button"
               onClick={() => fileInputRef.current?.click()}
-              className="absolute right-2 text-slate-400 hover:text-white p-2 rounded-xl hover:bg-slate-800 transition"
+              className="absolute right-1.5 text-slate-400 hover:text-white p-1.5 rounded-lg hover:bg-slate-800 transition"
               title="إرفاق صورة أو ملف"
             >
-              <Plus className="size-5" />
+              <Plus className="size-4" />
             </button>
 
             <textarea
@@ -421,7 +421,7 @@ function ChatIndexScreen() {
               onChange={(e) => setInput(e.target.value)}
               placeholder="اكتب رسالتك لـ Salman AI..."
               rows={1}
-              className="w-full resize-none bg-transparent py-3 pr-11 pl-4 text-sm text-right text-white focus:outline-none max-h-32 min-h-[44px]"
+              className="w-full resize-none bg-transparent py-2.5 pr-9 pl-3 text-xs text-right text-white focus:outline-none max-h-28 min-h-[38px]"
             />
           </div>
 
@@ -430,9 +430,9 @@ function ChatIndexScreen() {
             onClick={() => handleSend()}
             disabled={isSending || (!input.trim() && !selectedFile)}
             size="icon"
-            className="rounded-2xl shrink-0 bg-[#2dd4bf] hover:bg-[#26b8a5] text-slate-950 h-11 w-11"
+            className="rounded-xl shrink-0 bg-[#2dd4bf] hover:bg-[#26b8a5] text-slate-950 h-9 w-9"
           >
-            <Send className="size-4 -rotate-90" />
+            <Send className="size-3.5 -rotate-90" />
           </Button>
         </div>
       </footer>

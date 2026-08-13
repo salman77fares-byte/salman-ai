@@ -11,7 +11,8 @@ import { Button } from "@/components/ui/button";
 import { useSession } from "@/hooks/useSession";
 import { askSalmanAI } from "@/lib/aiService";
 
-export const Route = createFileRoute("/chat/")({
+// تعديل المسار ليعمل كصفحة رئيسية مباشرة
+export const Route = createFileRoute("/")({
   component: ChatIndexScreen,
 });
 
@@ -258,7 +259,7 @@ function ChatIndexScreen() {
             <BrandMark size={64} />
             <h2 className="text-xl font-bold">مرحباً بك مع Salman AI</h2>
             <p className="text-sm text-muted-foreground max-w-xs">
-              أسألني أي شيء، أرفق صوراً، واستفد من خيارات النقر المطول على الرسائل.
+              مساعدك الذكي لإنجاز مشاريعك، كتابة الأكواد، وتحليل الأفكار بكفاءة 🚀
             </p>
           </div>
         ) : (

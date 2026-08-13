@@ -14,6 +14,7 @@ import {
   Trash2,
   Sparkles,
   AlertCircle,
+  Plus,
 } from "lucide-react";
 import { useState } from "react";
 
@@ -49,6 +50,10 @@ function ChatLayout() {
     }
   };
 
+  const handleNewChat = () => {
+    void navigate({ to: "/chat" });
+  };
+
   const getFontSizeValue = () => {
     switch (fontSize) {
       case "small": return "13px";
@@ -63,7 +68,7 @@ function ChatLayout() {
       style={{ fontSize: getFontSizeValue() }}
       dir="rtl"
     >
-      {/* الهيدر الرئيسي */}
+      {/* الهيدر الرئيسي الأصلي */}
       <header className="flex h-14 w-full items-center justify-between border-b border-slate-800/80 bg-[#0b101b] px-3 shrink-0 z-20">
         <div className="flex items-center gap-2">
           <Button
@@ -109,7 +114,7 @@ function ChatLayout() {
         />
       )}
 
-      {/* القائمة الجانبية (بدون زر الوضع النهاري) */}
+      {/* القائمة الجانبية */}
       <aside
         className={`fixed top-0 right-0 z-50 h-full w-72 bg-[#0d1424] border-l border-slate-800/80 flex flex-col justify-between p-4 transition-transform duration-300 ease-in-out ${
           isSidebarOpen ? "translate-x-0" : "translate-x-full"
@@ -140,7 +145,6 @@ function ChatLayout() {
           </div>
         </div>
 
-        {/* الأسفل: الإعدادات + تسجيل الدخول */}
         <div className="space-y-2.5 pt-4 border-t border-slate-800/80">
           <button
             onClick={() => {
@@ -170,7 +174,7 @@ function ChatLayout() {
         </div>
       </aside>
 
-      {/* نافذة الإعدادات العودة كاملة بكل الخيارات */}
+      {/* نافذة الإعدادات */}
       {isSettingsOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-md">
           <div className="w-full max-w-md max-h-[90vh] overflow-y-auto bg-[#0d1424] border border-slate-800 rounded-3xl p-5 text-slate-100 shadow-2xl space-y-5">
@@ -190,7 +194,6 @@ function ChatLayout() {
               </Button>
             </div>
 
-            {/* الحساب */}
             <div className="space-y-2">
               <span className="text-xs font-bold text-slate-400">الحساب</span>
               <div className="p-3.5 rounded-2xl bg-slate-900/80 border border-slate-800 text-xs text-slate-300 leading-relaxed">
@@ -200,7 +203,6 @@ function ChatLayout() {
               </div>
             </div>
 
-            {/* إعدادات الذكاء الاصطناعي */}
             <div className="space-y-3">
               <span className="text-xs font-bold text-slate-400 flex items-center gap-1">
                 <Sparkles className="size-3.5 text-amber-400" /> إعدادات الذكاء الاصطناعي
@@ -232,7 +234,6 @@ function ChatLayout() {
               </div>
             </div>
 
-            {/* التفضيلات والعرض */}
             <div className="space-y-3">
               <span className="text-xs font-bold text-slate-400">التفضيلات والعرض</span>
 
@@ -249,7 +250,6 @@ function ChatLayout() {
                 </select>
               </div>
 
-              {/* حجم الخط الجاهز للعمل */}
               <div className="flex items-center justify-between p-3.5 rounded-2xl bg-slate-900/80 border border-slate-800">
                 <span className="text-xs font-semibold">حجم الخط</span>
                 <select
@@ -264,7 +264,6 @@ function ChatLayout() {
               </div>
             </div>
 
-            {/* مشاريع وخدمات سلمان */}
             <div className="space-y-2.5">
               <span className="text-xs font-bold text-slate-400 flex items-center gap-1">
                 🌐 مشاريع وخدمات سلمان
@@ -300,7 +299,7 @@ function ChatLayout() {
                   </div>
                   <div>
                     <h4 className="text-xs font-bold text-slate-200">متجر كنز</h4>
-                    <p className="text-[10px] text-slate-400">متجر إلكتروني للمنتجات المختارة</p>
+                    <p className="text-[10px] text-slate-400">متجر إلكتروني للممنتجات المختارة</p>
                   </div>
                 </div>
                 <ExternalLink className="size-3.5 text-slate-500" />
@@ -325,7 +324,6 @@ function ChatLayout() {
               </a>
             </div>
 
-            {/* عن التطبيق */}
             <div className="space-y-2 pt-2">
               <span className="text-xs font-bold text-slate-400">عن التطبيق</span>
               <div className="p-3.5 rounded-2xl bg-slate-900/80 border border-slate-800 text-xs text-slate-400 space-y-3">
@@ -348,7 +346,7 @@ function ChatLayout() {
         </div>
       )}
 
-      {/* مودال النوافذ المنسدلة */}
+      {/* مودال سياسات الاستخدام */}
       {activePolicyModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
           <div className="w-full max-w-sm bg-[#0d1424] border border-slate-800 rounded-3xl p-5 text-slate-200 space-y-4">
@@ -395,33 +393,42 @@ function ChatLayout() {
         </div>
       )}
 
-      {/* منطقة المحادثة */}
-      <main className="flex-1 overflow-hidden relative flex flex-col bg-[#0b101b]">
+      {/* الشاشة الرئيسية */}
+      <main className="flex-1 overflow-hidden relative flex flex-col bg-[#0b101b] w-full">
         
-        {/* شاشة العرض والأجوبة */}
-        <div className="flex-1 overflow-y-auto p-4">
+        {/* شريط يحتوي على زر "محادثة جديدة" خارج الهيدر أسفل الشريط العلوي بالضبط */}
+        <div className="w-full px-4 pt-3 pb-1 flex justify-start shrink-0">
+          <Button
+            onClick={handleNewChat}
+            variant="outline"
+            className="h-9 rounded-full px-4 text-xs font-bold border-slate-700/70 bg-[#121a2d]/80 text-slate-200 hover:bg-slate-800 hover:text-white flex items-center gap-1.5 shadow-sm transition-all"
+          >
+            <span>محادثة جديدة</span>
+            <Plus className="size-4 text-[#2dd4bf]" />
+          </Button>
+        </div>
+
+        {/* عرض المحادثة والرسائل */}
+        <div className="flex-1 overflow-y-auto w-full p-2 sm:p-4">
           <Outlet />
         </div>
 
-        {/* الشريط المدمج السفلي: يحتوي على شريط التنبيه المدمج المصغر + حقل الإدخال الأصلي */}
-        <div className="p-3 border-t border-slate-800/80 bg-[#0b101b]/95 backdrop-blur shrink-0 space-y-2">
-          
-          {/* التنبيه المصغر في المنطقة المحددة بالأحمر فوق حقل الرسالة */}
+        {/* شريط التنبيه المصغر فوق مربع الإرسال */}
+        <div className="w-full p-2 sm:p-3 border-t border-slate-800/80 bg-[#0b101b]/95 backdrop-blur shrink-0 space-y-2">
           {!isLoggedIn && (
-            <div className="max-w-4xl mx-auto py-1 px-3 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-between text-[11px] text-amber-300/90">
+            <div className="w-full py-1.5 px-3 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-between text-[11px] text-amber-300/90">
               <div className="flex items-center gap-1.5">
                 <AlertCircle className="size-3.5 text-amber-400 shrink-0" />
                 <span>تنبيه: محادثة كزائر — لن يتم حفظ السجل.</span>
               </div>
               <button
                 onClick={() => void navigate({ to: "/auth" })}
-                className="font-bold text-[#2dd4bf] hover:underline"
+                className="font-bold text-[#2dd4bf] hover:underline whitespace-nowrap"
               >
                 تسجيل الدخول
               </button>
             </div>
           )}
-
         </div>
 
       </main>

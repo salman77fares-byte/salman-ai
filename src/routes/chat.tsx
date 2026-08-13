@@ -68,7 +68,7 @@ function ChatLayout() {
       style={{ fontSize: getFontSizeValue() }}
       dir="rtl"
     >
-      {/* الهيدر الرئيسي الأصلي */}
+      {/* الهيدر الرئيسي */}
       <header className="flex h-14 w-full items-center justify-between border-b border-slate-800/80 bg-[#0b101b] px-3 shrink-0 z-20">
         <div className="flex items-center gap-2">
           <Button
@@ -299,7 +299,7 @@ function ChatLayout() {
                   </div>
                   <div>
                     <h4 className="text-xs font-bold text-slate-200">متجر كنز</h4>
-                    <p className="text-[10px] text-slate-400">متجر إلكتروني للممنتجات المختارة</p>
+                    <p className="text-[10px] text-slate-400">متجر إلكتروني للمنتجات المختارة</p>
                   </div>
                 </div>
                 <ExternalLink className="size-3.5 text-slate-500" />
@@ -346,7 +346,7 @@ function ChatLayout() {
         </div>
       )}
 
-      {/* مودال سياسات الاستخدام */}
+      {/* مودال السياسات */}
       {activePolicyModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
           <div className="w-full max-w-sm bg-[#0d1424] border border-slate-800 rounded-3xl p-5 text-slate-200 space-y-4">
@@ -396,7 +396,7 @@ function ChatLayout() {
       {/* الشاشة الرئيسية */}
       <main className="flex-1 overflow-hidden relative flex flex-col bg-[#0b101b] w-full">
         
-        {/* شريط يحتوي على زر "محادثة جديدة" خارج الهيدر أسفل الشريط العلوي بالضبط */}
+        {/* زر "محادثة جديدة" واحد فقط أسفل الهيدر مباشرة */}
         <div className="w-full px-4 pt-3 pb-1 flex justify-start shrink-0">
           <Button
             onClick={handleNewChat}
@@ -408,14 +408,9 @@ function ChatLayout() {
           </Button>
         </div>
 
-        {/* عرض المحادثة والرسائل */}
-        <div className="flex-1 overflow-y-auto w-full p-2 sm:p-4">
-          <Outlet />
-        </div>
-
-        {/* شريط التنبيه المصغر فوق مربع الإرسال */}
-        <div className="w-full p-2 sm:p-3 border-t border-slate-800/80 bg-[#0b101b]/95 backdrop-blur shrink-0 space-y-2">
-          {!isLoggedIn && (
+        {/* تنبيه الزائر مرفوع لأعلى شاشة الرسائل وقبل مربع الكتابة */}
+        {!isLoggedIn && (
+          <div className="px-3 pt-2 shrink-0">
             <div className="w-full py-1.5 px-3 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-between text-[11px] text-amber-300/90">
               <div className="flex items-center gap-1.5">
                 <AlertCircle className="size-3.5 text-amber-400 shrink-0" />
@@ -428,7 +423,12 @@ function ChatLayout() {
                 تسجيل الدخول
               </button>
             </div>
-          )}
+          </div>
+        )}
+
+        {/* عرض محتوى المحادثة من المكونات الفرعية */}
+        <div className="flex-1 overflow-y-auto w-full p-2 sm:p-4">
+          <Outlet />
         </div>
 
       </main>

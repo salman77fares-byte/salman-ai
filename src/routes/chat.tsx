@@ -176,7 +176,7 @@ function ChatLayout() {
   );
 
   return (
-    <div className="flex h-screen w-full overflow-hidden bg-background">
+    <div dir="rtl" className="flex h-screen w-full overflow-hidden bg-background text-right">
       <aside className="hidden w-72 shrink-0 border-e border-sidebar-border md:block">
         {sidebar()}
       </aside>
@@ -244,8 +244,8 @@ function ChatLayout() {
       </div>
 
       <Dialog open={settingsOpen} onOpenChange={setSettingsOpen}>
-        <DialogContent className="max-h-[85vh] max-w-sm overflow-y-auto rounded-3xl">
-          <DialogHeader>
+        <DialogContent dir="rtl" className="max-h-[85vh] max-w-sm overflow-y-auto rounded-3xl text-right">
+          <DialogHeader className="text-right">
             <DialogTitle>الإعدادات</DialogTitle>
             <DialogDescription>تخصيص تجربتك في Salman AI.</DialogDescription>
           </DialogHeader>
@@ -325,13 +325,13 @@ function ChatLayout() {
                     className="flex items-center gap-3 rounded-2xl bg-secondary px-4 py-3 transition hover:bg-secondary/70"
                   >
                     <span className="text-lg">{project.emoji}</span>
-                    <span className="min-w-0">
+                    <span className="min-w-0 flex-1">
                       <span className="block truncate text-xs font-extrabold">{project.name}</span>
                       <span className="block truncate text-[11px] text-muted-foreground">
                         {project.description}
                       </span>
                     </span>
-                    <ExternalLink className="ms-auto size-3.5 shrink-0 text-primary" />
+                    <ExternalLink className="me-auto size-3.5 shrink-0 text-primary" />
                   </a>
                 </li>
               ))}

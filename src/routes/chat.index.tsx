@@ -209,7 +209,7 @@ function ChatIndexScreen() {
 
   if (loading) {
     return (
-      <div className="flex h-full flex-col items-center justify-center gap-4 px-6 text-center bg-[#0b101b] text-slate-100">
+      <div className="flex h-full flex-col items-center justify-center gap-4 bg-[#0b101b] px-6 text-center text-slate-100">
         <BrandMark size={64} className="shadow-glow" />
         <h1 className="text-xl font-extrabold">
           مرحباً بك، أنا <span className="brand-gradient-text">Salman AI</span>
@@ -239,20 +239,22 @@ function ChatIndexScreen() {
       {/* منطقة المحتوى والرسائل */}
       <div className="flex flex-1 flex-col justify-between space-y-5 overflow-y-auto px-4 py-4">
         
-        {/* الشعار والنصوص الثابتة في منتصف الشاشة */}
-        <div className="my-auto flex flex-col items-center justify-center space-y-3 py-6 text-center">
-          <div className="rounded-2xl border border-slate-800 bg-slate-900/80 p-3 shadow-xl">
-            <BrandMark size={64} />
+        {/* واجهة الترحيب تظهر فقط عندما تكون قائمة الرسائل فارغة */}
+        {messages.length === 0 && (
+          <div className="my-auto flex flex-col items-center justify-center space-y-3 py-6 text-center">
+            <div className="rounded-2xl border border-slate-800 bg-slate-900/80 p-3 shadow-xl">
+              <BrandMark size={64} />
+            </div>
+            <h2 className="text-xl font-black tracking-tight text-white">مرحباً بك مع Salman AI</h2>
+            <p className="max-w-xs text-xs leading-relaxed text-slate-400">
+              أسألني أي شيء، أرفق صوراً، واستفد من خيارات النقر المطوّل على الرسائل.
+            </p>
           </div>
-          <h2 className="text-xl font-black tracking-tight text-white">مرحباً بك مع Salman AI</h2>
-          <p className="max-w-xs text-xs leading-relaxed text-slate-400">
-            أسألني أي شيء، أرفق صوراً، واستفد من خيارات النقر المطوّل على الرسائل.
-          </p>
-        </div>
+        )}
 
         {/* قائمة الرسائل في حال وجود محادثات */}
         {messages.length > 0 && (
-          <div className="w-full space-y-4">
+          <div className="w-full space-y-4 pt-10">
             {messages.map((msg, idx) => (
               <div
                 key={idx}

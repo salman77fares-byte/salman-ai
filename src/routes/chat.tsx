@@ -7,7 +7,7 @@ import {
   useParams,
 } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
-import { ExternalLink, LogIn, LogOut, Menu } from "lucide-react";
+import { ExternalLink, LogIn, LogOut, Menu, Trash2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 
@@ -22,9 +22,11 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
+import { Switch } from "@/components/ui/switch";
 import { useSession } from "@/hooks/useSession";
 import { supabase } from "@/integrations/supabase/client";
 import {
+  clearAllConversations,
   createConversation,
   deleteConversation,
   listConversations,
@@ -32,6 +34,7 @@ import {
 } from "@/lib/chat.functions";
 import { GuestChatProvider, NewChatProvider, useGuestChat } from "@/lib/guest-chat";
 import { SALMAN_PROJECTS } from "@/lib/projects";
+import { useTheme } from "@/lib/theme";
 
 export const Route = createFileRoute("/chat")({
   ssr: false,
@@ -67,6 +70,7 @@ function ChatLayout() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [fontScale, setFontScale] = useState("medium");
   const [replyLang, setReplyLang] = useState("auto");
+  const { theme, toggleTheme } = useTheme();
   const { session, user, isGuest } = useSession();
   const { resetGuestChat } = useGuestChat();
 
@@ -94,6 +98,7 @@ function ChatLayout() {
   const fetchConversations = useServerFn(listConversations);
   const createFn = useServerFn(createConversation);
   const deleteFn = useServerFn(deleteConversation);
+  const clearFn = useServerFn(clearAllConversations);
 
   const { data: conversations = [] } = useQuery<Conversation[]>({
     queryKey: ["conversations"],
@@ -136,6 +141,16 @@ function ChatLayout() {
     onError: () => toast.error("تعذّر حذف المحادثة."),
   });
 
+  const clearAll = useMutation({
+    mutationFn: () => clearFn(),
+    onSuccess: async () => {
+      await invalidate();
+      toast.success("تم حذف كل المحادثات");
+      void navigate({ to: "/chat" });
+    },
+    onError: () => toast.error("تعذّر حذف المحادثات."),
+  });
+
   const signOut = async () => {
     await queryClient.cancelQueries();
     queryClient.clear();
@@ -150,6 +165,7 @@ function ChatLayout() {
       isGuest={isGuest}
       userEmail={user?.email ?? null}
       onDeleteConversation={(id) => removeChat.mutate(id)}
+      // تم حذف onClearAll من هنا لضمان عدم ظهوره في القائمة الجانبية
       onOpenSettings={() => {
         setSettingsOpen(true);
         onClose?.();
@@ -251,6 +267,10 @@ function ChatLayout() {
 
           <section className="space-y-2">
             <p className="text-xs font-extrabold text-muted-foreground">التفضيلات</p>
+            <div className="flex items-center justify-between rounded-2xl bg-secondary px-4 py-3">
+              <span className="text-sm font-bold">الوضع الليلي</span>
+              <Switch checked={theme === "dark"} onCheckedChange={toggleTheme} />
+            </div>
             <div className="flex items-center justify-between gap-2 rounded-2xl bg-secondary px-4 py-3">
               <span className="text-sm font-bold">لغة الردود</span>
               <select
@@ -276,6 +296,20 @@ function ChatLayout() {
               </select>
             </div>
           </section>
+
+          {!isGuest ? (
+            <section className="space-y-2">
+              <p className="text-xs font-extrabold text-muted-foreground">البيانات</p>
+              <Button
+                variant="outline"
+                className="w-full justify-start gap-2 rounded-2xl text-xs font-bold text-destructive"
+                onClick={() => clearAll.mutate()}
+              >
+                <Trash2 className="size-4" />
+                حذف كل المحادثات
+              </Button>
+            </section>
+          ) : null}
 
           <section className="space-y-2">
             <p className="text-xs font-extrabold text-muted-foreground">

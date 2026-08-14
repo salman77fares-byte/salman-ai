@@ -276,8 +276,8 @@ function ChatIndexScreen() {
                     onMouseUp={handleTouchEnd}
                     className={`relative w-fit cursor-pointer select-none break-words whitespace-pre-wrap px-4 py-3 text-right text-sm leading-relaxed shadow-sm ${
                       msg.role === "user"
-                        ? "rounded-2xl rounded-br-none bg-[#2dd4bf] font-medium text-slate-950"
-                        : "rounded-2xl rounded-tl-none border border-slate-700/60 bg-slate-800/90 text-slate-100"
+                        ? "rounded-2xl rounded-bl-none bg-[#2dd4bf] font-medium text-slate-950"
+                        : "rounded-2xl rounded-tr-none border border-slate-700/60 bg-slate-800/90 text-slate-100"
                     }`}
                   >
                     {msg.attachment && (
@@ -355,7 +355,7 @@ function ChatIndexScreen() {
             <div className="shrink-0">
               <BrandMark size={32} />
             </div>
-            <div className="w-fit max-w-[85%] animate-pulse rounded-2xl rounded-tl-none border border-slate-700/60 bg-slate-800/90 px-4 py-3 text-right text-sm font-medium text-[#2dd4bf]">
+            <div className="w-fit max-w-[85%] animate-pulse rounded-2xl rounded-tr-none border border-slate-700/60 bg-slate-800/90 px-4 py-3 text-right text-sm font-medium text-[#2dd4bf]">
               {activeStatuses[statusIndex]}
             </div>
           </div>
@@ -422,6 +422,9 @@ function ChatIndexScreen() {
               onChange={(e) => setInput(e.target.value)}
               placeholder="اكتب رسالتك لـ Salman AI..."
               rows={1}
+              autoComplete="on"
+              autoCorrect="on"
+              spellCheck={true}
               className="max-h-32 min-h-[44px] w-full resize-none bg-transparent py-3 pl-4 pr-11 text-right text-xs text-white placeholder:text-slate-500 focus:outline-none"
             />
           </div>

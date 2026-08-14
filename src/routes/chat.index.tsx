@@ -1,6 +1,6 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { Loader2, Send, Plus, Paperclip, X, Image as ImageIcon, Copy, Edit2, RotateCcw, PlusCircle, LogIn } from "lucide-react";
+import { Loader2, Send, Plus, Paperclip, X, Image as ImageIcon, Copy, Edit2, RotateCcw } from "lucide-react";
 import { useEffect, useState, useRef } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -223,58 +223,46 @@ function ChatIndexScreen() {
   }
 
   return (
-    <div className="flex h-full flex-col justify-between bg-[#0b101b] text-slate-100" dir="rtl">
+    <div className="relative flex h-full flex-col justify-between bg-[#0b101b] text-slate-100" dir="rtl">
       
-      {/* الهيدر العلوي */}
-      <div className="flex items-center justify-between px-5 py-4 border-b border-slate-800/80 bg-[#0b101b] min-h-[64px] shrink-0">
-        <Button
-          onClick={handleNewChat}
-          variant="outline"
-          size="sm"
-          className="rounded-xl flex items-center gap-1.5 text-xs border-slate-800 bg-slate-900/60 hover:bg-slate-800 text-slate-200 px-3 py-1.5"
-        >
-          <PlusCircle className="size-4 text-[#2dd4bf]" />
-          محادثة جديدة
-        </Button>
-
-        <Button
-          onClick={() => void navigate({ to: "/auth" })}
-          variant="secondary"
-          size="sm"
-          className="rounded-lg text-[11px] h-8 px-2.5 font-medium flex items-center gap-1 bg-amber-500/10 text-amber-400 hover:bg-amber-500/20 border border-amber-500/20"
-        >
-          <LogIn className="size-3" />
-          تسجيل الدخول
-        </Button>
-      </div>
+      {/* زر محادثة جديدة العائم */}
+      <Button
+        onClick={handleNewChat}
+        variant="outline"
+        size="sm"
+        className="absolute left-4 top-4 z-10 flex items-center gap-1.5 rounded-full border-slate-800 bg-slate-900/60 px-3 py-1.5 text-xs text-slate-200 hover:bg-slate-800"
+      >
+        محادثة جديدة
+        <Plus className="size-4 text-[#2dd4bf]" />
+      </Button>
 
       {/* منطقة المحتوى والرسائل */}
-      <div className="flex-1 overflow-y-auto space-y-5 px-4 py-4 flex flex-col justify-between">
+      <div className="flex flex-1 flex-col justify-between space-y-5 overflow-y-auto px-4 py-4">
         
         {/* الشعار والنصوص الثابتة في منتصف الشاشة */}
-        <div className="flex flex-col items-center justify-center text-center space-y-3 my-auto py-6">
-          <div className="p-3 rounded-2xl bg-slate-900/80 border border-slate-800 shadow-xl">
+        <div className="my-auto flex flex-col items-center justify-center space-y-3 py-6 text-center">
+          <div className="rounded-2xl border border-slate-800 bg-slate-900/80 p-3 shadow-xl">
             <BrandMark size={64} />
           </div>
-          <h2 className="text-xl font-black text-white tracking-tight">مرحباً بك مع Salman AI</h2>
-          <p className="text-xs text-slate-400 max-w-xs leading-relaxed">
+          <h2 className="text-xl font-black tracking-tight text-white">مرحباً بك مع Salman AI</h2>
+          <p className="max-w-xs text-xs leading-relaxed text-slate-400">
             أسألني أي شيء، أرفق صوراً، واستفد من خيارات النقر المطوّل على الرسائل.
           </p>
         </div>
 
         {/* قائمة الرسائل في حال وجود محادثات */}
         {messages.length > 0 && (
-          <div className="space-y-4 w-full">
+          <div className="w-full space-y-4">
             {messages.map((msg, idx) => (
               <div
                 key={idx}
-                className={`flex flex-col w-full ${
+                className={`flex w-full flex-col ${
                   msg.role === "user" ? "items-end" : "items-start"
                 }`}
               >
-                <div className="flex items-start gap-2.5 max-w-[88%]">
+                <div className="flex max-w-[88%] items-start gap-2.5">
                   {msg.role === "assistant" && (
-                    <div className="shrink-0 mt-1">
+                    <div className="mt-1 shrink-0">
                       <BrandMark size={32} />
                     </div>
                   )}
@@ -284,10 +272,10 @@ function ChatIndexScreen() {
                     onTouchEnd={handleTouchEnd}
                     onMouseDown={() => handleTouchStart(idx)}
                     onMouseUp={handleTouchEnd}
-                    className={`relative w-fit px-4 py-3 text-sm leading-relaxed text-right whitespace-pre-wrap break-words cursor-pointer select-none ${
+                    className={`relative w-fit cursor-pointer select-none break-words whitespace-pre-wrap px-4 py-3 text-right text-sm leading-relaxed shadow-sm ${
                       msg.role === "user"
-                        ? "bg-[#2dd4bf] text-slate-950 font-medium rounded-2xl rounded-br-none shadow-sm"
-                        : "bg-slate-800/90 text-slate-100 rounded-2xl rounded-tl-none border border-slate-700/60 shadow-sm"
+                        ? "rounded-2xl rounded-br-none bg-[#2dd4bf] font-medium text-slate-950"
+                        : "rounded-2xl rounded-tl-none border border-slate-700/60 bg-slate-800/90 text-slate-100"
                     }`}
                   >
                     {msg.attachment && (
@@ -301,7 +289,7 @@ function ChatIndexScreen() {
                         ) : (
                           <div className="flex items-center gap-1.5 font-bold">
                             <Paperclip className="size-4" />
-                            <span className="truncate max-w-[180px]">{msg.attachment.name}</span>
+                            <span className="max-w-[180px] truncate">{msg.attachment.name}</span>
                           </div>
                         )}
                       </div>
@@ -320,10 +308,10 @@ function ChatIndexScreen() {
                 </div>
 
                 {activeActionIndex === idx && (
-                  <div className="flex items-center gap-1 mt-1.5 p-1 bg-slate-900 border border-slate-700 rounded-xl shadow-lg z-10 animate-in fade-in">
+                  <div className="animate-in fade-in z-10 mt-1.5 flex items-center gap-1 rounded-xl border border-slate-700 bg-slate-900 p-1 shadow-lg">
                     <button
                       onClick={() => handleCopy(msg.content)}
-                      className="flex items-center gap-1 text-xs px-2 py-1 rounded-lg hover:bg-slate-800 text-slate-200"
+                      className="flex items-center gap-1 rounded-lg px-2 py-1 text-xs text-slate-200 hover:bg-slate-800"
                     >
                       <Copy className="size-3.5" />
                       نسخ
@@ -332,14 +320,14 @@ function ChatIndexScreen() {
                       <>
                         <button
                           onClick={() => handleEdit(msg.content)}
-                          className="flex items-center gap-1 text-xs px-2 py-1 rounded-lg hover:bg-slate-800 text-slate-200"
+                          className="flex items-center gap-1 rounded-lg px-2 py-1 text-xs text-slate-200 hover:bg-slate-800"
                         >
                           <Edit2 className="size-3.5" />
                           تعديل
                         </button>
                         <button
                           onClick={() => handleRetry(idx)}
-                          className="flex items-center gap-1 text-xs px-2 py-1 rounded-lg hover:bg-slate-800 text-slate-200"
+                          className="flex items-center gap-1 rounded-lg px-2 py-1 text-xs text-slate-200 hover:bg-slate-800"
                         >
                           <RotateCcw className="size-3.5" />
                           إعادة المحاولة
@@ -348,7 +336,7 @@ function ChatIndexScreen() {
                     )}
                     <button
                       onClick={() => setActiveActionIndex(null)}
-                      className="text-slate-500 hover:text-slate-300 px-1"
+                      className="px-1 text-slate-500 hover:text-slate-300"
                     >
                       <X className="size-3.5" />
                     </button>
@@ -361,11 +349,11 @@ function ChatIndexScreen() {
 
         {/* حالة الانتظار */}
         {isSending && messages[messages.length - 1]?.content === "" && (
-          <div className="flex w-full justify-start items-center gap-2.5">
+          <div className="flex w-full items-center justify-start gap-2.5">
             <div className="shrink-0">
               <BrandMark size={32} />
             </div>
-            <div className="w-fit max-w-[85%] px-4 py-3 text-sm bg-slate-800/90 text-[#2dd4bf] rounded-2xl rounded-tl-none border border-slate-700/60 animate-pulse text-right font-medium">
+            <div className="w-fit max-w-[85%] animate-pulse rounded-2xl rounded-tl-none border border-slate-700/60 bg-slate-800/90 px-4 py-3 text-right text-sm font-medium text-[#2dd4bf]">
               {activeStatuses[statusIndex]}
             </div>
           </div>
@@ -374,13 +362,13 @@ function ChatIndexScreen() {
       </div>
 
       {/* الشريط السفلي للإدخال والاقتراحات */}
-      <div className="p-3 border-t border-slate-800/80 bg-[#0b101b] space-y-2.5 shrink-0">
-        <div className="flex items-center gap-2 overflow-x-auto pb-1 no-scrollbar">
+      <div className="shrink-0 space-y-2.5 border-t border-slate-800/80 bg-[#0b101b] p-3">
+        <div className="no-scrollbar flex items-center gap-2 overflow-x-auto pb-1">
           {QUICK_SUGGESTIONS.map((item, i) => (
             <button
               key={i}
               onClick={() => setInput(item)}
-              className="shrink-0 rounded-full border border-slate-800 bg-slate-900/60 px-3 py-1.5 text-xs font-semibold text-slate-300 hover:bg-slate-800 hover:text-white transition"
+              className="shrink-0 rounded-full border border-slate-800 bg-slate-900/60 px-3 py-1.5 text-xs font-semibold text-slate-300 transition hover:bg-slate-800 hover:text-white"
             >
               {item}
             </button>
@@ -388,14 +376,14 @@ function ChatIndexScreen() {
         </div>
 
         {selectedFile && (
-          <div className="flex items-center justify-between rounded-xl bg-slate-900 border border-slate-800 px-3 py-2 text-xs">
+          <div className="flex items-center justify-between rounded-xl border border-slate-800 bg-slate-900 px-3 py-2 text-xs">
             <div className="flex items-center gap-2 truncate">
               {selectedFile.type.startsWith("image/") ? (
-                <ImageIcon className="size-4 text-[#2dd4bf] shrink-0" />
+                <ImageIcon className="size-4 shrink-0 text-[#2dd4bf]" />
               ) : (
-                <Paperclip className="size-4 text-[#2dd4bf] shrink-0" />
+                <Paperclip className="size-4 shrink-0 text-[#2dd4bf]" />
               )}
-              <span className="truncate max-w-[200px] font-bold text-white">{selectedFile.name}</span>
+              <span className="max-w-[200px] truncate font-bold text-white">{selectedFile.name}</span>
             </div>
             <Button
               type="button"
@@ -410,7 +398,7 @@ function ChatIndexScreen() {
         )}
 
         <div className="flex items-center gap-2">
-          <div className="relative flex-1 flex items-center rounded-2xl border border-slate-800 bg-slate-900/90 focus-within:border-[#2dd4bf] transition">
+          <div className="relative flex flex-1 items-center rounded-2xl border border-slate-800 bg-slate-900/90 transition focus-within:border-[#2dd4bf]">
             <input
               type="file"
               ref={fileInputRef}
@@ -421,7 +409,7 @@ function ChatIndexScreen() {
             <button
               type="button"
               onClick={() => fileInputRef.current?.click()}
-              className="absolute right-2 text-slate-400 hover:text-white p-2 rounded-xl hover:bg-slate-800 transition"
+              className="absolute right-2 rounded-xl p-2 text-slate-400 transition hover:bg-slate-800 hover:text-white"
               title="إرفاق صورة أو ملف"
             >
               <Plus className="size-5" />
@@ -432,7 +420,7 @@ function ChatIndexScreen() {
               onChange={(e) => setInput(e.target.value)}
               placeholder="اكتب رسالتك لـ Salman AI..."
               rows={1}
-              className="w-full resize-none bg-transparent py-3 pr-11 pl-4 text-xs text-right text-white placeholder:text-slate-500 focus:outline-none max-h-32 min-h-[44px]"
+              className="max-h-32 min-h-[44px] w-full resize-none bg-transparent py-3 pl-4 pr-11 text-right text-xs text-white placeholder:text-slate-500 focus:outline-none"
             />
           </div>
 
@@ -441,9 +429,9 @@ function ChatIndexScreen() {
             onClick={() => handleSend()}
             disabled={isSending || (!input.trim() && !selectedFile)}
             size="icon"
-            className="rounded-2xl shrink-0 bg-[#2dd4bf] hover:bg-[#26b8a5] text-slate-950 h-11 w-11"
+            className="h-11 w-11 shrink-0 rounded-2xl bg-[#2dd4bf] text-slate-950 hover:bg-[#26b8a5]"
           >
-            <Send className="size-4 -rotate-90" />
+            <Send className="-rotate-90 size-4" />
           </Button>
         </div>
       </div>

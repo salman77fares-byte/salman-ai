@@ -18,7 +18,13 @@ export const Route = createFileRoute("/chat/")({
 interface Message {
   role: "user" | "assistant";
   content: string;
-  attachment?: { name: string; type: string; url: string; base64?: string };
+  attachment?: {
+    name: string;
+    type: string;
+    url: string;
+    base64?: string;
+    textContent?: string;
+  };
 }
 
 const QUICK_SUGGESTIONS = [
@@ -51,7 +57,13 @@ function ChatIndexScreen() {
   const [statusIndex, setStatusIndex] = useState(0);
   const [activeStatuses, setActiveStatuses] = useState<string[]>(CHAT_STATUSES);
   const [activeActionIndex, setActiveActionIndex] = useState<number | null>(null);
-  const [selectedFile, setSelectedFile] = useState<{ name: string; type: string; url: string; base64: string } | null>(null);
+  const [selectedFile, setSelectedFile] = useState<{
+    name: string;
+    type: string;
+    url: string;
+    base64: string;
+    textContent?: string;
+  } | null>(null);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -126,16 +138,24 @@ function ChatIndexScreen() {
 
     try {
       const formattedHistory = chatHistory.map((m) => {
+        // إذا وجد محتوى نصي داخل الملف المرفق، ندمجه مع الرسالة
+        let finalContent = m.content;
+        if (m.attachment?.textContent) {
+          finalContent = `${m.content ? m.content + "\n\n" : ""}[محتوى الملف المرفق: ${m.attachment.name}]\n\`\`\`\n${m.attachment.textContent}\n\`\`\``;
+        }
+
+        // التعامل مع الصور
         if (m.attachment?.base64 && m.attachment.type.startsWith("image/")) {
           return {
             role: m.role,
             content: [
-              { type: "text", text: m.content || "حلل هذه الصورة واستخرج النص منها أو أجب بناءً عليها." },
+              { type: "text", text: finalContent || "حلل هذه الصورة واستخرج النص أو التفاصيل منها وأجب بناءً عليها." },
               { type: "image_url", image_url: { url: m.attachment.base64 } }
             ]
           };
         }
-        return { role: m.role, content: m.content };
+
+        return { role: m.role, content: finalContent };
       });
 
       const fullResponse = await askSalmanAI(formattedHistory);
@@ -195,16 +215,34 @@ function ChatIndexScreen() {
       return;
     }
 
-    const reader = new FileReader();
-    reader.onload = () => {
-      setSelectedFile({
-        name: file.name,
-        type: file.type,
-        url: URL.createObjectURL(file),
-        base64: reader.result as string,
-      });
-    };
-    reader.readAsDataURL(file);
+    const isTextFile =
+      file.type.startsWith("text/") ||
+      /\.(txt|json|js|ts|tsx|jsx|py|md|html|css|csv|xml|json)$/i.test(file.name);
+
+    if (isTextFile) {
+      const reader = new FileReader();
+      reader.onload = () => {
+        setSelectedFile({
+          name: file.name,
+          type: file.type || "text/plain",
+          url: URL.createObjectURL(file),
+          base64: "",
+          textContent: reader.result as string,
+        });
+      };
+      reader.readAsText(file);
+    } else {
+      const reader = new FileReader();
+      reader.onload = () => {
+        setSelectedFile({
+          name: file.name,
+          type: file.type,
+          url: URL.createObjectURL(file),
+          base64: reader.result as string,
+        });
+      };
+      reader.readAsDataURL(file);
+    }
   };
 
   if (loading) {
@@ -406,7 +444,7 @@ function ChatIndexScreen() {
               ref={fileInputRef}
               onChange={handleFileChange}
               className="hidden"
-              accept="image/*,.pdf,.doc,.docx,.txt"
+              accept="image/*,.pdf,.doc,.docx,.txt,.json,.js,.ts,.tsx,.py,.md,.csv"
             />
             <button
               type="button"
@@ -442,4 +480,4 @@ function ChatIndexScreen() {
       </div>
     </div>
   );
-}
+                            }

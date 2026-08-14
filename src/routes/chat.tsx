@@ -1,198 +1,328 @@
-import { createFileRoute, Outlet, useNavigate } from "@tanstack/react-router";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
-  LogIn,
-  LogOut,
-  Menu,
-  Settings,
-  ExternalLink,
-  X,
-  BookOpen,
-  ShoppingBag,
-  Smartphone,
-  ShieldCheck,
-  FileText,
-  Trash2,
-  Sparkles,
-  AlertCircle,
-} from "lucide-react";
-import { useState } from "react";
+  createFileRoute,
+  Link,
+  Outlet,
+  useNavigate,
+  useParams,
+} from "@tanstack/react-router";
+import { useServerFn } from "@tanstack/react-start";
+import { ExternalLink, LogIn, LogOut, Menu } from "lucide-react";
+import { useEffect, useState } from "react";
+import { toast } from "sonner";
 
+import { AppSidebar } from "@/components/salman/AppSidebar";
 import { BrandMark } from "@/components/salman/BrandMark";
 import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Sheet, SheetContent } from "@/components/ui/sheet";
+import { useSession } from "@/hooks/useSession";
+import { supabase } from "@/integrations/supabase/client";
+import {
+  createConversation,
+  deleteConversation,
+  listConversations,
+  type Conversation,
+} from "@/lib/chat.functions";
+import { GuestChatProvider, NewChatProvider, useGuestChat } from "@/lib/guest-chat";
+import { SALMAN_PROJECTS } from "@/lib/projects";
 
 export const Route = createFileRoute("/chat")({
-  component: ChatLayout,
+  ssr: false,
+  head: () => ({
+    meta: [
+      { title: "المحادثة — Salman AI" },
+      {
+        name: "description",
+        content: "تحدّث مع Salman AI، من تطوير المهندس سلمان فارس. ابدأ كزائر أو احفظ محادثاتك بحسابك.",
+      },
+      { property: "og:title", content: "المحادثة — Salman AI" },
+      { property: "og:description", content: "تحدّث مع Salman AI بالعربية والإنجليزية." },
+      { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary_large_image" },
+    ],
+  }),
+  component: ChatRoute,
 });
+
+function ChatRoute() {
+  return (
+    <GuestChatProvider>
+      <ChatLayout />
+    </GuestChatProvider>
+  );
+}
 
 function ChatLayout() {
   const navigate = useNavigate();
-  
-  // حالات التحكم
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
-  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const queryClient = useQueryClient();
+  const params = useParams({ strict: false }) as { conversationId?: string };
+  const [mobileOpen, setMobileOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [fontScale, setFontScale] = useState("medium");
+  const [replyLang, setReplyLang] = useState("auto");
+  const { session, user, isGuest } = useSession();
+  const { resetGuestChat } = useGuestChat();
 
-  // إعدادات العرض والتخصيص
-  const [fontSize, setFontSize] = useState<"small" | "medium" | "large">("medium");
-  const [responseLang, setResponseLang] = useState("auto");
-  const [selectedModel, setSelectedModel] = useState("fast");
-  const [creativity, setCreativity] = useState("balanced");
+  useEffect(() => {
+    const stored = localStorage.getItem("salman-font-scale");
+    if (stored) setFontScale(stored);
+    const lang = localStorage.getItem("salman-reply-lang");
+    if (lang) setReplyLang(lang);
+  }, []);
 
-  // نوافذ الشروط والسياسات
-  const [activePolicyModal, setActivePolicyModal] = useState<"privacy" | "terms" | "delete" | null>(null);
+  useEffect(() => {
+    const sizes: Record<string, string> = {
+      small: "15px",
+      medium: "16px",
+      large: "18px",
+    };
+    document.documentElement.style.fontSize = sizes[fontScale] ?? "16px";
+    localStorage.setItem("salman-font-scale", fontScale);
+  }, [fontScale]);
 
-  const handleAuthAction = () => {
-    if (isLoggedIn) {
-      setIsLoggedIn(false);
-    } else {
-      void navigate({ to: "/auth" });
+  useEffect(() => {
+    localStorage.setItem("salman-reply-lang", replyLang);
+  }, [replyLang]);
+
+  const fetchConversations = useServerFn(listConversations);
+  const createFn = useServerFn(createConversation);
+  const deleteFn = useServerFn(deleteConversation);
+
+  const { data: conversations = [] } = useQuery<Conversation[]>({
+    queryKey: ["conversations"],
+    queryFn: () => fetchConversations(),
+    enabled: Boolean(session),
+  });
+
+  const invalidate = () => queryClient.invalidateQueries({ queryKey: ["conversations"] });
+
+  const newChat = useMutation({
+    mutationFn: () => createFn(),
+    onSuccess: async (conversation) => {
+      await invalidate();
+      setMobileOpen(false);
+      void navigate({
+        to: "/chat/$conversationId",
+        params: { conversationId: conversation.id },
+      });
+    },
+    onError: () => toast.error("تعذّر إنشاء محادثة جديدة."),
+  });
+
+  const startNewChat = () => {
+    if (isGuest) {
+      resetGuestChat();
+      setMobileOpen(false);
+      void navigate({ to: "/chat" });
+      return;
     }
+    newChat.mutate();
   };
 
-  const getFontSizeValue = () => {
-    switch (fontSize) {
-      case "small": return "13px";
-      case "large": return "18px";
-      default: return "15px";
-    }
+  const removeChat = useMutation({
+    mutationFn: (conversationId: string) => deleteFn({ data: { conversationId } }),
+    onSuccess: async (_result, conversationId) => {
+      await invalidate();
+      toast.success("تم حذف المحادثة");
+      if (params.conversationId === conversationId) void navigate({ to: "/chat" });
+    },
+    onError: () => toast.error("تعذّر حذف المحادثة."),
+  });
+
+  const signOut = async () => {
+    await queryClient.cancelQueries();
+    queryClient.clear();
+    await supabase.auth.signOut();
+    void navigate({ to: "/chat", replace: true });
   };
+
+  const sidebar = (onClose?: () => void) => (
+    <AppSidebar
+      conversations={conversations}
+      activeId={params.conversationId}
+      isGuest={isGuest}
+      userEmail={user?.email ?? null}
+      onDeleteConversation={(id) => removeChat.mutate(id)}
+      onOpenSettings={() => {
+        setSettingsOpen(true);
+        onClose?.();
+      }}
+      onSignOut={() => void signOut()}
+      onClose={onClose}
+    />
+  );
 
   return (
-    <div 
-      className="flex h-screen w-full flex-col bg-[#0b101b] text-slate-100 transition-all duration-200" 
-      style={{ fontSize: getFontSizeValue() }}
-      dir="rtl"
-    >
-      {/* الهيدر الرئيسي */}
-      <header className="flex h-14 w-full items-center justify-between border-b border-slate-800/80 bg-[#0b101b] px-3 shrink-0 z-20">
-        <div className="flex items-center gap-2">
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={() => setIsSidebarOpen(true)}
-            className="size-8 rounded-lg hover:bg-slate-800/60 text-slate-200 p-0 shrink-0"
-          >
-            <Menu className="size-5" />
-          </Button>
+    <div className="flex h-screen w-full overflow-hidden bg-background">
+      <aside className="hidden w-72 shrink-0 border-e border-sidebar-border md:block">
+        {sidebar()}
+      </aside>
 
-          <div 
-            onClick={() => void navigate({ to: "/chat" })}
-            className="flex items-center gap-2 cursor-pointer select-none shrink-0"
-          >
-            <BrandMark size={30} />
-            <span className="text-base font-black tracking-tight text-white whitespace-nowrap">
-              Salman AI
-            </span>
-          </div>
-        </div>
+      <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
+        <SheetContent
+          side="right"
+          className="w-[68%] max-w-[260px] p-0 [&>button]:hidden"
+        >
+          {sidebar(() => setMobileOpen(false))}
+        </SheetContent>
+      </Sheet>
 
-        <div className="shrink-0">
-          <Button
-            onClick={handleAuthAction}
-            className={`h-8 rounded-full px-3.5 text-xs font-extrabold shadow-sm hover:opacity-95 transition-all flex items-center gap-1.5 border-0 whitespace-nowrap ${
-              isLoggedIn
-                ? "bg-rose-500/15 text-rose-400 hover:bg-rose-500/25 border border-rose-500/30"
-                : "bg-gradient-to-r from-[#5eead4] via-[#facc15] to-[#f59e0b] text-slate-950"
-            }`}
-          >
-            <span>{isLoggedIn ? "تسجيل الخروج" : "تسجيل الدخول"}</span>
-            {isLoggedIn ? <LogOut className="size-3.5" /> : <LogIn className="size-3.5 rotate-180" />}
-          </Button>
-        </div>
-      </header>
-
-      {/* خلفية القائمة الجانبية */}
-      {isSidebarOpen && (
-        <div
-          onClick={() => setIsSidebarOpen(false)}
-          className="fixed inset-0 z-40 bg-black/60 backdrop-blur-sm transition-opacity"
-        />
-      )}
-
-      {/* القائمة الجانبية */}
-      <aside
-        className={`fixed top-0 right-0 z-50 h-full w-72 bg-[#0d1424] border-l border-slate-800/80 flex flex-col justify-between p-4 transition-transform duration-300 ease-in-out ${
-          isSidebarOpen ? "translate-x-0" : "translate-x-full"
-        }`}
-      >
-        <div className="space-y-6">
-          <div className="flex items-center justify-between border-b border-slate-800/80 pb-4">
-            <div className="flex items-center gap-2">
-              <BrandMark size={32} />
-              <span className="text-lg font-bold text-white">Salman AI</span>
-            </div>
+      <div className="flex min-w-0 flex-1 flex-col">
+        <header className="safe-top shrink-0 border-b border-border bg-background/95 px-3 py-3 backdrop-blur sm:px-5">
+          <div className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-2">
             <Button
               variant="ghost"
               size="icon"
-              onClick={() => setIsSidebarOpen(false)}
-              className="size-8 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800"
+              onClick={() => setMobileOpen(true)}
+              aria-label="فتح القائمة"
+              className="md:hidden"
             >
-              <X className="size-5" />
+              <Menu className="size-5" />
             </Button>
-          </div>
-
-          <div className="text-center py-6 px-2 space-y-2">
-            <p className="text-xs font-semibold text-slate-300">
-              {isLoggedIn
-                ? "مرحباً بك مجدداً! محادثاتك وسجّلك محفوظ بنجاح."
-                : "سجّل الدخول لحفظ محادثاتك وعرض سجّلك هنا."}
-            </p>
-          </div>
-        </div>
-
-        <div className="space-y-2.5 pt-4 border-t border-slate-800/80">
-          <button
-            onClick={() => {
-              setIsSidebarOpen(false);
-              setIsSettingsOpen(true);
-            }}
-            className="w-full flex items-center justify-start gap-3 px-3 py-2.5 rounded-xl text-slate-300 hover:bg-slate-800/60 text-xs font-medium transition"
-          >
-            <Settings className="size-4 text-slate-400" />
-            <span>الإعدادات</span>
-          </button>
-
-          <Button
-            onClick={() => {
-              setIsSidebarOpen(false);
-              handleAuthAction();
-            }}
-            className={`w-full h-10 rounded-2xl font-bold text-xs shadow-md transition flex items-center justify-center gap-2 border-0 ${
-              isLoggedIn
-                ? "bg-rose-500/20 text-rose-400 hover:bg-rose-500/30 border border-rose-500/30"
-                : "bg-gradient-to-r from-[#5eead4] via-[#facc15] to-[#f59e0b] text-slate-950"
-            }`}
-          >
-            <span>{isLoggedIn ? "تسجيل الخروج" : "تسجيل الدخول"}</span>
-            {isLoggedIn ? <LogOut className="size-4" /> : <LogIn className="size-4 rotate-180" />}
-          </Button>
-        </div>
-      </aside>
-
-      {/* الشاشة الرئيسية */}
-      <main className="flex-1 overflow-hidden relative flex flex-col bg-[#0b101b] w-full">
-        <div className="flex-1 overflow-y-auto w-full p-2 sm:p-4">
-          <Outlet />
-        </div>
-
-        {/* شريط التنبيه متموضع فوق الاقتراحات ومربع الإرسال مباشرة */}
-        {!isLoggedIn && (
-          <div className="w-full px-3 py-1.5 shrink-0 bg-[#0b101b]">
-            <div className="w-full py-1.5 px-3 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-between text-[11px] text-amber-300/90">
-              <div className="flex items-center gap-1.5">
-                <AlertCircle className="size-3.5 text-amber-400 shrink-0" />
-                <span>تنبيه: محادثة كزائر — لن يتم حفظ السجل.</span>
-              </div>
-              <button
-                onClick={() => void navigate({ to: "/auth" })}
-                className="font-bold text-[#2dd4bf] hover:underline whitespace-nowrap"
-              >
-                تسجيل الدخول
-              </button>
+            <div className="flex min-w-0 items-center gap-2.5">
+              <BrandMark size={40} />
+              <span className="truncate text-lg font-extrabold sm:text-xl">Salman AI</span>
             </div>
+            {isGuest ? (
+              <Button
+                asChild
+                size="sm"
+                className="shrink-0 gap-1.5 rounded-xl brand-gradient-bg text-xs font-extrabold text-primary-foreground hover:opacity-90"
+              >
+                <Link to="/auth">
+                  <LogIn className="size-3.5" />
+                  تسجيل الدخول
+                </Link>
+              </Button>
+            ) : (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => void signOut()}
+                className="shrink-0 gap-1.5 rounded-xl text-xs font-bold"
+              >
+                <LogOut className="size-3.5" />
+                تسجيل الخروج
+              </Button>
+            )}
           </div>
-        )}
-      </main>
+          {!isGuest && user?.email ? (
+            <p className="mt-1.5 truncate text-[11px] text-muted-foreground" dir="ltr">
+              {user.email}
+            </p>
+          ) : null}
+        </header>
+
+        <main className="min-h-0 flex-1">
+          <NewChatProvider onNewChat={startNewChat}>
+            <Outlet />
+          </NewChatProvider>
+        </main>
+      </div>
+
+      <Dialog open={settingsOpen} onOpenChange={setSettingsOpen}>
+        <DialogContent className="max-h-[85vh] max-w-sm overflow-y-auto rounded-3xl">
+          <DialogHeader>
+            <DialogTitle>الإعدادات</DialogTitle>
+            <DialogDescription>تخصيص تجربتك في Salman AI.</DialogDescription>
+          </DialogHeader>
+
+          <section className="space-y-2">
+            <p className="text-xs font-extrabold text-muted-foreground">الحساب</p>
+            <div className="rounded-2xl bg-secondary px-4 py-3 text-xs leading-6">
+              {isGuest ? (
+                <span className="text-muted-foreground">
+                  أنت تستخدم التطبيق كزائر، سجّل الدخول لحفظ محادثاتك.
+                </span>
+              ) : (
+                <span dir="ltr" className="block truncate font-bold">
+                  {user?.email}
+                </span>
+              )}
+            </div>
+          </section>
+
+          <section className="space-y-2">
+            <p className="text-xs font-extrabold text-muted-foreground">التفضيلات</p>
+            <div className="flex items-center justify-between gap-2 rounded-2xl bg-secondary px-4 py-3">
+              <span className="text-sm font-bold">لغة الردود</span>
+              <select
+                value={replyLang}
+                onChange={(event) => setReplyLang(event.currentTarget.value)}
+                className="rounded-xl border border-border bg-background px-2 py-1 text-xs font-bold"
+              >
+                <option value="auto">تلقائي</option>
+                <option value="ar">العربية</option>
+                <option value="en">English</option>
+              </select>
+            </div>
+            <div className="flex items-center justify-between gap-2 rounded-2xl bg-secondary px-4 py-3">
+              <span className="text-sm font-bold">حجم الخط</span>
+              <select
+                value={fontScale}
+                onChange={(event) => setFontScale(event.currentTarget.value)}
+                className="rounded-xl border border-border bg-background px-2 py-1 text-xs font-bold"
+              >
+                <option value="small">صغير</option>
+                <option value="medium">متوسط</option>
+                <option value="large">كبير</option>
+              </select>
+            </div>
+          </section>
+
+          <section className="space-y-2">
+            <p className="text-xs font-extrabold text-muted-foreground">
+              🌐 مشاريع وخدمات سلمان
+            </p>
+            <ul className="space-y-1.5">
+              {SALMAN_PROJECTS.map((project) => (
+                <li key={project.name}>
+                  <a
+                    href={project.url}
+                    target="_blank"
+                    rel="noreferrer noopener"
+                    className="flex items-center gap-3 rounded-2xl bg-secondary px-4 py-3 transition hover:bg-secondary/70"
+                  >
+                    <span className="text-lg">{project.emoji}</span>
+                    <span className="min-w-0">
+                      <span className="block truncate text-xs font-extrabold">{project.name}</span>
+                      <span className="block truncate text-[11px] text-muted-foreground">
+                        {project.description}
+                      </span>
+                    </span>
+                    <ExternalLink className="ms-auto size-3.5 shrink-0 text-primary" />
+                  </a>
+                </li>
+              ))}
+            </ul>
+          </section>
+
+          <section className="space-y-2">
+            <p className="text-xs font-extrabold text-muted-foreground">عن التطبيق</p>
+            <div className="space-y-2 rounded-2xl bg-secondary px-4 py-3 text-xs leading-6 text-muted-foreground">
+              <p>Salman AI — الإصدار 1.0. تطوير: المهندس سلمان فارس.</p>
+              <div className="flex flex-wrap gap-x-3 gap-y-1 font-bold text-primary">
+                <Link to="/privacy" onClick={() => setSettingsOpen(false)}>
+                  سياسة الخصوصية
+                </Link>
+                <Link to="/terms" onClick={() => setSettingsOpen(false)}>
+                  شروط الاستخدام
+                </Link>
+                <Link to="/delete-account" onClick={() => setSettingsOpen(false)}>
+                  حذف الحساب
+                </Link>
+              </div>
+            </div>
+          </section>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

@@ -4,19 +4,15 @@ import {
   LogIn,
   LogOut,
   MessageSquare,
-  Moon,
   Settings,
-  Sun,
   Trash2,
 } from "lucide-react";
 
 import { BrandMark } from "./BrandMark";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
-import { useTheme } from "@/lib/theme";
 import { cn } from "@/lib/utils";
 import type { Conversation } from "@/lib/chat.functions";
-
 
 type Group = { label: string; items: Conversation[] };
 
@@ -49,7 +45,6 @@ export function AppSidebar({
   isGuest,
   userEmail,
   onDeleteConversation,
-  onClearAll,
   onOpenSettings,
   onSignOut,
   onClose,
@@ -59,12 +54,11 @@ export function AppSidebar({
   isGuest: boolean;
   userEmail?: string | null | undefined;
   onDeleteConversation: (id: string) => void;
-  onClearAll: () => void;
+  onClearAll?: () => void;
   onOpenSettings: () => void;
   onSignOut: () => void;
   onClose?: (() => void) | undefined;
 }) {
-  const { theme, toggleTheme } = useTheme();
   const groups = groupConversations(conversations);
 
   return (
@@ -133,21 +127,10 @@ export function AppSidebar({
             </div>
           ))
         )}
-
       </div>
 
       <Separator />
       <div className="space-y-1 p-3">
-        <Button variant="ghost" className="w-full justify-start gap-2" onClick={toggleTheme}>
-          {theme === "dark" ? <Sun className="size-4" /> : <Moon className="size-4" />}
-          {theme === "dark" ? "الوضع النهاري" : "الوضع الليلي"}
-        </Button>
-        {!isGuest ? (
-          <Button variant="ghost" className="w-full justify-start gap-2" onClick={onClearAll}>
-            <Trash2 className="size-4" />
-            حذف كل المحادثات
-          </Button>
-        ) : null}
         <Button variant="ghost" className="w-full justify-start gap-2" onClick={onOpenSettings}>
           <Settings className="size-4" />
           الإعدادات

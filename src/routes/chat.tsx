@@ -3,7 +3,6 @@ import {
   Menu,
   Settings,
   X,
-  User,
   LogOut,
   AlertTriangle,
   LogIn,
@@ -18,7 +17,10 @@ import {
   BookOpen,
   ShoppingBag,
   Smartphone,
-  ExternalLink
+  ExternalLink,
+  Sparkles,
+  User,
+  ChevronDown
 } from "lucide-react";
 import { useState } from "react";
 import { BrandMark } from "@/components/salman/BrandMark";
@@ -34,7 +36,6 @@ function ChatLayout() {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
 
-  // قائمة المشاريع
   const projects = [
     { title: "زاد الدعاة", desc: "منصة محتوى دعوي ومكتبة موارد", url: "https://zad-alduat.lovable.app", icon: BookOpen, color: "text-[#2dd4bf]" },
     { title: "متجر كنز", desc: "متجر إلكتروني للمنتجات المختارة", url: "https://kanzstore.lovable.app", icon: ShoppingBag, color: "text-[#facc15]" },
@@ -70,20 +71,22 @@ function ChatLayout() {
               <Button variant="ghost" size="icon" onClick={() => setIsSidebarOpen(false)}><X className="size-5" /></Button>
             </div>
 
-            {/* زر تسجيل الدخول */}
-            <Button 
-              onClick={() => setIsLoggedIn(!isLoggedIn)} 
-              className={`w-full justify-start gap-3 mb-8 h-12 rounded-xl transition ${isLoggedIn ? "bg-rose-500/10 text-rose-500 hover:bg-rose-500/20" : "bg-[#2dd4bf]/10 text-[#2dd4bf] hover:bg-[#2dd4bf]/20"}`}
-            >
-              {isLoggedIn ? <LogOut className="size-5" /> : <LogIn className="size-5" />}
-              {isLoggedIn ? "تسجيل الخروج" : "تسجيل الدخول"}
-            </Button>
-
-            {/* الروابط القانونية في القائمة الجانبية */}
-            <div className="space-y-2 mt-auto border-t border-slate-800 pt-6">
+            {/* الروابط القانونية في الأعلى */}
+            <div className="space-y-2 flex-1">
               <button className="flex items-center gap-3 w-full p-3 text-slate-400 hover:text-white hover:bg-slate-800/50 rounded-xl transition"><Shield className="size-5" /> سياسة الخصوصية</button>
               <button className="flex items-center gap-3 w-full p-3 text-slate-400 hover:text-white hover:bg-slate-800/50 rounded-xl transition"><FileText className="size-5" /> شروط الاستخدام</button>
               <button className="flex items-center gap-3 w-full p-3 text-rose-500/80 hover:text-rose-500 hover:bg-rose-500/10 rounded-xl transition"><Trash2 className="size-5" /> حذف الحساب</button>
+            </div>
+
+            {/* زر تسجيل الدخول في الأسفل */}
+            <div className="pt-6 border-t border-slate-800">
+                <Button 
+                    onClick={() => void navigate({ to: "/auth" })}
+                    className="w-full justify-center gap-2 bg-slate-800 hover:bg-slate-700 text-white h-12 rounded-xl transition"
+                >
+                    <LogIn className="size-5" />
+                    تسجيل الدخول
+                </Button>
             </div>
           </div>
         </>
@@ -99,25 +102,42 @@ function ChatLayout() {
             </div>
             
             <div className="space-y-6">
-              {/* قسم التحكم */}
+              {/* قسم الحساب (الزائر) */}
+              <div className="p-4 bg-slate-900/50 rounded-2xl border border-slate-800 text-center">
+                <p className="text-xs text-slate-400 leading-relaxed">
+                    أنت تستخدم التطبيق كزائر، سجل الدخول لحفظ محادثاتك.
+                </p>
+              </div>
+
+              {/* إعدادات الذكاء الاصطناعي */}
               <div className="space-y-3">
-                <div className="flex items-center justify-between p-3 bg-slate-900/50 rounded-xl">
-                   <div className="flex items-center gap-2"><Moon className="size-4 text-slate-400" /> <span className="text-sm">الوضع الليلي</span></div>
-                   <div className="w-10 h-6 bg-teal-500 rounded-full relative cursor-pointer"><div className="absolute left-1 top-1 w-4 h-4 bg-white rounded-full"></div></div>
+                <h3 className="text-xs font-bold text-[#2dd4bf] flex items-center gap-1"><Sparkles className="size-3" /> إعدادات الذكاء الاصطناعي</h3>
+                <div className="flex items-center justify-between p-3 bg-slate-900/50 rounded-xl border border-slate-800">
+                   <span className="text-sm">نموذج الإجابة</span>
+                   <div className="flex items-center gap-1 text-slate-400 text-xs">Salman AI Fast <ChevronDown className="size-3" /></div>
                 </div>
-                <div className="flex items-center justify-between p-3 bg-slate-900/50 rounded-xl">
-                   <div className="flex items-center gap-2"><Languages className="size-4 text-slate-400" /> <span className="text-sm">اللغة</span></div>
-                   <span className="text-xs text-slate-500">العربية</span>
+                <div className="flex items-center justify-between p-3 bg-slate-900/50 rounded-xl border border-slate-800">
+                   <span className="text-sm">نمط الرد</span>
+                   <div className="flex items-center gap-1 text-slate-400 text-xs">متوازن <ChevronDown className="size-3" /></div>
                 </div>
-                <div className="flex items-center justify-between p-3 bg-slate-900/50 rounded-xl">
-                   <div className="flex items-center gap-2"><Type className="size-4 text-slate-400" /> <span className="text-sm">حجم الخط</span></div>
-                   <span className="text-xs text-slate-500">متوسط</span>
+              </div>
+
+              {/* التفضيلات والعرض */}
+              <div className="space-y-3">
+                <h3 className="text-xs font-bold text-slate-400">التفضيلات والعرض</h3>
+                <div className="flex items-center justify-between p-3 bg-slate-900/50 rounded-xl border border-slate-800">
+                   <span className="text-sm">لغة الردود</span>
+                   <div className="flex items-center gap-1 text-slate-400 text-xs">تلقائي <ChevronDown className="size-3" /></div>
+                </div>
+                <div className="flex items-center justify-between p-3 bg-slate-900/50 rounded-xl border border-slate-800">
+                   <span className="text-sm">حجم الخط</span>
+                   <div className="flex items-center gap-1 text-slate-400 text-xs">متوسط (15px) <ChevronDown className="size-3" /></div>
                 </div>
               </div>
 
               {/* قسم المشاريع */}
               <div className="space-y-3">
-                <h3 className="text-sm font-bold text-slate-400 px-1">🌐 مشاريع سلمان</h3>
+                <h3 className="text-xs font-bold text-slate-400 px-1">🌐 مشاريع سلمان</h3>
                 {projects.map((proj, i) => (
                   <div 
                     key={i} 
@@ -148,10 +168,10 @@ function ChatLayout() {
 
         {/* التنبيه فوق مربع الإدخال */}
         {!isLoggedIn && (
-           <div className="px-4 py-3 bg-[#2dd4bf]/5 border-t border-[#2dd4bf]/20 text-center mx-2 rounded-t-xl">
+           <div className="px-4 py-3 bg-[#2dd4bf]/5 border-t border-[#2dd4bf]/20 text-center mx-2 rounded-t-xl cursor-pointer hover:bg-[#2dd4bf]/10 transition" onClick={() => void navigate({ to: "/auth" })}>
              <p className="text-xs text-[#2dd4bf] flex items-center justify-center gap-2 font-bold">
                <AlertTriangle className="size-4" />
-               أنت تستخدم التطبيق كزائر، سجل الدخول لحفظ محادثاتك.
+               أنت تستخدم التطبيق كزائر، <span className="underline">انقر لتسجيل الدخول</span> لحفظ محادثاتك.
              </p>
            </div>
         )}

@@ -1,17 +1,6 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import {
-  Loader2,
-  Send,
-  Plus,
-  Paperclip,
-  X,
-  Image as ImageIcon,
-  Copy,
-  Edit2,
-  RotateCcw,
-  AlertCircle,
-} from "lucide-react";
+import { Loader2, Send, Plus, Paperclip, X, Image as ImageIcon, Copy, Edit2, RotateCcw, PlusCircle, LogIn } from "lucide-react";
 import { useEffect, useState, useRef } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -42,13 +31,13 @@ const QUICK_SUGGESTIONS = [
 const SEARCH_STATUSES = [
   "جاري البحث في المصادر المحدثة...",
   "جاري تحليل البيانات...",
-  "جاري صياغة الإجابة...",
+  "جاري صياغة الإجابة..."
 ];
 
 const CHAT_STATUSES = [
   "Salman يكتب الآن...",
   "جاري التفكير في الرد...",
-  "جاري تجهيز الإجابة...",
+  "جاري تجهيز الإجابة..."
 ];
 
 function ChatIndexScreen() {
@@ -62,12 +51,7 @@ function ChatIndexScreen() {
   const [statusIndex, setStatusIndex] = useState(0);
   const [activeStatuses, setActiveStatuses] = useState<string[]>(CHAT_STATUSES);
   const [activeActionIndex, setActiveActionIndex] = useState<number | null>(null);
-  const [selectedFile, setSelectedFile] = useState<{
-    name: string;
-    type: string;
-    url: string;
-    base64: string;
-  } | null>(null);
+  const [selectedFile, setSelectedFile] = useState<{ name: string; type: string; url: string; base64: string } | null>(null);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -138,35 +122,45 @@ function ChatIndexScreen() {
     setActiveStatuses(isSearchQuery ? SEARCH_STATUSES : CHAT_STATUSES);
 
     setIsSending(true);
+    setMessages([...chatHistory, { role: "assistant", content: "" }]);
 
     try {
       const formattedHistory = chatHistory.map((m) => {
-        let textContent = m.content;
-        if (m.attachment) {
-          textContent += `\n[مرفق ملف: ${m.attachment.name}]`;
+        if (m.attachment?.base64 && m.attachment.type.startsWith("image/")) {
+          return {
+            role: m.role,
+            content: [
+              { type: "text", text: m.content || "حلل هذه الصورة واستخرج النص منها أو أجب بناءً عليها." },
+              { type: "image_url", image_url: { url: m.attachment.base64 } }
+            ]
+          };
         }
-        return {
-          role: m.role,
-          content: textContent,
-        };
+        return { role: m.role, content: m.content };
       });
 
       const fullResponse = await askSalmanAI(formattedHistory);
 
-      setMessages((prev) => [
-        ...prev,
-        { role: "assistant", content: fullResponse },
-      ]);
+      let currentText = "";
+      const words = fullResponse.split(" ");
+      
+      for (let i = 0; i < words.length; i++) {
+        currentText += (i === 0 ? "" : " ") + words[i];
+        const textToUpdate = currentText;
+        setMessages((prev) => {
+          const newMsgs = [...prev];
+          newMsgs[newMsgs.length - 1] = { role: "assistant", content: textToUpdate };
+          return newMsgs;
+        });
+        await new Promise((resolve) => setTimeout(resolve, 20));
+      }
     } catch (error) {
-      console.error("Execute Send Error:", error);
+      console.error(error);
       toast.error("تعذّر جلب الرد حالياً.");
-      setMessages((prev) => [
-        ...prev,
-        {
-          role: "assistant",
-          content: "عذراً، حدث خطأ أثناء معالجة الطلب.",
-        },
-      ]);
+      setMessages((prev) => {
+        const newMsgs = [...prev];
+        newMsgs[newMsgs.length - 1] = { role: "assistant", content: "عذراً، حدث خطأ أثناء معالجة الطلب." };
+        return newMsgs;
+      });
     } finally {
       setIsSending(false);
     }
@@ -215,12 +209,12 @@ function ChatIndexScreen() {
 
   if (loading) {
     return (
-      <div className="flex h-full flex-col items-center justify-center gap-4 px-6 text-center">
+      <div className="flex h-full flex-col items-center justify-center gap-4 px-6 text-center bg-[#0b101b] text-slate-100">
         <BrandMark size={64} className="shadow-glow" />
         <h1 className="text-xl font-extrabold">
           مرحباً بك، أنا <span className="brand-gradient-text">Salman AI</span>
         </h1>
-        <p className="flex items-center gap-2 text-sm text-muted-foreground">
+        <p className="flex items-center gap-2 text-sm text-slate-400">
           <Loader2 className="size-4 animate-spin" />
           جارٍ التجهيز...
         </p>
@@ -228,126 +222,149 @@ function ChatIndexScreen() {
     );
   }
 
-  // نعتبر المستخدم زاراً إذا لم توجد جلسة نشطة
-  const isVisitor = !session;
-
   return (
-    <div className="flex h-full flex-col justify-between bg-background text-foreground" dir="rtl">
-      {/* شريط الإجراء العلوي للبدء بمحادثة جديدة (زر واحد غير مكرر) */}
-      <div className="flex items-center justify-start px-4 py-2 shrink-0">
+    <div className="flex h-full flex-col justify-between bg-[#0b101b] text-slate-100" dir="rtl">
+      
+      {/* الهيدر العلوي */}
+      <div className="flex items-center justify-between px-5 py-4 border-b border-slate-800/80 bg-[#0b101b] min-h-[64px] shrink-0">
         <Button
           onClick={handleNewChat}
           variant="outline"
           size="sm"
-          className="rounded-2xl border border-slate-700/80 bg-slate-900/60 text-slate-200 hover:bg-slate-800 gap-2 text-xs font-bold px-4 py-2"
+          className="rounded-xl flex items-center gap-1.5 text-xs border-slate-800 bg-slate-900/60 hover:bg-slate-800 text-slate-200 px-3 py-1.5"
         >
-          <Plus className="size-4 text-[#2dd4bf]" />
+          <PlusCircle className="size-4 text-[#2dd4bf]" />
           محادثة جديدة
+        </Button>
+
+        <Button
+          onClick={() => void navigate({ to: "/auth" })}
+          variant="secondary"
+          size="sm"
+          className="rounded-lg text-[11px] h-8 px-2.5 font-medium flex items-center gap-1 bg-amber-500/10 text-amber-400 hover:bg-amber-500/20 border border-amber-500/20"
+        >
+          <LogIn className="size-3" />
+          تسجيل الدخول
         </Button>
       </div>
 
-      {/* منطقة المحادثة والرسائل */}
-      <div className="flex-1 overflow-y-auto space-y-5 px-4 py-2">
-        {messages.length === 0 ? (
-          <div className="flex h-full flex-col items-center justify-center text-center space-y-3">
-            <BrandMark size={72} />
-            <h2 className="text-2xl font-black">مرحباً بك مع Salman AI</h2>
-            <p className="text-sm text-muted-foreground max-w-xs leading-relaxed">
-              أسألني أي شيء، أرفق صوراً، واستفد من خيارات النقر المطول على الرسائل.
-            </p>
+      {/* منطقة المحتوى والرسائل */}
+      <div className="flex-1 overflow-y-auto space-y-5 px-4 py-4 flex flex-col justify-between">
+        
+        {/* الشعار والنصوص الثابتة في منتصف الشاشة */}
+        <div className="flex flex-col items-center justify-center text-center space-y-3 my-auto py-6">
+          <div className="p-3 rounded-2xl bg-slate-900/80 border border-slate-800 shadow-xl">
+            <BrandMark size={64} />
           </div>
-        ) : (
-          messages.map((msg, idx) => (
-            <div
-              key={idx}
-              className={`flex flex-col w-full ${
-                msg.role === "user" ? "items-start" : "items-end"
-              }`}
-            >
-              <div className="flex items-start gap-2.5 max-w-[88%]">
-                <div
-                  onTouchStart={() => handleTouchStart(idx)}
-                  onTouchEnd={handleTouchEnd}
-                  onMouseDown={() => handleTouchStart(idx)}
-                  onMouseUp={handleTouchEnd}
-                  className={`relative w-fit px-4 py-3 text-sm leading-relaxed text-right whitespace-pre-wrap break-words cursor-pointer select-none ${
-                    msg.role === "user"
-                      ? "bg-[#2dd4bf] text-slate-950 font-medium rounded-2xl rounded-tr-none shadow-sm"
-                      : "bg-slate-800/90 text-slate-100 rounded-2xl rounded-tl-none border border-slate-700/60 shadow-sm"
-                  }`}
-                >
-                  {msg.attachment && (
-                    <div className="mb-2 flex items-center gap-2 rounded-xl bg-black/10 p-2 text-xs">
-                      {msg.attachment.type.startsWith("image/") ? (
-                        <img
-                          src={msg.attachment.url}
-                          alt="attachment"
-                          className="h-24 w-auto rounded-lg object-cover"
-                        />
-                      ) : (
-                        <div className="flex items-center gap-1.5 font-bold">
-                          <Paperclip className="size-4" />
-                          <span className="truncate max-w-[180px]">{msg.attachment.name}</span>
-                        </div>
-                      )}
+          <h2 className="text-xl font-black text-white tracking-tight">مرحباً بك مع Salman AI</h2>
+          <p className="text-xs text-slate-400 max-w-xs leading-relaxed">
+            أسألني أي شيء، أرفق صوراً، واستفد من خيارات النقر المطوّل على الرسائل.
+          </p>
+        </div>
+
+        {/* قائمة الرسائل في حال وجود محادثات */}
+        {messages.length > 0 && (
+          <div className="space-y-4 w-full">
+            {messages.map((msg, idx) => (
+              <div
+                key={idx}
+                className={`flex flex-col w-full ${
+                  msg.role === "user" ? "items-end" : "items-start"
+                }`}
+              >
+                <div className="flex items-start gap-2.5 max-w-[88%]">
+                  {msg.role === "assistant" && (
+                    <div className="shrink-0 mt-1">
+                      <BrandMark size={32} />
                     </div>
                   )}
 
-                  {msg.role === "assistant" ? (
-                    <div className="prose prose-invert prose-sm max-w-none space-y-3 leading-relaxed prose-p:my-1.5 prose-ul:my-2 prose-li:my-0.5">
-                      <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                        {msg.content}
-                      </ReactMarkdown>
-                    </div>
-                  ) : (
-                    msg.content
-                  )}
+                  <div
+                    onTouchStart={() => handleTouchStart(idx)}
+                    onTouchEnd={handleTouchEnd}
+                    onMouseDown={() => handleTouchStart(idx)}
+                    onMouseUp={handleTouchEnd}
+                    className={`relative w-fit px-4 py-3 text-sm leading-relaxed text-right whitespace-pre-wrap break-words cursor-pointer select-none ${
+                      msg.role === "user"
+                        ? "bg-[#2dd4bf] text-slate-950 font-medium rounded-2xl rounded-br-none shadow-sm"
+                        : "bg-slate-800/90 text-slate-100 rounded-2xl rounded-tl-none border border-slate-700/60 shadow-sm"
+                    }`}
+                  >
+                    {msg.attachment && (
+                      <div className="mb-2 flex items-center gap-2 rounded-xl bg-black/10 p-2 text-xs">
+                        {msg.attachment.type.startsWith("image/") ? (
+                          <img
+                            src={msg.attachment.url}
+                            alt="attachment"
+                            className="h-24 w-auto rounded-lg object-cover"
+                          />
+                        ) : (
+                          <div className="flex items-center gap-1.5 font-bold">
+                            <Paperclip className="size-4" />
+                            <span className="truncate max-w-[180px]">{msg.attachment.name}</span>
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {msg.role === "assistant" ? (
+                      <div className="prose prose-invert prose-sm max-w-none space-y-3 leading-relaxed">
+                        <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                          {msg.content}
+                        </ReactMarkdown>
+                      </div>
+                    ) : (
+                      msg.content
+                    )}
+                  </div>
                 </div>
+
+                {activeActionIndex === idx && (
+                  <div className="flex items-center gap-1 mt-1.5 p-1 bg-slate-900 border border-slate-700 rounded-xl shadow-lg z-10 animate-in fade-in">
+                    <button
+                      onClick={() => handleCopy(msg.content)}
+                      className="flex items-center gap-1 text-xs px-2 py-1 rounded-lg hover:bg-slate-800 text-slate-200"
+                    >
+                      <Copy className="size-3.5" />
+                      نسخ
+                    </button>
+                    {msg.role === "user" && (
+                      <>
+                        <button
+                          onClick={() => handleEdit(msg.content)}
+                          className="flex items-center gap-1 text-xs px-2 py-1 rounded-lg hover:bg-slate-800 text-slate-200"
+                        >
+                          <Edit2 className="size-3.5" />
+                          تعديل
+                        </button>
+                        <button
+                          onClick={() => handleRetry(idx)}
+                          className="flex items-center gap-1 text-xs px-2 py-1 rounded-lg hover:bg-slate-800 text-slate-200"
+                        >
+                          <RotateCcw className="size-3.5" />
+                          إعادة المحاولة
+                        </button>
+                      </>
+                    )}
+                    <button
+                      onClick={() => setActiveActionIndex(null)}
+                      className="text-slate-500 hover:text-slate-300 px-1"
+                    >
+                      <X className="size-3.5" />
+                    </button>
+                  </div>
+                )}
               </div>
-
-              {/* قائمة الخيارات عند الضغط المطول */}
-              {activeActionIndex === idx && (
-                <div className="flex items-center gap-1 mt-1.5 p-1 bg-slate-900 border border-slate-700 rounded-xl shadow-lg z-10">
-                  <button
-                    onClick={() => handleCopy(msg.content)}
-                    className="flex items-center gap-1 text-xs px-2 py-1 rounded-lg hover:bg-slate-800 text-slate-200"
-                  >
-                    <Copy className="size-3.5" />
-                    نسخ
-                  </button>
-                  {msg.role === "user" && (
-                    <>
-                      <button
-                        onClick={() => handleEdit(msg.content)}
-                        className="flex items-center gap-1 text-xs px-2 py-1 rounded-lg hover:bg-slate-800 text-slate-200"
-                      >
-                        <Edit2 className="size-3.5" />
-                        تعديل
-                      </button>
-                      <button
-                        onClick={() => handleRetry(idx)}
-                        className="flex items-center gap-1 text-xs px-2 py-1 rounded-lg hover:bg-slate-800 text-slate-200"
-                      >
-                        <RotateCcw className="size-3.5" />
-                        إعادة المحاولة
-                      </button>
-                    </>
-                  )}
-                  <button
-                    onClick={() => setActiveActionIndex(null)}
-                    className="text-slate-500 hover:text-slate-300 px-1"
-                  >
-                    <X className="size-3.5" />
-                  </button>
-                </div>
-              )}
-            </div>
-          ))
+            ))}
+          </div>
         )}
 
-        {/* مؤشر الانتظار */}
-        {isSending && (
-          <div className="flex w-full justify-end items-center gap-2.5">
+        {/* حالة الانتظار */}
+        {isSending && messages[messages.length - 1]?.content === "" && (
+          <div className="flex w-full justify-start items-center gap-2.5">
+            <div className="shrink-0">
+              <BrandMark size={32} />
+            </div>
             <div className="w-fit max-w-[85%] px-4 py-3 text-sm bg-slate-800/90 text-[#2dd4bf] rounded-2xl rounded-tl-none border border-slate-700/60 animate-pulse text-right font-medium">
               {activeStatuses[statusIndex]}
             </div>
@@ -356,32 +373,14 @@ function ChatIndexScreen() {
         <div ref={messagesEndRef} />
       </div>
 
-      {/* الشريط السفلي للإدخال والاقتراحات وتنبيه الزائر فوقها تماماً */}
-      <div className="p-2 border-t border-border bg-background/95 space-y-2 shrink-0">
-        
-        {/* إشعار الزائر: تم نقله ليصبح هنا فوق الاقتراحات ومربع الإرسال تماماً */}
-        {isVisitor && (
-          <div className="w-full py-1.5 px-3 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-between text-[11px] text-amber-300/90 shadow-sm">
-            <div className="flex items-center gap-1.5">
-              <AlertCircle className="size-3.5 text-amber-400 shrink-0" />
-              <span>تنبيه: محادثة كزائر — لن يتم حفظ السجل.</span>
-            </div>
-            <button
-              onClick={() => void navigate({ to: "/auth" })}
-              className="font-bold text-[#2dd4bf] hover:underline whitespace-nowrap"
-            >
-              تسجيل الدخول
-            </button>
-          </div>
-        )}
-
-        {/* اقتراحات الذكاء الاصطناعي */}
+      {/* الشريط السفلي للإدخال والاقتراحات */}
+      <div className="p-3 border-t border-slate-800/80 bg-[#0b101b] space-y-2.5 shrink-0">
         <div className="flex items-center gap-2 overflow-x-auto pb-1 no-scrollbar">
           {QUICK_SUGGESTIONS.map((item, i) => (
             <button
               key={i}
               onClick={() => setInput(item)}
-              className="shrink-0 rounded-full border border-border bg-secondary/80 px-3 py-1.5 text-xs font-semibold text-muted-foreground hover:bg-secondary hover:text-foreground transition"
+              className="shrink-0 rounded-full border border-slate-800 bg-slate-900/60 px-3 py-1.5 text-xs font-semibold text-slate-300 hover:bg-slate-800 hover:text-white transition"
             >
               {item}
             </button>
@@ -389,20 +388,20 @@ function ChatIndexScreen() {
         </div>
 
         {selectedFile && (
-          <div className="flex items-center justify-between rounded-xl bg-secondary px-3 py-2 text-xs">
+          <div className="flex items-center justify-between rounded-xl bg-slate-900 border border-slate-800 px-3 py-2 text-xs">
             <div className="flex items-center gap-2 truncate">
               {selectedFile.type.startsWith("image/") ? (
-                <ImageIcon className="size-4 text-primary shrink-0" />
+                <ImageIcon className="size-4 text-[#2dd4bf] shrink-0" />
               ) : (
-                <Paperclip className="size-4 text-primary shrink-0" />
+                <Paperclip className="size-4 text-[#2dd4bf] shrink-0" />
               )}
-              <span className="truncate max-w-[200px] font-bold">{selectedFile.name}</span>
+              <span className="truncate max-w-[200px] font-bold text-white">{selectedFile.name}</span>
             </div>
             <Button
               type="button"
               variant="ghost"
               size="icon"
-              className="size-6 rounded-full"
+              className="size-6 rounded-full text-slate-400 hover:text-white"
               onClick={() => setSelectedFile(null)}
             >
               <X className="size-3.5" />
@@ -411,7 +410,7 @@ function ChatIndexScreen() {
         )}
 
         <div className="flex items-center gap-2">
-          <div className="relative flex-1 flex items-center rounded-2xl border border-border bg-background focus-within:ring-2 focus-within:ring-[#2dd4bf]">
+          <div className="relative flex-1 flex items-center rounded-2xl border border-slate-800 bg-slate-900/90 focus-within:border-[#2dd4bf] transition">
             <input
               type="file"
               ref={fileInputRef}
@@ -422,7 +421,7 @@ function ChatIndexScreen() {
             <button
               type="button"
               onClick={() => fileInputRef.current?.click()}
-              className="absolute right-2 text-muted-foreground hover:text-foreground p-2 rounded-xl hover:bg-secondary transition"
+              className="absolute right-2 text-slate-400 hover:text-white p-2 rounded-xl hover:bg-slate-800 transition"
               title="إرفاق صورة أو ملف"
             >
               <Plus className="size-5" />
@@ -433,7 +432,7 @@ function ChatIndexScreen() {
               onChange={(e) => setInput(e.target.value)}
               placeholder="اكتب رسالتك لـ Salman AI..."
               rows={1}
-              className="w-full resize-none bg-transparent py-3 pr-11 pl-4 text-sm text-right focus:outline-none max-h-32 min-h-[44px]"
+              className="w-full resize-none bg-transparent py-3 pr-11 pl-4 text-xs text-right text-white placeholder:text-slate-500 focus:outline-none max-h-32 min-h-[44px]"
             />
           </div>
 

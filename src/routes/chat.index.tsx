@@ -480,4 +480,4 @@ function ChatIndexScreen() {
       </div>
     </div>
   );
-                            }
+}

@@ -1,4 +1,4 @@
-export async function askSalmanAI(messages: { role: string; content: any }[]) {
+export async function askSalmanAI(messages: any[]) {
   const groqApiKey = import.meta.env.VITE_GROQ_API_KEY || "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";
   const tavilyApiKey = import.meta.env.VITE_TAVILY_API_KEY || "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";
 
@@ -57,12 +57,46 @@ export async function askSalmanAI(messages: { role: string; content: any }[]) {
 - التاريخ الحالي: ${new Date().toISOString().slice(0, 10)}.`
   };
 
-  // تنظيف الرسائل وتحويل المحتوى إلى String نقي متوافق تماماً مع Groq API
+  // متغير للتحقق مما إذا كانت المخرجات تتضمن صورة
+  let hasImage = false;
+
+  // إعداد الرسائل وتنسيقها بشكل يدعم الصور والنصوص معاً
   const formattedMessages = messages
     .filter((m) => m.role === "user" || m.role === "assistant")
     .map((m, index) => {
-      let contentStr = "";
+      const isLastMessage = index === messages.length - 1;
 
+      // 1. حالة وجود صورة مرفقة (إما كعنصر image أو base64 أو array يحتوي على image_url)
+      const imageUrl = m.image || (m.imageBase64 ? `data:${m.imageMimeType || "image/jpeg"};base64,${m.imageBase64}` : null);
+      
+      if (imageUrl || (Array.isArray(m.content) && m.content.some((c: any) => c.type === "image_url"))) {
+        hasImage = true;
+        
+        let textContent = "";
+        if (typeof m.content === "string") {
+          textContent = m.content;
+        } else if (Array.isArray(m.content)) {
+          const textObj = m.content.find((item: any) => item.type === "text" || typeof item === "string");
+          textContent = typeof textObj === "string" ? textObj : textObj?.text || "";
+        }
+
+        if (isLastMessage && searchResultsContext) {
+          textContent += searchResultsContext;
+        }
+
+        const finalImgUrl = imageUrl || m.content.find((c: any) => c.type === "image_url")?.image_url?.url;
+
+        return {
+          role: m.role,
+          content: [
+            { type: "text", text: textContent.trim() || "حلل هذه الصورة واشرح محتواها بالتفصيل." },
+            { type: "image_url", image_url: { url: finalImgUrl } }
+          ]
+        };
+      }
+
+      // 2. حالة الرسائل النصية العادية
+      let contentStr = "";
       if (typeof m.content === "string") {
         contentStr = m.content;
       } else if (Array.isArray(m.content)) {
@@ -73,8 +107,7 @@ export async function askSalmanAI(messages: { role: string; content: any }[]) {
         contentStr = String(m.content || "");
       }
 
-      // إرفاق سياق البحث في نهاية آخر رسالة للمستخدم
-      if (index === messages.length - 1 && searchResultsContext) {
+      if (isLastMessage && searchResultsContext) {
         contentStr += searchResultsContext;
       }
 
@@ -84,6 +117,9 @@ export async function askSalmanAI(messages: { role: string; content: any }[]) {
       };
     });
 
+  // التبديل التلقائي: نموذج Vision في حال وجود صورة، ونموذج النص السريع Llama 3.3 في باقي الحالات
+  const selectedModel = hasImage ? "llama-3.2-11b-vision-preview" : "llama-3.3-70b-versatile";
+
   try {
     const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
       method: "POST",
@@ -92,7 +128,7 @@ export async function askSalmanAI(messages: { role: string; content: any }[]) {
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "llama-3.3-70b-versatile",
+        model: selectedModel,
         messages: [systemPrompt, ...formattedMessages],
         temperature: 0.5,
         max_tokens: 2048,

@@ -67,6 +67,7 @@ function ChatIndexScreen() {
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
   const pressTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   const scrollToBottom = () => {
@@ -118,6 +119,9 @@ function ChatIndexScreen() {
   const handleEdit = (text: string) => {
     setInput(text);
     setActiveActionIndex(null);
+    if (textareaRef.current) {
+      textareaRef.current.focus();
+    }
   };
 
   const handleRetry = (index: number) => {
@@ -138,19 +142,30 @@ function ChatIndexScreen() {
 
     try {
       const formattedHistory = chatHistory.map((m) => {
-        // إذا وجد محتوى نصي داخل الملف المرفق، ندمجه مع الرسالة
         let finalContent = m.content;
+        
+        // دمج محتوى الملف النصي إن وجد
         if (m.attachment?.textContent) {
           finalContent = `${m.content ? m.content + "\n\n" : ""}[محتوى الملف المرفق: ${m.attachment.name}]\n\`\`\`\n${m.attachment.textContent}\n\`\`\``;
         }
 
-        // التعامل مع الصور
-        if (m.attachment?.base64 && m.attachment.type.startsWith("image/")) {
+        // التعامل مع الصور وإرسالها بمختلف التنسيقات المدعومة
+        if (m.attachment?.base64 && (m.attachment.type.startsWith("image/") || m.attachment.base64.startsWith("data:image/"))) {
+          const textPrompt = finalContent || "ماذا يوجد في هذه الصورة؟ قم بتحليلها والتفصيل فيها بشكل كامل.";
           return {
             role: m.role,
             content: [
-              { type: "text", text: finalContent || "حلل هذه الصورة واستخرج النص أو التفاصيل منها وأجب بناءً عليها." },
+              { type: "text", text: textPrompt },
               { type: "image_url", image_url: { url: m.attachment.base64 } }
+            ],
+            image: m.attachment.base64,
+            image_url: m.attachment.base64,
+            experimental_attachments: [
+              {
+                name: m.attachment.name,
+                contentType: m.attachment.type,
+                url: m.attachment.base64
+              }
             ]
           };
         }
@@ -188,22 +203,33 @@ function ChatIndexScreen() {
 
   const handleSend = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
-    if ((!input.trim() && !selectedFile) || isSending) return;
 
-    const currentAttachment = selectedFile;
-    const userText = input.trim();
-    const userMessage: Message = {
-      role: "user",
-      content: userText,
-      attachment: currentAttachment ? { ...currentAttachment } : undefined,
-    };
+    // 1. إجبار كيبورد الهاتف على إلغاء التركيز واعتماد الكلمة الأخيرة المكتوبة
+    if (textareaRef.current) {
+      textareaRef.current.blur();
+    }
 
-    const updatedMessages = [...messages, userMessage];
-    setMessages(updatedMessages);
-    setInput("");
-    setSelectedFile(null);
+    // 2. تأخير بسيط لالتقاط النص النهائي المكتوب بعد إغلاق كيبورد الهاتف
+    setTimeout(async () => {
+      const rawText = textareaRef.current?.value || input;
+      const userText = rawText.trim();
 
-    await executeSend(updatedMessages, userText);
+      if ((!userText && !selectedFile) || isSending) return;
+
+      const currentAttachment = selectedFile;
+      const userMessage: Message = {
+        role: "user",
+        content: userText,
+        attachment: currentAttachment ? { ...currentAttachment } : undefined,
+      };
+
+      const updatedMessages = [...messages, userMessage];
+      setMessages(updatedMessages);
+      setInput("");
+      setSelectedFile(null);
+
+      await executeSend(updatedMessages, userText);
+    }, 60);
   };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -236,7 +262,7 @@ function ChatIndexScreen() {
       reader.onload = () => {
         setSelectedFile({
           name: file.name,
-          type: file.type,
+          type: file.type || "image/jpeg",
           url: URL.createObjectURL(file),
           base64: reader.result as string,
         });
@@ -456,6 +482,7 @@ function ChatIndexScreen() {
             </button>
 
             <textarea
+              ref={textareaRef}
               value={input}
               onChange={(e) => setInput(e.target.value)}
               placeholder="اكتب رسالتك لـ Salman AI..."

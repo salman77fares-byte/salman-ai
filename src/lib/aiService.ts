@@ -2,7 +2,7 @@ export async function askSalmanAI(messages: any[]) {
   const groqApiKey = import.meta.env.VITE_GROQ_API_KEY || "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";
   const tavilyApiKey = import.meta.env.VITE_TAVILY_API_KEY || "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";
 
-  // استخراج آخر سؤال للمستخدم
+  // 1. استخراج آخر سؤال للمستخدم
   const lastUserMsg = [...messages].reverse().find((m) => m.role === "user");
   let userQuery = "";
   
@@ -15,18 +15,15 @@ export async function askSalmanAI(messages: any[]) {
     }
   }
 
+  // 2. البحث الذكي عبر الإنترنت (Tavily)
   let searchResultsContext = "";
-
-  // فحص ما إذا كان السؤال يتطلب البحث عبر الإنترنت
   const isSearchQuery = /بحث|أخبار|أحدث|ابحث|معلومات|مصادر|رياضة|مباراة|اليوم|سعر/i.test(userQuery);
 
   if (isSearchQuery && userQuery.trim() !== "") {
     try {
       const tavilyResponse = await fetch("https://api.tavily.com/search", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           api_key: tavilyApiKey.trim(),
           query: userQuery,
@@ -57,21 +54,38 @@ export async function askSalmanAI(messages: any[]) {
 - التاريخ الحالي: ${new Date().toISOString().slice(0, 10)}.`
   };
 
-  // متغير للتحقق مما إذا كانت المخرجات تتضمن صورة
   let hasImage = false;
 
-  // إعداد الرسائل وتنسيقها بشكل يدعم الصور والنصوص معاً
+  // 3. تنظيف وتنسيق الرسائل لدعم Vision API
   const formattedMessages = messages
     .filter((m) => m.role === "user" || m.role === "assistant")
     .map((m, index) => {
       const isLastMessage = index === messages.length - 1;
 
-      // 1. حالة وجود صورة مرفقة (إما كعنصر image أو base64 أو array يحتوي على image_url)
-      const imageUrl = m.image || (m.imageBase64 ? `data:${m.imageMimeType || "image/jpeg"};base64,${m.imageBase64}` : null);
-      
-      if (imageUrl || (Array.isArray(m.content) && m.content.some((c: any) => c.type === "image_url"))) {
+      // استخراج الصورة من كافة الأشكال المحتملة (attachment أو image أو base64)
+      let rawImgUrl: string | null = null;
+      if (m.attachment?.base64) {
+        rawImgUrl = m.attachment.base64;
+      } else if (m.image) {
+        rawImgUrl = m.image;
+      } else if (m.imageBase64) {
+        rawImgUrl = `data:${m.imageMimeType || "image/jpeg"};base64,${m.imageBase64}`;
+      } else if (Array.isArray(m.content)) {
+        const imgObj = m.content.find((c: any) => c.type === "image_url" || c.image_url);
+        if (imgObj?.image_url?.url) rawImgUrl = imgObj.image_url.url;
+      }
+
+      // إذا كانت الرسالة تحتوي على صورة
+      if (rawImgUrl && typeof rawImgUrl === "string") {
         hasImage = true;
-        
+
+        // تنظيف Base64 من الأسطر الجديدة والمسافات لتجنب خطأ 400
+        let cleanedImgUrl = rawImgUrl.replace(/[\r\n\s]+/g, "");
+        if (!cleanedImgUrl.startsWith("data:")) {
+          cleanedImgUrl = `data:image/jpeg;base64,${cleanedImgUrl}`;
+        }
+
+        // استخراج النص المصاحب للصورة وضمان عدم إرسال string فارغ
         let textContent = "";
         if (typeof m.content === "string") {
           textContent = m.content;
@@ -84,18 +98,18 @@ export async function askSalmanAI(messages: any[]) {
           textContent += searchResultsContext;
         }
 
-        const finalImgUrl = imageUrl || m.content.find((c: any) => c.type === "image_url")?.image_url?.url;
+        const finalText = textContent.trim() || "ماذا يوجد في هذه الصورة؟ اشرحها بالتفصيل.";
 
         return {
           role: m.role,
           content: [
-            { type: "text", text: textContent.trim() || "حلل هذه الصورة واشرح محتواها بالتفصيل." },
-            { type: "image_url", image_url: { url: finalImgUrl } }
+            { type: "text", text: finalText },
+            { type: "image_url", image_url: { url: cleanedImgUrl } }
           ]
         };
       }
 
-      // 2. حالة الرسائل النصية العادية
+      // الرسائل النصية العادية
       let contentStr = "";
       if (typeof m.content === "string") {
         contentStr = m.content;
@@ -117,7 +131,7 @@ export async function askSalmanAI(messages: any[]) {
       };
     });
 
-  // التبديل التلقائي: نموذج Vision في حال وجود صورة، ونموذج النص السريع Llama 3.3 في باقي الحالات
+  // تحديد النموذج المناسب (الرؤية للصور، أو Llama 3.3 للنصوص)
   const selectedModel = hasImage ? "llama-3.2-11b-vision-preview" : "llama-3.3-70b-versatile";
 
   try {
@@ -142,7 +156,7 @@ export async function askSalmanAI(messages: any[]) {
     }
 
     const data = await response.json();
-    return data.choices[0]?.message?.content || "لم يتم استلام رد.";
+    return data.choices?.[0]?.message?.content || "لم يتم استلام رد.";
   } catch (error: any) {
     console.error("Fetch Exception:", error);
     return `تعذر الاتصال بالخادم: ${error.message || "خطأ في الشبكة"}`;

@@ -144,29 +144,28 @@ function ChatIndexScreen() {
       const formattedHistory = chatHistory.map((m) => {
         let finalContent = m.content;
         
-        // دمج محتوى الملف النصي إن وجد
+        // إذا كان هناك ملف نصي مرفق
         if (m.attachment?.textContent) {
           finalContent = `${m.content ? m.content + "\n\n" : ""}[محتوى الملف المرفق: ${m.attachment.name}]\n\`\`\`\n${m.attachment.textContent}\n\`\`\``;
         }
 
-        // التعامل مع الصور وإرسالها بمختلف التنسيقات المدعومة
+        // تجهيز بيانات الصورة بشكل صريح ومطابق لـ Vision APIs
         if (m.attachment?.base64 && (m.attachment.type.startsWith("image/") || m.attachment.base64.startsWith("data:image/"))) {
-          const textPrompt = finalContent || "ماذا يوجد في هذه الصورة؟ قم بتحليلها والتفصيل فيها بشكل كامل.";
+          const rawBase64 = m.attachment.base64.includes(",") 
+            ? m.attachment.base64.split(",")[1] 
+            : m.attachment.base64;
+          const mimeType = m.attachment.type || "image/jpeg";
+          const promptText = finalContent.trim() || "حلل هذه الصورة واشرح محتواها بالتفصيل وأجب عن أي سؤال حولها.";
+
           return {
             role: m.role,
             content: [
-              { type: "text", text: textPrompt },
-              { type: "image_url", image_url: { url: m.attachment.base64 } }
+              { type: "text", text: promptText },
+              { type: "image_url", image_url: { url: `data:${mimeType};base64,${rawBase64}` } }
             ],
-            image: m.attachment.base64,
-            image_url: m.attachment.base64,
-            experimental_attachments: [
-              {
-                name: m.attachment.name,
-                contentType: m.attachment.type,
-                url: m.attachment.base64
-              }
-            ]
+            image: `data:${mimeType};base64,${rawBase64}`,
+            imageBase64: rawBase64,
+            imageMimeType: mimeType
           };
         }
 
@@ -193,7 +192,7 @@ function ChatIndexScreen() {
       toast.error("تعذّر جلب الرد حالياً.");
       setMessages((prev) => {
         const newMsgs = [...prev];
-        newMsgs[newMsgs.length - 1] = { role: "assistant", content: "عذراً، حدث خطأ أثناء معالجة الطلب." };
+        newMsgs[newMsgs.length - 1] = { role: "assistant", content: "عذراً، حدث خطأ أثناء معالجة الصورة أو الطلب." };
         return newMsgs;
       });
     } finally {
@@ -204,12 +203,11 @@ function ChatIndexScreen() {
   const handleSend = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
 
-    // 1. إجبار كيبورد الهاتف على إلغاء التركيز واعتماد الكلمة الأخيرة المكتوبة
+    // إجبار الكيبورد على الحفظ وإلغاء التركيز لالتقاط أحدث كلمة
     if (textareaRef.current) {
       textareaRef.current.blur();
     }
 
-    // 2. تأخير بسيط لالتقاط النص النهائي المكتوب بعد إغلاق كيبورد الهاتف
     setTimeout(async () => {
       const rawText = textareaRef.current?.value || input;
       const userText = rawText.trim();
@@ -229,7 +227,7 @@ function ChatIndexScreen() {
       setSelectedFile(null);
 
       await executeSend(updatedMessages, userText);
-    }, 60);
+    }, 80);
   };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -303,7 +301,6 @@ function ChatIndexScreen() {
       {/* منطقة المحتوى والرسائل */}
       <div className="flex flex-1 flex-col justify-between space-y-5 overflow-y-auto px-4 py-4">
         
-        {/* واجهة الترحيب تظهر فقط عندما تكون قائمة الرسائل فارغة */}
         {messages.length === 0 && (
           <div className="my-auto flex flex-col items-center justify-center space-y-3 py-6 text-center">
             <div className="rounded-2xl border border-slate-800 bg-slate-900/80 p-3 shadow-xl">
@@ -316,7 +313,6 @@ function ChatIndexScreen() {
           </div>
         )}
 
-        {/* قائمة الرسائل في حال وجود محادثات */}
         {messages.length > 0 && (
           <div className="w-full space-y-4 pt-10">
             {messages.map((msg, idx) => (
@@ -413,7 +409,6 @@ function ChatIndexScreen() {
           </div>
         )}
 
-        {/* حالة الانتظار */}
         {isSending && messages[messages.length - 1]?.content === "" && (
           <div className="flex w-full items-center justify-start gap-2.5">
             <div className="shrink-0">

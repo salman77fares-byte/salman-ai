@@ -1,3 +1,35 @@
+async function compressImage(dataUrl: string, maxWidth = 800, quality = 0.7): Promise<string> {
+  return new Promise((resolve) => {
+    if (typeof window === "undefined" || !dataUrl.startsWith("data:image")) {
+      return resolve(dataUrl);
+    }
+    const img = new Image();
+    img.crossOrigin = "anonymous";
+    img.onload = () => {
+      let width = img.width;
+      let height = img.height;
+
+      if (width > maxWidth) {
+        height = Math.round((height * maxWidth) / width);
+        width = maxWidth;
+      }
+
+      const canvas = document.createElement("canvas");
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext("2d");
+      if (ctx) {
+        ctx.drawImage(img, 0, 0, width, height);
+        resolve(canvas.toDataURL("image/jpeg", quality));
+      } else {
+        resolve(dataUrl);
+      }
+    };
+    img.onerror = () => resolve(dataUrl);
+    img.src = dataUrl;
+  });
+}
+
 export async function askSalmanAI(messages: any[]) {
   const groqApiKey = import.meta.env.VITE_GROQ_API_KEY || "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";
   const tavilyApiKey = import.meta.env.VITE_TAVILY_API_KEY || "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";
@@ -56,83 +88,84 @@ export async function askSalmanAI(messages: any[]) {
 
   let hasImage = false;
 
-  // 3. تنظيف وتنسيق الرسائل لدعم Vision API
-  const formattedMessages = messages
-    .filter((m) => m.role === "user" || m.role === "assistant")
-    .map((m, index) => {
-      const isLastMessage = index === messages.length - 1;
+  // 3. معالجة وضغط الرسائل لتجهيزها لـ API
+  const formattedMessages = await Promise.all(
+    messages
+      .filter((m) => m.role === "user" || m.role === "assistant")
+      .map(async (m, index) => {
+        const isLastMessage = index === messages.length - 1;
 
-      // استخراج الصورة من كافة الأشكال المحتملة (attachment أو image أو base64)
-      let rawImgUrl: string | null = null;
-      if (m.attachment?.base64) {
-        rawImgUrl = m.attachment.base64;
-      } else if (m.image) {
-        rawImgUrl = m.image;
-      } else if (m.imageBase64) {
-        rawImgUrl = `data:${m.imageMimeType || "image/jpeg"};base64,${m.imageBase64}`;
-      } else if (Array.isArray(m.content)) {
-        const imgObj = m.content.find((c: any) => c.type === "image_url" || c.image_url);
-        if (imgObj?.image_url?.url) rawImgUrl = imgObj.image_url.url;
-      }
-
-      // إذا كانت الرسالة تحتوي على صورة
-      if (rawImgUrl && typeof rawImgUrl === "string") {
-        hasImage = true;
-
-        // تنظيف Base64 من الأسطر الجديدة والمسافات لتجنب خطأ 400
-        let cleanedImgUrl = rawImgUrl.replace(/[\r\n\s]+/g, "");
-        if (!cleanedImgUrl.startsWith("data:")) {
-          cleanedImgUrl = `data:image/jpeg;base64,${cleanedImgUrl}`;
+        // استخراج الصورة من كافة الأشكال المحتملة
+        let rawImgUrl: string | null = null;
+        if (m.attachment?.base64) {
+          rawImgUrl = m.attachment.base64;
+        } else if (m.image) {
+          rawImgUrl = m.image;
+        } else if (m.imageBase64) {
+          rawImgUrl = `data:${m.imageMimeType || "image/jpeg"};base64,${m.imageBase64}`;
+        } else if (Array.isArray(m.content)) {
+          const imgObj = m.content.find((c: any) => c.type === "image_url" || c.image_url);
+          if (imgObj?.image_url?.url) rawImgUrl = imgObj.image_url.url;
         }
 
-        // استخراج النص المصاحب للصورة وضمان عدم إرسال string فارغ
-        let textContent = "";
+        // إذا كانت الرسالة تحتوي على صورة
+        if (rawImgUrl && typeof rawImgUrl === "string") {
+          hasImage = true;
+
+          // ضغط الصورة فوراً لتقليل حجم الطلب من MB إلى عدة KB
+          const compressedImgUrl = await compressImage(rawImgUrl);
+
+          let textContent = "";
+          if (typeof m.content === "string") {
+            textContent = m.content;
+          } else if (Array.isArray(m.content)) {
+            const textObj = m.content.find((item: any) => item.type === "text" || typeof item === "string");
+            textContent = typeof textObj === "string" ? textObj : textObj?.text || "";
+          }
+
+          if (isLastMessage && searchResultsContext) {
+            textContent += searchResultsContext;
+          }
+
+          const finalText = textContent.trim() || "ماذا يوجد في هذه الصورة؟ اشرحها بالتفصيل.";
+
+          return {
+            role: m.role,
+            content: [
+              { type: "text", text: finalText },
+              { type: "image_url", image_url: { url: compressedImgUrl } }
+            ]
+          };
+        }
+
+        // الرسائل النصية العادية
+        let contentStr = "";
         if (typeof m.content === "string") {
-          textContent = m.content;
+          contentStr = m.content;
         } else if (Array.isArray(m.content)) {
-          const textObj = m.content.find((item: any) => item.type === "text" || typeof item === "string");
-          textContent = typeof textObj === "string" ? textObj : textObj?.text || "";
+          contentStr = m.content
+            .map((item: any) => (typeof item === "string" ? item : item.text || ""))
+            .join(" ");
+        } else {
+          contentStr = String(m.content || "");
         }
 
         if (isLastMessage && searchResultsContext) {
-          textContent += searchResultsContext;
+          contentStr += searchResultsContext;
         }
-
-        const finalText = textContent.trim() || "ماذا يوجد في هذه الصورة؟ اشرحها بالتفصيل.";
 
         return {
           role: m.role,
-          content: [
-            { type: "text", text: finalText },
-            { type: "image_url", image_url: { url: cleanedImgUrl } }
-          ]
+          content: contentStr.trim() || "..."
         };
-      }
+      })
+  );
 
-      // الرسائل النصية العادية
-      let contentStr = "";
-      if (typeof m.content === "string") {
-        contentStr = m.content;
-      } else if (Array.isArray(m.content)) {
-        contentStr = m.content
-          .map((item: any) => (typeof item === "string" ? item : item.text || ""))
-          .join(" ");
-      } else {
-        contentStr = String(m.content || "");
-      }
-
-      if (isLastMessage && searchResultsContext) {
-        contentStr += searchResultsContext;
-      }
-
-      return {
-        role: m.role,
-        content: contentStr.trim() || "..."
-      };
-    });
-
-  // تحديد النموذج المناسب (الرؤية للصور، أو Llama 3.3 للنصوص)
+  // تحديد النموذج ومصفوفة الرسائل النهائية
   const selectedModel = hasImage ? "llama-3.2-11b-vision-preview" : "llama-3.3-70b-versatile";
+  
+  // استبعاد systemPrompt عند وجود صور لمنع خطأ 400 من Groq Vision
+  const finalPayloadMessages = hasImage ? formattedMessages : [systemPrompt, ...formattedMessages];
 
   try {
     const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
@@ -143,7 +176,7 @@ export async function askSalmanAI(messages: any[]) {
       },
       body: JSON.stringify({
         model: selectedModel,
-        messages: [systemPrompt, ...formattedMessages],
+        messages: finalPayloadMessages,
         temperature: 0.5,
         max_tokens: 2048,
       }),

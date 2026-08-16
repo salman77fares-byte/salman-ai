@@ -1,4 +1,3 @@
-// دالة لتصغير وضغط الصور تلقائياً لتفادي أخطاء الحجم والذاكرة
 async function compressImage(dataUrl: string, maxWidth = 800, quality = 0.7): Promise<string> {
   return new Promise((resolve) => {
     if (typeof window === "undefined" || !dataUrl.startsWith("data:image")) {
@@ -32,11 +31,14 @@ async function compressImage(dataUrl: string, maxWidth = 800, quality = 0.7): Pr
 }
 
 export async function askSalmanAI(messages: any[]) {
-  // المفتاح الجديد المحدث
-  const groqApiKey = import.meta.env.VITE_GROQ_API_KEY || "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";
-  const tavilyApiKey = import.meta.env.VITE_TAVILY_API_KEY || "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";
+  // قراءة المفاتيح سرّياً من متغيرات البيئة بدون كود صريح
+  const groqApiKey = import.meta.env.VITE_GROQ_API_KEY;
+  const tavilyApiKey = import.meta.env.VITE_TAVILY_API_KEY;
 
-  // 1. استخراج آخر سؤال للمستخدم
+  if (!groqApiKey) {
+    return "خطأ: لم يتم العثور على مفتاح Groq API. يرجى إضافته في إعدادات البيئة (Project Secrets / .env).";
+  }
+
   const lastUserMsg = [...messages].reverse().find((m) => m.role === "user");
   let userQuery = "";
   
@@ -49,7 +51,6 @@ export async function askSalmanAI(messages: any[]) {
     }
   }
 
-  // 2. البحث الذكي عبر Tavily عند الحجم للبيانات المحدثة
   let searchResultsContext = "";
   const isSearchQuery = /بحث|أخبار|أحدث|ابحث|معلومات|مصادر|رياضة|مباراة|اليوم|سعر/i.test(userQuery);
 
@@ -82,14 +83,13 @@ export async function askSalmanAI(messages: any[]) {
   const systemPrompt = {
     role: "system",
     content: `أنت "Salman AI"، مساعد ذكي عربي متقدّم بشخصية واثقة وعملية.
-- مطوّرك ومؤسسك هو "المهندس سلمان فارس" فقط. إذا سُئلت عن هويتك أو قدراتك، قدّم نفسك بأسلوب مميّز: أنك Salman AI، من تطوير المهندس سلمان فارس، ولا تنسب نفسك لأي شركة أو جهة أخرى.
-- أسلوبك: عربي احترافي حديث وودّي مع وضوح تقني. ابدأ بالإجابة مباشرة دون مقدمات روبوتية.
+- مطوّرك ومؤسسك هو "المهندس سلمان فارس" فقط.
+- أسلوبك: عربي احترافي حديث وودّي مع وضوح تقني. ابدأ بالإجابة مباشرة دون مقدمات.
 - التاريخ الحالي: ${new Date().toISOString().slice(0, 10)}.`
   };
 
   let hasImage = false;
 
-  // 3. تجهيز وتنسيق الرسائل لدعم الصور والنصوص
   const formattedMessages = await Promise.all(
     messages
       .filter((m) => m.role === "user" || m.role === "assistant")
@@ -145,7 +145,6 @@ export async function askSalmanAI(messages: any[]) {
       })
   );
 
-  // اختيار النموذج المناسب وحجم المخرجات
   const selectedModel = hasImage ? "llama-3.2-11b-vision-preview" : "llama-3.3-70b-versatile";
   const finalPayloadMessages = hasImage ? formattedMessages : [systemPrompt, ...formattedMessages];
 
@@ -165,7 +164,7 @@ export async function askSalmanAI(messages: any[]) {
     });
 
     if (response.status === 401) {
-      return "خطأ (401): مفتاح Groq API غير صالح أو تم حظره مجدداً. يرجى التأكد من إضافة المفتاح في ملف .env وليس بشكل مكشوف في الكود.";
+      return "خطأ (401): مفتاح Groq API غير صالح أو تم إلغاؤه. تأكد من تحديث المفتاح في إعدادات البيئة (Secrets).";
     }
 
     if (!response.ok) {

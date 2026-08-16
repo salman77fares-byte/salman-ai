@@ -1,3 +1,4 @@
+// دالة لتصغير وضغط الصور تلقائياً لتفادي أخطاء الحجم والذاكرة
 async function compressImage(dataUrl: string, maxWidth = 800, quality = 0.7): Promise<string> {
   return new Promise((resolve) => {
     if (typeof window === "undefined" || !dataUrl.startsWith("data:image")) {
@@ -31,7 +32,8 @@ async function compressImage(dataUrl: string, maxWidth = 800, quality = 0.7): Pr
 }
 
 export async function askSalmanAI(messages: any[]) {
-  const groqApiKey = import.meta.env.VITE_GROQ_API_KEY || "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";
+  // المفتاح الجديد المحدث
+  const groqApiKey = import.meta.env.VITE_GROQ_API_KEY || "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";
   const tavilyApiKey = import.meta.env.VITE_TAVILY_API_KEY || "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";
 
   // 1. استخراج آخر سؤال للمستخدم
@@ -47,11 +49,11 @@ export async function askSalmanAI(messages: any[]) {
     }
   }
 
-  // 2. البحث الذكي عبر الإنترنت (Tavily)
+  // 2. البحث الذكي عبر Tavily عند الحجم للبيانات المحدثة
   let searchResultsContext = "";
   const isSearchQuery = /بحث|أخبار|أحدث|ابحث|معلومات|مصادر|رياضة|مباراة|اليوم|سعر/i.test(userQuery);
 
-  if (isSearchQuery && userQuery.trim() !== "") {
+  if (isSearchQuery && userQuery.trim() !== "" && tavilyApiKey) {
     try {
       const tavilyResponse = await fetch("https://api.tavily.com/search", {
         method: "POST",
@@ -67,8 +69,8 @@ export async function askSalmanAI(messages: any[]) {
 
       if (tavilyResponse.ok) {
         const tavilyData = await tavilyResponse.json();
-        if (tavilyData.results && tavilyData.results.length > 0) {
-          searchResultsContext = "\n\n[معلومات حديثة تم جلبها مباشرة من البحث]:\n" +
+        if (tavilyData.results?.length > 0) {
+          searchResultsContext = "\n\n[معلومات حديثة من البحث]:\n" +
             tavilyData.results.map((r: any, i: number) => `${i + 1}. ${r.title}: ${r.content}`).join("\n");
         }
       }
@@ -82,20 +84,18 @@ export async function askSalmanAI(messages: any[]) {
     content: `أنت "Salman AI"، مساعد ذكي عربي متقدّم بشخصية واثقة وعملية.
 - مطوّرك ومؤسسك هو "المهندس سلمان فارس" فقط. إذا سُئلت عن هويتك أو قدراتك، قدّم نفسك بأسلوب مميّز: أنك Salman AI، من تطوير المهندس سلمان فارس، ولا تنسب نفسك لأي شركة أو جهة أخرى.
 - أسلوبك: عربي احترافي حديث وودّي مع وضوح تقني. ابدأ بالإجابة مباشرة دون مقدمات روبوتية.
-- استعن بالمعلومات المحدثة المرفقة في طلبات البحث للإجابة بدقة وبأسلوب منظم يضم مسافات وأسطر واضحة.
 - التاريخ الحالي: ${new Date().toISOString().slice(0, 10)}.`
   };
 
   let hasImage = false;
 
-  // 3. معالجة وضغط الرسائل لتجهيزها لـ API
+  // 3. تجهيز وتنسيق الرسائل لدعم الصور والنصوص
   const formattedMessages = await Promise.all(
     messages
       .filter((m) => m.role === "user" || m.role === "assistant")
       .map(async (m, index) => {
         const isLastMessage = index === messages.length - 1;
 
-        // استخراج الصورة من كافة الأشكال المحتملة
         let rawImgUrl: string | null = null;
         if (m.attachment?.base64) {
           rawImgUrl = m.attachment.base64;
@@ -108,11 +108,8 @@ export async function askSalmanAI(messages: any[]) {
           if (imgObj?.image_url?.url) rawImgUrl = imgObj.image_url.url;
         }
 
-        // إذا كانت الرسالة تحتوي على صورة
         if (rawImgUrl && typeof rawImgUrl === "string") {
           hasImage = true;
-
-          // ضغط الصورة فوراً لتقليل حجم الطلب من MB إلى عدة KB
           const compressedImgUrl = await compressImage(rawImgUrl);
 
           let textContent = "";
@@ -127,29 +124,16 @@ export async function askSalmanAI(messages: any[]) {
             textContent += searchResultsContext;
           }
 
-          const finalText = textContent.trim() || "ماذا يوجد في هذه الصورة؟ اشرحها بالتفصيل.";
-
           return {
             role: m.role,
             content: [
-              { type: "text", text: finalText },
+              { type: "text", text: textContent.trim() || "ماذا يوجد في هذه الصورة؟ اشرحها بالتفصيل." },
               { type: "image_url", image_url: { url: compressedImgUrl } }
             ]
           };
         }
 
-        // الرسائل النصية العادية
-        let contentStr = "";
-        if (typeof m.content === "string") {
-          contentStr = m.content;
-        } else if (Array.isArray(m.content)) {
-          contentStr = m.content
-            .map((item: any) => (typeof item === "string" ? item : item.text || ""))
-            .join(" ");
-        } else {
-          contentStr = String(m.content || "");
-        }
-
+        let contentStr = typeof m.content === "string" ? m.content : JSON.stringify(m.content || "");
         if (isLastMessage && searchResultsContext) {
           contentStr += searchResultsContext;
         }
@@ -161,10 +145,8 @@ export async function askSalmanAI(messages: any[]) {
       })
   );
 
-  // تحديد النموذج ومصفوفة الرسائل النهائية
+  // اختيار النموذج المناسب وحجم المخرجات
   const selectedModel = hasImage ? "llama-3.2-11b-vision-preview" : "llama-3.3-70b-versatile";
-  
-  // استبعاد systemPrompt عند وجود صور لمنع خطأ 400 من Groq Vision
   const finalPayloadMessages = hasImage ? formattedMessages : [systemPrompt, ...formattedMessages];
 
   try {
@@ -181,6 +163,10 @@ export async function askSalmanAI(messages: any[]) {
         max_tokens: 2048,
       }),
     });
+
+    if (response.status === 401) {
+      return "خطأ (401): مفتاح Groq API غير صالح أو تم حظره مجدداً. يرجى التأكد من إضافة المفتاح في ملف .env وليس بشكل مكشوف في الكود.";
+    }
 
     if (!response.ok) {
       const errData = await response.json().catch(() => ({}));

@@ -112,10 +112,10 @@ export async function askSalmanAI(messages: any[]) {
 
   const finalMessages = hasImage ? formattedMessages : [systemPrompt, ...formattedMessages];
 
-  // النماذج الدائمة والمستقرة فقط على سيرفرات Groq
+  // قائمة النماذج الفعالة والمستقرة 100% على Groq
   const candidateModels = hasImage
-    ? ["llama-3.2-11b-vision-instruct", "llama-3.2-90b-vision-instruct"]
-    : ["llama-3.3-70b-versatile", "llama-3.1-8b-instant"];
+    ? ["llama-3.2-11b-vision-preview", "llama-3.2-90b-vision-preview"]
+    : ["llama-3.3-70b-versatile", "llama3-8b-8192", "llama3-70b-8192", "mixtral-8x7b-32768"];
 
   let lastErrorMessage = "";
 

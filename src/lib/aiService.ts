@@ -25,7 +25,6 @@ export async function askSalmanAI(messages: any[]) {
     return "خطأ: مفتاح Groq مفقود في إعدادات البيئة (VITE_GROQ_API_KEY).";
   }
 
-  // فلترة وتنظيف الرسائل لمنع إرسال أي قيم فارغة تسبب خطأ 400
   const validMessages = (messages || []).filter(
     (m) => (m.role === "user" || m.role === "assistant") && (m.content || m.attachment || m.image || m.imageBase64)
   );
@@ -104,7 +103,7 @@ export async function askSalmanAI(messages: any[]) {
       }
 
       let textContent = typeof m.content === "string" ? m.content.trim() : JSON.stringify(m.content || "");
-      if (!textContent) textContent = "..."; // حماية من الحقول الفارغة
+      if (!textContent) textContent = "...";
       if (isLast && searchResultsContext) textContent += searchResultsContext;
 
       return { role: m.role, content: textContent };
@@ -113,10 +112,10 @@ export async function askSalmanAI(messages: any[]) {
 
   const finalMessages = hasImage ? formattedMessages : [systemPrompt, ...formattedMessages];
 
-  // النماذج النشطة والمعتمدة حالياً على Groq
+  // قائمة النماذج الفعالة والمستقرة رسمياً على سيرفرات Groq
   const candidateModels = hasImage
-    ? ["llama-3.2-11b-vision-preview", "llama-3.2-90b-vision-preview"]
-    : ["llama-3.3-70b-versatile", "llama-3.1-8b-instant", "gemma2-9b-it"];
+    ? ["llama-3.2-11b-vision-instruct", "llama-3.2-90b-vision-instruct"]
+    : ["llama-3.3-70b-versatile", "llama-3.1-8b-instant", "llama-3.2-3b-preview"];
 
   let lastErrorMessage = "";
 

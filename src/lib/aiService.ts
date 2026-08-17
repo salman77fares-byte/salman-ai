@@ -17,7 +17,7 @@ async function compressImage(dataUrl: string, maxWidth = 800, quality = 0.7): Pr
   });
 }
 
-// جلب وتصفية النماذج النشطة فقط وحظر أي نموذج ملغى أو تجريبي تلقائياً
+// جلب وتصفية النماذج النشطة فقط وحظر أي نموذج ملغى أو تجريبي
 async function getActiveGroqModels(apiKey: string, hasImage: boolean): Promise<string[]> {
   const safeTextFallbacks = ["llama-3.3-70b-versatile", "deepseek-r1-distill-llama-70b"];
   const safeVisionFallbacks = ["llama-3.2-11b-vision-instruct", "llama-3.2-90b-vision-instruct"];
@@ -31,7 +31,6 @@ async function getActiveGroqModels(apiKey: string, hasImage: boolean): Promise<s
       const data = await res.json();
       const rawModels: any[] = data.data || [];
 
-      // حظر صارم لجميع النماذج الملغاة أو المؤقتة
       const validActive = rawModels
         .filter((m) => m.active !== false)
         .map((m) => m.id as string)
@@ -63,10 +62,57 @@ async function getActiveGroqModels(apiKey: string, hasImage: boolean): Promise<s
       }
     }
   } catch (e) {
-    console.warn("تعذر استعلام API النماذج الحية من Groq، استخدام القائمة الآمنة:", e);
+    console.warn("تعذر استعلام API النماذج الحية من Groq، استخدام القائمة الافتراضية:", e);
   }
 
   return hasImage ? safeVisionFallbacks : safeTextFallbacks;
+}
+
+// محرك بحث مرن (Tavily أولاً ثم DuckDuckGo كبديل مجاني مباشر)
+async function fetchLiveSearchResults(query: string, tavilyApiKey?: string): Promise<string> {
+  // 1. تجربة Tavily API عند توفر المفتاح
+  if (tavilyApiKey) {
+    try {
+      const tavilyRes = await fetch("https://api.tavily.com/search", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          api_key: tavilyApiKey,
+          query: query,
+          search_depth: "basic",
+          max_results: 5,
+        }),
+      });
+      if (tavilyRes.ok) {
+        const tavilyData = await tavilyRes.json();
+        if (tavilyData.results?.length) {
+          return tavilyData.results.map((r: any) => `- ${r.title}: ${r.content}`).join("\n");
+        }
+      }
+    } catch (e) {
+      console.warn("تنبيه: تعذر إتمام البحث عبر Tavily:", e);
+    }
+  }
+
+  // 2. محرك بحث مجاني احتياطي عبر DuckDuckGo
+  try {
+    const ddgRes = await fetch(`https://api.duckduckgo.com/?q=${encodeURIComponent(query)}&format=json&no_html=1&skip_disambig=1`);
+    if (ddgRes.ok) {
+      const ddgData = await ddgRes.json();
+      const results: string[] = [];
+      if (ddgData.AbstractText) results.push(`- ${ddgData.Heading}: ${ddgData.AbstractText}`);
+      if (ddgData.RelatedTopics?.length) {
+        ddgData.RelatedTopics.slice(0, 5).forEach((t: any) => {
+          if (t.Text) results.push(`- ${t.Text}`);
+        });
+      }
+      if (results.length > 0) return results.join("\n");
+    }
+  } catch (e) {
+    console.warn("تنبيه: تعذر البحث عبر البديل المجاني:", e);
+  }
+
+  return "";
 }
 
 export async function askSalmanAI(messages: any[]) {
@@ -95,27 +141,10 @@ export async function askSalmanAI(messages: any[]) {
   let searchResultsContext = "";
   const needsSearch = /بحث|أخبار|أحدث|ابحث|معلومات|مصادر|رياضة|مباراة|اليوم|سعر|من هو|ما هو|متى|كم|جديد|تاريخ|نتيجة|ترتيب/i.test(userQuery);
 
-  if (needsSearch && tavilyApiKey && userQuery) {
-    try {
-      const tavilyRes = await fetch("https://api.tavily.com/search", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          api_key: tavilyApiKey,
-          query: userQuery,
-          search_depth: "advanced",
-          max_results: 5,
-        }),
-      });
-      if (tavilyRes.ok) {
-        const tavilyData = await tavilyRes.json();
-        if (tavilyData.results?.length) {
-          searchResultsContext = "\n\n[نتائج البحث المباشر في الويب (استخدم هذه البيانات لإعطاء إجابة حقيقية ومحدثة 100%)]:\n" +
-            tavilyData.results.map((r: any) => `- ${r.title}: ${r.content}`).join("\n");
-        }
-      }
-    } catch (e) {
-      console.warn("تنبيه: تعذر إتمام البحث عبر Tavily:", e);
+  if (needsSearch && userQuery) {
+    const rawSearch = await fetchLiveSearchResults(userQuery, tavilyApiKey);
+    if (rawSearch) {
+      searchResultsContext = `\n\n[معلومات ونتائج البحث الحية المحدثة من الويب]:\n${rawSearch}`;
     }
   }
 
@@ -124,8 +153,8 @@ export async function askSalmanAI(messages: any[]) {
     content: `أنت "Salman AI"، مساعد ذكي متقدم وذو كفاءة عالية.
 - المطور والمؤسس الخاص بك هو "المهندس سلمان فارس".
 - تاريخ اليوم المرجعي هو: ${formattedDate}.
-- التزم بالدقة العلمية والفعلية التامة في الإجابات ولا تقم باختراع أو تخمين أي معلومات.
-- عند وجود نتائج بحث مباشر، اعتمد عليها كمصدر رئيسي ومؤكد للإجابة.`
+- يمنع تماماً القول "لا يمكنني الوصول للإنترنت" أو "ليس لدي معلومات حديثة".
+- قدم دائماً إجابات عملية، مباشرة، ومنظمة في نقاط أو جداول مفصلة بناءً على المعطيات أو نتائج البحث المتاحة.`
   };
 
   let hasImage = false;
@@ -178,7 +207,7 @@ export async function askSalmanAI(messages: any[]) {
         body: JSON.stringify({
           model: model,
           messages: finalMessages,
-          temperature: 0.2,
+          temperature: 0.3,
           max_tokens: 2048,
         }),
       });

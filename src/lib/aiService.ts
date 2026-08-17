@@ -17,20 +17,21 @@ async function compressImage(dataUrl: string, maxWidth = 800, quality = 0.7): Pr
   });
 }
 
-// ترتيب وأولويات أقوى النماذج المتاحة لضمان أقصى درجات الدقة والذكاء
+// قائمة النماذج الرسمية النشطة والمعتمدة حالياً فقط على سيرفرات Groq
 async function getActiveGroqModels(apiKey: string, hasImage: boolean): Promise<string[]> {
-  const preferredTextModels = [
-    "llama-3.3-70b-versatile", // النموذج الأقوى والأكثر دقة عالمياً لدى Groq
-    "llama-3.1-70b-versatile",
-    "llama3-70b-8192",
-    "llama-3.1-8b-instant",
-    "llama3-8b-8192"
+  const activeTextModels = [
+    "llama-3.3-70b-versatile",
+    "deepseek-r1-distill-llama-70b",
+    "llama-3.3-70b-specdec"
   ];
 
-  const preferredVisionModels = [
+  const activeVisionModels = [
     "llama-3.2-11b-vision-instruct",
-    "llama-3.2-90b-vision-instruct",
-    "llama-3.2-11b-vision-preview"
+    "llama-3.2-90b-vision-instruct"
+  ];
+
+  const blacklistedPatterns = [
+    "gemma", "mixtral", "preview", "8192", "instant", "llama-3.1-8b", "llama3-8b", "llama3-70b"
   ];
 
   try {
@@ -39,20 +40,21 @@ async function getActiveGroqModels(apiKey: string, hasImage: boolean): Promise<s
     });
     if (res.ok) {
       const data = await res.json();
-      const activeIds: string[] = (data.data || [])
+      const fetchedIds: string[] = (data.data || [])
         .filter((m: any) => m.active !== false)
-        .map((m: any) => m.id);
+        .map((m: any) => m.id)
+        .filter((id: string) => !blacklistedPatterns.some((p) => id.includes(p)));
 
-      const targetList = hasImage ? preferredVisionModels : preferredTextModels;
-      const orderedActive = targetList.filter((id) => activeIds.includes(id));
+      const preferredList = hasImage ? activeVisionModels : activeTextModels;
+      const validFromApi = preferredList.filter((id) => fetchedIds.includes(id));
 
-      if (orderedActive.length > 0) return orderedActive;
+      if (validFromApi.length > 0) return validFromApi;
     }
   } catch (e) {
     console.warn("تعذر جلب النماذج تلقائياً، سيتم استخدام القائمة الافتراضية:", e);
   }
 
-  return hasImage ? preferredVisionModels : preferredTextModels;
+  return hasImage ? activeVisionModels : activeTextModels;
 }
 
 export async function askSalmanAI(messages: any[]) {
@@ -148,9 +150,7 @@ export async function askSalmanAI(messages: any[]) {
     })
   );
 
-  // إدراج توجيهات النظام دائماً لضمان عدم خروج الذكاء الاصطناعي عن السياق
   const finalMessages = [systemPrompt, ...formattedMessages];
-
   const candidateModels = await getActiveGroqModels(groqApiKey, hasImage);
 
   let lastErrorMessage = "";
@@ -166,7 +166,7 @@ export async function askSalmanAI(messages: any[]) {
         body: JSON.stringify({
           model: model,
           messages: finalMessages,
-          temperature: 0.2, // تقليل العشوائية لزيادة الدقة والواقعية
+          temperature: 0.2,
           max_tokens: 2048,
         }),
       });

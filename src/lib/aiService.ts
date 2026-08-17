@@ -17,44 +17,56 @@ async function compressImage(dataUrl: string, maxWidth = 800, quality = 0.7): Pr
   });
 }
 
-// قائمة النماذج الرسمية النشطة والمعتمدة حالياً فقط على سيرفرات Groq
+// جلب وتصفية النماذج النشطة فقط وحظر أي نموذج ملغى أو تجريبي تلقائياً
 async function getActiveGroqModels(apiKey: string, hasImage: boolean): Promise<string[]> {
-  const activeTextModels = [
-    "llama-3.3-70b-versatile",
-    "deepseek-r1-distill-llama-70b",
-    "llama-3.3-70b-specdec"
-  ];
-
-  const activeVisionModels = [
-    "llama-3.2-11b-vision-instruct",
-    "llama-3.2-90b-vision-instruct"
-  ];
-
-  const blacklistedPatterns = [
-    "gemma", "mixtral", "preview", "8192", "instant", "llama-3.1-8b", "llama3-8b", "llama3-70b"
-  ];
+  const safeTextFallbacks = ["llama-3.3-70b-versatile", "deepseek-r1-distill-llama-70b"];
+  const safeVisionFallbacks = ["llama-3.2-11b-vision-instruct", "llama-3.2-90b-vision-instruct"];
 
   try {
     const res = await fetch("https://api.groq.com/openai/v1/models", {
       headers: { Authorization: `Bearer ${apiKey}` },
     });
+
     if (res.ok) {
       const data = await res.json();
-      const fetchedIds: string[] = (data.data || [])
-        .filter((m: any) => m.active !== false)
-        .map((m: any) => m.id)
-        .filter((id: string) => !blacklistedPatterns.some((p) => id.includes(p)));
+      const rawModels: any[] = data.data || [];
 
-      const preferredList = hasImage ? activeVisionModels : activeTextModels;
-      const validFromApi = preferredList.filter((id) => fetchedIds.includes(id));
+      // حظر صارم لجميع النماذج الملغاة أو المؤقتة
+      const validActive = rawModels
+        .filter((m) => m.active !== false)
+        .map((m) => m.id as string)
+        .filter((id) => {
+          const lower = id.toLowerCase();
+          return (
+            !lower.includes("specdec") &&
+            !lower.includes("preview") &&
+            !lower.includes("deprecated") &&
+            !lower.includes("whisper") &&
+            !lower.includes("guard") &&
+            !lower.includes("gemma") &&
+            !lower.includes("mixtral") &&
+            !lower.includes("8192")
+          );
+        });
 
-      if (validFromApi.length > 0) return validFromApi;
+      if (hasImage) {
+        const visionList = validActive.filter((id) => id.includes("vision"));
+        if (visionList.length > 0) return visionList;
+      } else {
+        const textList = validActive.filter((id) => !id.includes("vision"));
+        textList.sort((a, b) => {
+          if (a.includes("llama-3.3-70b-versatile")) return -1;
+          if (b.includes("llama-3.3-70b-versatile")) return 1;
+          return 0;
+        });
+        if (textList.length > 0) return textList;
+      }
     }
   } catch (e) {
-    console.warn("تعذر جلب النماذج تلقائياً، سيتم استخدام القائمة الافتراضية:", e);
+    console.warn("تعذر استعلام API النماذج الحية من Groq، استخدام القائمة الآمنة:", e);
   }
 
-  return hasImage ? activeVisionModels : activeTextModels;
+  return hasImage ? safeVisionFallbacks : safeTextFallbacks;
 }
 
 export async function askSalmanAI(messages: any[]) {

@@ -25,7 +25,12 @@ export async function askSalmanAI(messages: any[]) {
     return "خطأ: مفتاح Groq مفقود في إعدادات البيئة (VITE_GROQ_API_KEY).";
   }
 
-  const lastUserMsg = [...messages].reverse().find((m) => m.role === "user");
+  // فلترة وتنظيف الرسائل لمنع إرسال أي قيم فارغة تسبب خطأ 400
+  const validMessages = (messages || []).filter(
+    (m) => (m.role === "user" || m.role === "assistant") && (m.content || m.attachment || m.image || m.imageBase64)
+  );
+
+  const lastUserMsg = [...validMessages].reverse().find((m) => m.role === "user");
   let userQuery = typeof lastUserMsg?.content === "string" ? lastUserMsg.content : "";
 
   const now = new Date();
@@ -75,46 +80,45 @@ export async function askSalmanAI(messages: any[]) {
   let hasImage = false;
 
   const formattedMessages = await Promise.all(
-    messages
-      .filter((m) => m.role === "user" || m.role === "assistant")
-      .map(async (m, index) => {
-        const isLast = index === messages.length - 1;
-        let rawImgUrl = m.attachment?.base64 || m.image || m.imageBase64;
+    validMessages.map(async (m, index) => {
+      const isLast = index === validMessages.length - 1;
+      let rawImgUrl = m.attachment?.base64 || m.image || m.imageBase64;
 
-        if (rawImgUrl) {
-          hasImage = true;
-          const url = typeof rawImgUrl === "string" && rawImgUrl.startsWith("data:")
-            ? rawImgUrl
-            : `data:image/jpeg;base64,${rawImgUrl}`;
-          const compressed = await compressImage(url);
+      if (rawImgUrl) {
+        hasImage = true;
+        const url = typeof rawImgUrl === "string" && rawImgUrl.startsWith("data:")
+          ? rawImgUrl
+          : `data:image/jpeg;base64,${rawImgUrl}`;
+        const compressed = await compressImage(url);
 
-          let textPrompt = m.content || "اشرح الصورة بالتفصيل.";
-          if (isLast && searchResultsContext) textPrompt += searchResultsContext;
+        let textPrompt = (typeof m.content === "string" && m.content.trim()) ? m.content : "اشرح الصورة بالتفصيل.";
+        if (isLast && searchResultsContext) textPrompt += searchResultsContext;
 
-          return {
-            role: m.role,
-            content: [
-              { type: "text", text: textPrompt },
-              { type: "image_url", image_url: { url: compressed } },
-            ],
-          };
-        }
+        return {
+          role: m.role,
+          content: [
+            { type: "text", text: textPrompt },
+            { type: "image_url", image_url: { url: compressed } },
+          ],
+        };
+      }
 
-        let textContent = typeof m.content === "string" ? m.content : JSON.stringify(m.content || "");
-        if (isLast && searchResultsContext) textContent += searchResultsContext;
+      let textContent = typeof m.content === "string" ? m.content.trim() : JSON.stringify(m.content || "");
+      if (!textContent) textContent = "..."; // حماية من الحقول الفارغة
+      if (isLast && searchResultsContext) textContent += searchResultsContext;
 
-        return { role: m.role, content: textContent };
-      })
+      return { role: m.role, content: textContent };
+    })
   );
 
   const finalMessages = hasImage ? formattedMessages : [systemPrompt, ...formattedMessages];
 
-  // قائمة النماذج المرشحة مع حلقة تجربة تلقائية في حال توقف أي نموذج
+  // النماذج النشطة والمعتمدة حالياً على Groq
   const candidateModels = hasImage
     ? ["llama-3.2-11b-vision-preview", "llama-3.2-90b-vision-preview"]
-    : ["llama-3.3-70b-versatile", "llama-3.1-8b-instant", "llama3-8b-8192", "mixtral-8x7b-32768"];
+    : ["llama-3.3-70b-versatile", "llama-3.1-8b-instant", "gemma2-9b-it"];
 
-  let lastStatus = 0;
+  let lastErrorMessage = "";
 
   for (const model of candidateModels) {
     try {
@@ -137,14 +141,16 @@ export async function askSalmanAI(messages: any[]) {
         return data.choices?.[0]?.message?.content || "لا يوجد رد متوفر.";
       }
 
-      lastStatus = response.status;
+      const errorData = await response.json().catch(() => ({}));
+      lastErrorMessage = errorData?.error?.message || `Status ${response.status}`;
+
       if (response.status === 401) {
         return "خطأ 401: المفتاح غير صالح. تأكد من تحديثه في Lovable Secrets واضغط Publish.";
       }
-    } catch (e) {
-      console.warn(`تعذر الاتصال بالنموذج ${model}، جاري تجربة النموذج التالي...`);
+    } catch (e: any) {
+      console.warn(`تعذر الاتصال بالنموذج ${model}:`, e);
     }
   }
 
-  return `خطأ من Groq (${lastStatus}): تعذر الوصول إلى النماذج المتاحة حالياً.`;
+  return `خطأ من Groq: ${lastErrorMessage}`;
 }

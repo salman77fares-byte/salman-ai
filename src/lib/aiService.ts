@@ -108,40 +108,43 @@ export async function askSalmanAI(messages: any[]) {
   );
 
   const finalMessages = hasImage ? formattedMessages : [systemPrompt, ...formattedMessages];
-  
-  // تحديد اسم النموذج المضمون والمستقر على Groq
-  const selectedModel = hasImage ? "llama-3.2-11b-vision-preview" : "llama-3.1-8b-instant";
 
-  try {
-    const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        "Authorization": `Bearer ${groqApiKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: selectedModel,
-        messages: finalMessages,
-        temperature: 0.4,
-        max_tokens: 2048,
-      }),
-    });
+  // قائمة النماذج المرشحة مع حلقة تجربة تلقائية في حال توقف أي نموذج
+  const candidateModels = hasImage
+    ? ["llama-3.2-11b-vision-preview", "llama-3.2-90b-vision-preview"]
+    : ["llama-3.3-70b-versatile", "llama-3.1-8b-instant", "llama3-8b-8192", "mixtral-8x7b-32768"];
 
-    if (response.status === 401) {
-      return "خطأ 401: المفتاح غير صالح. تأكد من تحديثه في Lovable Secrets واضغط Publish.";
+  let lastStatus = 0;
+
+  for (const model of candidateModels) {
+    try {
+      const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${groqApiKey}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: model,
+          messages: finalMessages,
+          temperature: 0.4,
+          max_tokens: 2048,
+        }),
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        return data.choices?.[0]?.message?.content || "لا يوجد رد متوفر.";
+      }
+
+      lastStatus = response.status;
+      if (response.status === 401) {
+        return "خطأ 401: المفتاح غير صالح. تأكد من تحديثه في Lovable Secrets واضغط Publish.";
+      }
+    } catch (e) {
+      console.warn(`تعذر الاتصال بالنموذج ${model}، جاري تجربة النموذج التالي...`);
     }
-
-    if (response.status === 404) {
-      return "خطأ 404: تعذر الوصول إلى النموذج. يرجى إعادة النشر والتأكد من الاتصال.";
-    }
-
-    if (!response.ok) {
-      return `خطأ من Groq: ${response.status}`;
-    }
-
-    const data = await response.json();
-    return data.choices?.[0]?.message?.content || "لا يوجد رد متوفر.";
-  } catch (e: any) {
-    return `تعذر الاتصال بـ Groq: ${e.message || "خطأ في الشبكة"}`;
   }
+
+  return `خطأ من Groq (${lastStatus}): تعذر الوصول إلى النماذج المتاحة حالياً.`;
 }

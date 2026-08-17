@@ -108,42 +108,31 @@ export async function askSalmanAI(messages: any[]) {
   );
 
   const finalMessages = hasImage ? formattedMessages : [systemPrompt, ...formattedMessages];
-  const primaryModel = hasImage ? "llama-3.2-11b-vision-preview" : "llama-3.3-70b-versatile";
+  
+  // تحديد اسم النموذج المضمون والمستقر على Groq
+  const selectedModel = hasImage ? "llama-3.2-11b-vision-preview" : "llama-3.1-8b-instant";
 
   try {
-    let response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+    const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
       method: "POST",
       headers: {
         "Authorization": `Bearer ${groqApiKey}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: primaryModel,
+        model: selectedModel,
         messages: finalMessages,
         temperature: 0.4,
         max_tokens: 2048,
       }),
     });
 
-    // في حال إرجاع 404، يتم التبديل التلقائي لنموذج llama-3.1-8b-instant المستقر جداً
-    if (response.status === 404 && !hasImage) {
-      response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
-        method: "POST",
-        headers: {
-          "Authorization": `Bearer ${groqApiKey}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          model: "llama-3.1-8b-instant",
-          messages: finalMessages,
-          temperature: 0.4,
-          max_tokens: 2048,
-        }),
-      });
-    }
-
     if (response.status === 401) {
       return "خطأ 401: المفتاح غير صالح. تأكد من تحديثه في Lovable Secrets واضغط Publish.";
+    }
+
+    if (response.status === 404) {
+      return "خطأ 404: تعذر الوصول إلى النموذج. يرجى إعادة النشر والتأكد من الاتصال.";
     }
 
     if (!response.ok) {

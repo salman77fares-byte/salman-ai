@@ -18,19 +18,13 @@ async function compressImage(dataUrl: string, maxWidth = 800, quality = 0.7): Pr
 }
 
 export async function askSalmanAI(messages: any[]) {
-  // إزالة أي مسافات زائدة مخفية في بداية أو نهاية المفتاح لضمان تجنب خطأ 401
-  const groqApiKey = import.meta.env.VITE_GROQ_API_KEY?.trim();
-  const tavilyApiKey = import.meta.env.VITE_TAVILY_API_KEY?.trim();
+  // استخدام المتغيرات من البيئة أو الاعتماد المباشر على المفاتيح التي أرفقتها
+  const groqApiKey = (import.meta.env.VITE_GROQ_API_KEY || "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").trim();
+  const tavilyApiKey = (import.meta.env.VITE_TAVILY_API_KEY || "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").trim();
 
-  if (!groqApiKey) {
-    return "خطأ: مفتاح Groq مفقود من إعدادات البيئة (VITE_GROQ_API_KEY).";
-  }
-
-  // استخراج نص الرسالة الأخيرة لتنفيذ البحث إذا لزم الأمر
   const lastUserMsg = [...messages].reverse().find((m) => m.role === "user");
   let userQuery = typeof lastUserMsg?.content === "string" ? lastUserMsg.content : "";
 
-  // جلب نتائج البحث من Tavily في حال كانت الرسالة تتطلب معلومات محدثة
   let searchResultsContext = "";
   const needsSearch = /بحث|أخبار|أحدث|ابحث|معلومات|مصادر|رياضة|مباراة|اليوم|سعر/i.test(userQuery);
 
@@ -58,7 +52,6 @@ export async function askSalmanAI(messages: any[]) {
     }
   }
 
-  // هوية النظام والتعليمات الأساسية
   const systemPrompt = {
     role: "system",
     content: `أنت "Salman AI"، مساعد ذكي متقدم بشخصية واثقة وعملية.
@@ -119,7 +112,7 @@ export async function askSalmanAI(messages: any[]) {
     });
 
     if (response.status === 401) {
-      return "خطأ 401: المفتاح غير صالح. تأكد من إدخاله في Project Secrets واضغط Publish لتحديث البيئة.";
+      return "خطأ 401: المفتاح غير صالح أو تم إلغاؤه من الخادم.";
     }
 
     if (!response.ok) {

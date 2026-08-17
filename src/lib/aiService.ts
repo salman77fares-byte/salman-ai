@@ -18,9 +18,13 @@ async function compressImage(dataUrl: string, maxWidth = 800, quality = 0.7): Pr
 }
 
 export async function askSalmanAI(messages: any[]) {
-  // استخدام المتغيرات من البيئة أو الاعتماد المباشر على المفاتيح التي أرفقتها
-  const groqApiKey = (import.meta.env.VITE_GROQ_API_KEY || "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").trim();
-  const tavilyApiKey = (import.meta.env.VITE_TAVILY_API_KEY || "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").trim();
+  // جلب المفاتيح بأمان من متغيرات البيئة دون كتابة المفتاح صراحة في الكود
+  const groqApiKey = import.meta.env.VITE_GROQ_API_KEY?.trim();
+  const tavilyApiKey = import.meta.env.VITE_TAVILY_API_KEY?.trim();
+
+  if (!groqApiKey) {
+    return "خطأ: مفتاح Groq مفقود في إعدادات البيئة (VITE_GROQ_API_KEY).";
+  }
 
   const lastUserMsg = [...messages].reverse().find((m) => m.role === "user");
   let userQuery = typeof lastUserMsg?.content === "string" ? lastUserMsg.content : "";
@@ -112,7 +116,7 @@ export async function askSalmanAI(messages: any[]) {
     });
 
     if (response.status === 401) {
-      return "خطأ 401: المفتاح غير صالح أو تم إلغاؤه من الخادم.";
+      return "خطأ 401: المفتاح غير صالح. أنشئ مفتاحاً جديداً وضعه فقط في Lovable Secrets ثم اضغط Publish.";
     }
 
     if (!response.ok) {

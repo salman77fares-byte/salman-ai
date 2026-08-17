@@ -18,7 +18,6 @@ async function compressImage(dataUrl: string, maxWidth = 800, quality = 0.7): Pr
 }
 
 export async function askSalmanAI(messages: any[]) {
-  // جلب المفاتيح بأمان من متغيرات البيئة دون كتابة المفتاح صراحة في الكود
   const groqApiKey = import.meta.env.VITE_GROQ_API_KEY?.trim();
   const tavilyApiKey = import.meta.env.VITE_TAVILY_API_KEY?.trim();
 
@@ -29,8 +28,18 @@ export async function askSalmanAI(messages: any[]) {
   const lastUserMsg = [...messages].reverse().find((m) => m.role === "user");
   let userQuery = typeof lastUserMsg?.content === "string" ? lastUserMsg.content : "";
 
+  // 1. تحديد تاريخ اليوم ديناميكياً لتزويد النموذج بالمرجع الزمني الصحيح
+  const now = new Date();
+  const formattedDate = now.toLocaleDateString("ar-EG", {
+    weekday: "long",
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+  });
+
+  // 2. توسيع نطاق البحث لضمان جلب أحدث البيانات والمعلومات المباشرة
   let searchResultsContext = "";
-  const needsSearch = /بحث|أخبار|أحدث|ابحث|معلومات|مصادر|رياضة|مباراة|اليوم|سعر/i.test(userQuery);
+  const needsSearch = /بحث|أخبار|أحدث|ابحث|معلومات|مصادر|رياضة|مباراة|اليوم|سعر|من هو|ما هو|متى|كم|جديد|تاريخ|نتيجة|ترتيب/i.test(userQuery);
 
   if (needsSearch && tavilyApiKey && userQuery) {
     try {
@@ -40,14 +49,14 @@ export async function askSalmanAI(messages: any[]) {
         body: JSON.stringify({
           api_key: tavilyApiKey,
           query: userQuery,
-          search_depth: "basic",
-          max_results: 3,
+          search_depth: "advanced",
+          max_results: 5,
         }),
       });
       if (tavilyRes.ok) {
         const tavilyData = await tavilyRes.json();
         if (tavilyData.results?.length) {
-          searchResultsContext = "\n\n[معلومات من البحث المباشر]:\n" +
+          searchResultsContext = "\n\n[معلومات محدثة من البحث المباشر في الويب]:\n" +
             tavilyData.results.map((r: any) => `- ${r.title}: ${r.content}`).join("\n");
         }
       }
@@ -56,11 +65,14 @@ export async function askSalmanAI(messages: any[]) {
     }
   }
 
+  // 3. تعليمات النظام المحسنة
   const systemPrompt = {
     role: "system",
     content: `أنت "Salman AI"، مساعد ذكي متقدم بشخصية واثقة وعملية.
 - المطور والمؤسس الخاص بك هو "المهندس سلمان فارس".
-- قدم إجابات مباشرة، دقيقة، واحترافية بدون مقدمات طويلة.`
+- تاريخ اليوم المرجعي هو: ${formattedDate}.
+- اعتمد على [معلومات من البحث المباشر] إذا توفرت لإعطاء إجابات دقيقة ومحدثة.
+- قدم إجابات مباشرة بدون مقدمات أو حشو.`
   };
 
   let hasImage = false;
@@ -110,13 +122,13 @@ export async function askSalmanAI(messages: any[]) {
       body: JSON.stringify({
         model: hasImage ? "llama-3.2-11b-vision-preview" : "llama-3.3-70b-versatile",
         messages: finalMessages,
-        temperature: 0.5,
+        temperature: 0.4,
         max_tokens: 2048,
       }),
     });
 
     if (response.status === 401) {
-      return "خطأ 401: المفتاح غير صالح. أنشئ مفتاحاً جديداً وضعه فقط في Lovable Secrets ثم اضغط Publish.";
+      return "خطأ 401: المفتاح غير صالح. تأكد من تحديثه في Lovable Secrets واضغط Publish.";
     }
 
     if (!response.ok) {

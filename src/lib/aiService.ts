@@ -17,7 +17,7 @@ async function compressImage(dataUrl: string, maxWidth = 800, quality = 0.7): Pr
   });
 }
 
-// جلب وتصفية النماذج النشطة فقط وحظر أي نموذج ملغى أو تجريبي
+// جلب النماذج النشطة وحظر النماذج القديمة أو الموقوفة
 async function getActiveGroqModels(apiKey: string, hasImage: boolean): Promise<string[]> {
   const safeTextFallbacks = ["llama-3.3-70b-versatile", "deepseek-r1-distill-llama-70b"];
   const safeVisionFallbacks = ["llama-3.2-11b-vision-instruct", "llama-3.2-90b-vision-instruct"];
@@ -62,15 +62,14 @@ async function getActiveGroqModels(apiKey: string, hasImage: boolean): Promise<s
       }
     }
   } catch (e) {
-    console.warn("تعذر استعلام API النماذج الحية من Groq، استخدام القائمة الافتراضية:", e);
+    console.warn("تعذر استعلام النماذج الحية، استخدام القائمة الافتراضية:", e);
   }
 
   return hasImage ? safeVisionFallbacks : safeTextFallbacks;
 }
 
-// محرك بحث مرن (Tavily أولاً ثم DuckDuckGo كبديل مجاني مباشر)
+// محرك جلب معلومات البحث الآمن عبر CORS
 async function fetchLiveSearchResults(query: string, tavilyApiKey?: string): Promise<string> {
-  // 1. تجربة Tavily API عند توفر المفتاح
   if (tavilyApiKey) {
     try {
       const tavilyRes = await fetch("https://api.tavily.com/search", {
@@ -90,26 +89,27 @@ async function fetchLiveSearchResults(query: string, tavilyApiKey?: string): Pro
         }
       }
     } catch (e) {
-      console.warn("تنبيه: تعذر إتمام البحث عبر Tavily:", e);
+      console.warn("تعذر البحث عبر Tavily:", e);
     }
   }
 
-  // 2. محرك بحث مجاني احتياطي عبر DuckDuckGo
   try {
-    const ddgRes = await fetch(`https://api.duckduckgo.com/?q=${encodeURIComponent(query)}&format=json&no_html=1&skip_disambig=1`);
+    const proxyUrl = "https://api.allorigins.win/get?url=" + encodeURIComponent(`https://html.duckduckgo.com/html/?q=${encodeURIComponent(query)}`);
+    const ddgRes = await fetch(proxyUrl);
     if (ddgRes.ok) {
       const ddgData = await ddgRes.json();
-      const results: string[] = [];
-      if (ddgData.AbstractText) results.push(`- ${ddgData.Heading}: ${ddgData.AbstractText}`);
-      if (ddgData.RelatedTopics?.length) {
-        ddgData.RelatedTopics.slice(0, 5).forEach((t: any) => {
-          if (t.Text) results.push(`- ${t.Text}`);
-        });
+      if (ddgData.contents) {
+        const parser = new DOMParser();
+        const doc = parser.parseFromString(ddgData.contents, "text/html");
+        const snippets = Array.from(doc.querySelectorAll(".result__snippet"))
+          .slice(0, 4)
+          .map((el) => `- ${el.textContent?.trim()}`)
+          .filter((t) => t.length > 10);
+        if (snippets.length > 0) return snippets.join("\n");
       }
-      if (results.length > 0) return results.join("\n");
     }
   } catch (e) {
-    console.warn("تنبيه: تعذر البحث عبر البديل المجاني:", e);
+    console.warn("تعذر البحث عبر البروكسي الاحتياطي:", e);
   }
 
   return "";
@@ -144,17 +144,16 @@ export async function askSalmanAI(messages: any[]) {
   if (needsSearch && userQuery) {
     const rawSearch = await fetchLiveSearchResults(userQuery, tavilyApiKey);
     if (rawSearch) {
-      searchResultsContext = `\n\n[معلومات ونتائج البحث الحية المحدثة من الويب]:\n${rawSearch}`;
+      searchResultsContext = `\n\n[معلومات ونتائج البحث المباشرة من الويب]:\n${rawSearch}`;
     }
   }
 
   const systemPrompt = {
     role: "system",
-    content: `أنت "Salman AI"، مساعد ذكي متقدم وذو كفاءة عالية.
-- المطور والمؤسس الخاص بك هو "المهندس سلمان فارس".
+    content: `أنت "Salman AI"، مساعد ذكي متقدم بتطوير المهندس سلمان فارس.
 - تاريخ اليوم المرجعي هو: ${formattedDate}.
-- يمنع تماماً القول "لا يمكنني الوصول للإنترنت" أو "ليس لدي معلومات حديثة".
-- قدم دائماً إجابات عملية، مباشرة، ومنظمة في نقاط أو جداول مفصلة بناءً على المعطيات أو نتائج البحث المتاحة.`
+- حظر صارم: يُمنع تماماً كتابة أي رسائل اعتذار مثل "لا يمكنني الوصول للإنترنت"، "عذراً"، "أعتذر عن الإزعاج"، أو "يُفضل الاستعانة بمصادر أخرى".
+- عند سؤالك عن الأخبار الرياضية أو التحديثات العامة، قدم فوراً تغطية شاملة ومباشرة لأهم الأخبار والبطولات الحالية (مثل دوري روشن السعودي، الدوري الإنجليزي، دوري أبطال أوروبا، وسوق الانتقالات) في نقاط منظمة وواضحة.`
   };
 
   let hasImage = false;

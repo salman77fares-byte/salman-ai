@@ -17,7 +17,7 @@ async function compressImage(dataUrl: string, maxWidth = 800, quality = 0.7): Pr
   });
 }
 
-// جلب النماذج النشطة وحظر النماذج الموقوفة
+// جلب النماذج النشطة فقط وحظر النماذج الموقوفة أو القديمة
 async function getActiveGroqModels(apiKey: string, hasImage: boolean): Promise<string[]> {
   const safeTextFallbacks = ["llama-3.3-70b-versatile", "deepseek-r1-distill-llama-70b"];
   const safeVisionFallbacks = ["llama-3.2-11b-vision-instruct", "llama-3.2-90b-vision-instruct"];
@@ -68,7 +68,7 @@ async function getActiveGroqModels(apiKey: string, hasImage: boolean): Promise<s
   return hasImage ? safeVisionFallbacks : safeTextFallbacks;
 }
 
-// محرك جلب معلومات البحث
+// جلب نتائج البحث المباشر دون الوقوع في مشاكل CORS
 async function fetchLiveSearchResults(query: string, tavilyApiKey?: string): Promise<string> {
   if (tavilyApiKey) {
     try {
@@ -104,7 +104,7 @@ async function fetchLiveSearchResults(query: string, tavilyApiKey?: string): Pro
         const snippets = Array.from(doc.querySelectorAll(".result__snippet"))
           .slice(0, 4)
           .map((el) => `- ${el.textContent?.trim()}`)
-          .filter((t) => t.length > 10);
+          .filter((t) => (t?.length ?? 0) > 10);
         if (snippets.length > 0) return snippets.join("\n");
       }
     }
@@ -115,7 +115,7 @@ async function fetchLiveSearchResults(query: string, tavilyApiKey?: string): Pro
   return "";
 }
 
-export async function askSalmanAI(messages: any[]) {
+export async function askSalmanAI(messages: any[], signal?: AbortSignal) {
   const groqApiKey = import.meta.env.VITE_GROQ_API_KEY?.trim();
   const tavilyApiKey = import.meta.env.VITE_TAVILY_API_KEY?.trim();
 
@@ -211,6 +211,7 @@ export async function askSalmanAI(messages: any[]) {
           temperature: 0.3,
           max_tokens: 2048,
         }),
+        signal,
       });
 
       if (response.ok) {
@@ -225,6 +226,9 @@ export async function askSalmanAI(messages: any[]) {
         return "خطأ 401: المفتاح غير صالح. تأكد من تحديثه في Lovable Secrets واضغط Publish.";
       }
     } catch (e: any) {
+      if (e.name === "AbortError") {
+        throw e;
+      }
       console.warn(`تعذر الاتصال بالنموذج ${model}:`, e);
     }
   }

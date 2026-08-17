@@ -17,34 +17,42 @@ async function compressImage(dataUrl: string, maxWidth = 800, quality = 0.7): Pr
   });
 }
 
-// جلب النماذج الشغالة حالياً على سيرفرات Groq ديناميكياً لمنع أخطاء Decommissioned
+// ترتيب وأولويات أقوى النماذج المتاحة لضمان أقصى درجات الدقة والذكاء
 async function getActiveGroqModels(apiKey: string, hasImage: boolean): Promise<string[]> {
+  const preferredTextModels = [
+    "llama-3.3-70b-versatile", // النموذج الأقوى والأكثر دقة عالمياً لدى Groq
+    "llama-3.1-70b-versatile",
+    "llama3-70b-8192",
+    "llama-3.1-8b-instant",
+    "llama3-8b-8192"
+  ];
+
+  const preferredVisionModels = [
+    "llama-3.2-11b-vision-instruct",
+    "llama-3.2-90b-vision-instruct",
+    "llama-3.2-11b-vision-preview"
+  ];
+
   try {
     const res = await fetch("https://api.groq.com/openai/v1/models", {
       headers: { Authorization: `Bearer ${apiKey}` },
     });
     if (res.ok) {
       const data = await res.json();
-      const active = (data.data || [])
+      const activeIds: string[] = (data.data || [])
         .filter((m: any) => m.active !== false)
         .map((m: any) => m.id);
 
-      if (hasImage) {
-        const visionModels = active.filter((id: string) => id.includes("vision"));
-        if (visionModels.length > 0) return visionModels;
-      } else {
-        const textModels = active.filter(
-          (id: string) => !id.includes("vision") && !id.includes("whisper") && !id.includes("guard")
-        );
-        if (textModels.length > 0) return textModels;
-      }
+      const targetList = hasImage ? preferredVisionModels : preferredTextModels;
+      const orderedActive = targetList.filter((id) => activeIds.includes(id));
+
+      if (orderedActive.length > 0) return orderedActive;
     }
   } catch (e) {
-    console.warn("تعذر جلب النماذج تلقائياً:", e);
+    console.warn("تعذر جلب النماذج تلقائياً، سيتم استخدام القائمة الافتراضية:", e);
   }
-  return hasImage
-    ? ["llama-3.2-11b-vision-instruct", "llama-3.2-90b-vision-instruct"]
-    : ["llama-3.3-70b-versatile", "llama-3.1-8b-instant"];
+
+  return hasImage ? preferredVisionModels : preferredTextModels;
 }
 
 export async function askSalmanAI(messages: any[]) {
@@ -81,14 +89,14 @@ export async function askSalmanAI(messages: any[]) {
         body: JSON.stringify({
           api_key: tavilyApiKey,
           query: userQuery,
-          search_depth: "basic",
+          search_depth: "advanced",
           max_results: 5,
         }),
       });
       if (tavilyRes.ok) {
         const tavilyData = await tavilyRes.json();
         if (tavilyData.results?.length) {
-          searchResultsContext = "\n\n[معلومات محدثة من البحث المباشر في الويب]:\n" +
+          searchResultsContext = "\n\n[نتائج البحث المباشر في الويب (استخدم هذه البيانات لإعطاء إجابة حقيقية ومحدثة 100%)]:\n" +
             tavilyData.results.map((r: any) => `- ${r.title}: ${r.content}`).join("\n");
         }
       }
@@ -99,11 +107,11 @@ export async function askSalmanAI(messages: any[]) {
 
   const systemPrompt = {
     role: "system",
-    content: `أنت "Salman AI"، مساعد ذكي متقدم بشخصية واثقة وعملية.
+    content: `أنت "Salman AI"، مساعد ذكي متقدم وذو كفاءة عالية.
 - المطور والمؤسس الخاص بك هو "المهندس سلمان فارس".
 - تاريخ اليوم المرجعي هو: ${formattedDate}.
-- اعتمد على [معلومات من البحث المباشر] إذا توفرت لإعطاء إجابات دقيقة ومحدثة.
-- قدم إجابات مباشرة بدون مقدمات أو حشو.`
+- التزم بالدقة العلمية والفعلية التامة في الإجابات ولا تقم باختراع أو تخمين أي معلومات.
+- عند وجود نتائج بحث مباشر، اعتمد عليها كمصدر رئيسي ومؤكد للإجابة.`
   };
 
   let hasImage = false;
@@ -140,9 +148,9 @@ export async function askSalmanAI(messages: any[]) {
     })
   );
 
-  const finalMessages = hasImage ? formattedMessages : [systemPrompt, ...formattedMessages];
+  // إدراج توجيهات النظام دائماً لضمان عدم خروج الذكاء الاصطناعي عن السياق
+  const finalMessages = [systemPrompt, ...formattedMessages];
 
-  // يجلب القائمة الحية والمباشرة المتاحة في حسابك لدى Groq
   const candidateModels = await getActiveGroqModels(groqApiKey, hasImage);
 
   let lastErrorMessage = "";
@@ -158,7 +166,7 @@ export async function askSalmanAI(messages: any[]) {
         body: JSON.stringify({
           model: model,
           messages: finalMessages,
-          temperature: 0.4,
+          temperature: 0.2, // تقليل العشوائية لزيادة الدقة والواقعية
           max_tokens: 2048,
         }),
       });

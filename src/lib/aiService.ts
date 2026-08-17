@@ -28,7 +28,6 @@ export async function askSalmanAI(messages: any[]) {
   const lastUserMsg = [...messages].reverse().find((m) => m.role === "user");
   let userQuery = typeof lastUserMsg?.content === "string" ? lastUserMsg.content : "";
 
-  // 1. تحديد تاريخ اليوم ديناميكياً لتزويد النموذج بالمرجع الزمني الصحيح
   const now = new Date();
   const formattedDate = now.toLocaleDateString("ar-EG", {
     weekday: "long",
@@ -37,7 +36,6 @@ export async function askSalmanAI(messages: any[]) {
     day: "numeric",
   });
 
-  // 2. توسيع نطاق البحث لضمان جلب أحدث البيانات والمعلومات المباشرة
   let searchResultsContext = "";
   const needsSearch = /بحث|أخبار|أحدث|ابحث|معلومات|مصادر|رياضة|مباراة|اليوم|سعر|من هو|ما هو|متى|كم|جديد|تاريخ|نتيجة|ترتيب/i.test(userQuery);
 
@@ -49,7 +47,7 @@ export async function askSalmanAI(messages: any[]) {
         body: JSON.stringify({
           api_key: tavilyApiKey,
           query: userQuery,
-          search_depth: "advanced",
+          search_depth: "basic",
           max_results: 5,
         }),
       });
@@ -65,7 +63,6 @@ export async function askSalmanAI(messages: any[]) {
     }
   }
 
-  // 3. تعليمات النظام المحسنة
   const systemPrompt = {
     role: "system",
     content: `أنت "Salman AI"، مساعد ذكي متقدم بشخصية واثقة وعملية.
@@ -111,21 +108,39 @@ export async function askSalmanAI(messages: any[]) {
   );
 
   const finalMessages = hasImage ? formattedMessages : [systemPrompt, ...formattedMessages];
+  const primaryModel = hasImage ? "llama-3.2-11b-vision-preview" : "llama-3.3-70b-versatile";
 
   try {
-    const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+    let response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
       method: "POST",
       headers: {
         "Authorization": `Bearer ${groqApiKey}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: hasImage ? "llama-3.2-11b-vision-preview" : "llama-3.3-70b-versatile",
+        model: primaryModel,
         messages: finalMessages,
         temperature: 0.4,
         max_tokens: 2048,
       }),
     });
+
+    // في حال إرجاع 404، يتم التبديل التلقائي لنموذج llama-3.1-8b-instant المستقر جداً
+    if (response.status === 404 && !hasImage) {
+      response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${groqApiKey}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "llama-3.1-8b-instant",
+          messages: finalMessages,
+          temperature: 0.4,
+          max_tokens: 2048,
+        }),
+      });
+    }
 
     if (response.status === 401) {
       return "خطأ 401: المفتاح غير صالح. تأكد من تحديثه في Lovable Secrets واضغط Publish.";

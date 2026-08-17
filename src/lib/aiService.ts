@@ -17,6 +17,36 @@ async function compressImage(dataUrl: string, maxWidth = 800, quality = 0.7): Pr
   });
 }
 
+// جلب النماذج الشغالة حالياً على سيرفرات Groq ديناميكياً لمنع أخطاء Decommissioned
+async function getActiveGroqModels(apiKey: string, hasImage: boolean): Promise<string[]> {
+  try {
+    const res = await fetch("https://api.groq.com/openai/v1/models", {
+      headers: { Authorization: `Bearer ${apiKey}` },
+    });
+    if (res.ok) {
+      const data = await res.json();
+      const active = (data.data || [])
+        .filter((m: any) => m.active !== false)
+        .map((m: any) => m.id);
+
+      if (hasImage) {
+        const visionModels = active.filter((id: string) => id.includes("vision"));
+        if (visionModels.length > 0) return visionModels;
+      } else {
+        const textModels = active.filter(
+          (id: string) => !id.includes("vision") && !id.includes("whisper") && !id.includes("guard")
+        );
+        if (textModels.length > 0) return textModels;
+      }
+    }
+  } catch (e) {
+    console.warn("تعذر جلب النماذج تلقائياً:", e);
+  }
+  return hasImage
+    ? ["llama-3.2-11b-vision-instruct", "llama-3.2-90b-vision-instruct"]
+    : ["llama-3.3-70b-versatile", "llama-3.1-8b-instant"];
+}
+
 export async function askSalmanAI(messages: any[]) {
   const groqApiKey = import.meta.env.VITE_GROQ_API_KEY?.trim();
   const tavilyApiKey = import.meta.env.VITE_TAVILY_API_KEY?.trim();
@@ -112,10 +142,8 @@ export async function askSalmanAI(messages: any[]) {
 
   const finalMessages = hasImage ? formattedMessages : [systemPrompt, ...formattedMessages];
 
-  // قائمة النماذج الفعالة والمستقرة 100% على Groq
-  const candidateModels = hasImage
-    ? ["llama-3.2-11b-vision-preview", "llama-3.2-90b-vision-preview"]
-    : ["llama-3.3-70b-versatile", "llama3-8b-8192", "llama3-70b-8192", "mixtral-8x7b-32768"];
+  // يجلب القائمة الحية والمباشرة المتاحة في حسابك لدى Groq
+  const candidateModels = await getActiveGroqModels(groqApiKey, hasImage);
 
   let lastErrorMessage = "";
 

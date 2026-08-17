@@ -17,7 +17,7 @@ async function compressImage(dataUrl: string, maxWidth = 800, quality = 0.7): Pr
   });
 }
 
-// جلب النماذج النشطة وحظر النماذج القديمة أو الموقوفة
+// جلب النماذج النشطة وحظر النماذج الموقوفة
 async function getActiveGroqModels(apiKey: string, hasImage: boolean): Promise<string[]> {
   const safeTextFallbacks = ["llama-3.3-70b-versatile", "deepseek-r1-distill-llama-70b"];
   const safeVisionFallbacks = ["llama-3.2-11b-vision-instruct", "llama-3.2-90b-vision-instruct"];
@@ -68,7 +68,7 @@ async function getActiveGroqModels(apiKey: string, hasImage: boolean): Promise<s
   return hasImage ? safeVisionFallbacks : safeTextFallbacks;
 }
 
-// محرك جلب معلومات البحث الآمن عبر CORS
+// محرك جلب معلومات البحث
 async function fetchLiveSearchResults(query: string, tavilyApiKey?: string): Promise<string> {
   if (tavilyApiKey) {
     try {
@@ -152,8 +152,10 @@ export async function askSalmanAI(messages: any[]) {
     role: "system",
     content: `أنت "Salman AI"، مساعد ذكي متقدم بتطوير المهندس سلمان فارس.
 - تاريخ اليوم المرجعي هو: ${formattedDate}.
-- حظر صارم: يُمنع تماماً كتابة أي رسائل اعتذار مثل "لا يمكنني الوصول للإنترنت"، "عذراً"، "أعتذر عن الإزعاج"، أو "يُفضل الاستعانة بمصادر أخرى".
-- عند سؤالك عن الأخبار الرياضية أو التحديثات العامة، قدم فوراً تغطية شاملة ومباشرة لأهم الأخبار والبطولات الحالية (مثل دوري روشن السعودي، الدوري الإنجليزي، دوري أبطال أوروبا، وسوق الانتقالات) في نقاط منظمة وواضحة.`
+- **قواعد التنسيق الصارمة**:
+  1. يُمنع تماماً استخدام الجداول (Markdown Tables) لأنها تخرج عن حدود الشاشة في الهواتف.
+  2. اعرض جميع الإجابات والمعلومات والنتائج في شكل **سرد متسلسل، فقرات واضحة، أو نقاط محدودة (Bullet Points)** فقط.
+  3. لا تعتذر ولا تقل "لا يمكنني الوصول للإنترنت"، واعرض الأخبار والمعلومات المطلوبة مباشرة بشكل جذاب ومباشر.`
   };
 
   let hasImage = false;

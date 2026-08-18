@@ -204,6 +204,24 @@
   text-align: left;
 }
 
+/* Fix KaTeX & Math Equations direction inside RTL */
+.katex,
+.katex-display,
+.katex-html,
+[class*="math"] {
+  direction: ltr !important;
+  unicode-bidi: isolate !important;
+  text-align: left;
+}
+
+.katex-display {
+  display: block !important;
+  text-align: center !important;
+  margin: 1em 0 !important;
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+
 /* Markdown / prose styling for chat answers */
 .salman-prose {
   line-height: 1.9;
@@ -403,12 +421,22 @@ form > .group\/input-group {
   overflow: visible;
 }
 
-/* Hide Lovable badge */
+/* Hide Lovable badge & Web Components */
 #gptengineer-badge,
+gptengineer-badge,
+lovable-badge,
 [id*="gptengineer"],
-div[class*="lovable-badge"],
-iframe[src*="gptengineer"] {
+[class*="lovable"],
+[id*="lovable"],
+iframe[src*="gptengineer"],
+iframe[src*="lovable"] {
   display: none !important;
   visibility: hidden !important;
+  opacity: 0 !important;
   pointer-events: none !important;
+  width: 0 !important;
+  height: 0 !important;
+  position: absolute !important;
+  left: -9999px !important;
+  z-index: -99999 !important;
 }

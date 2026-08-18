@@ -128,6 +128,19 @@ function RootShell({ children }: { children: ReactNode }) {
     <html lang="ar" dir="rtl" suppressHydrationWarning>
       <head>
         <HeadContent />
+        <style>{`
+          #gptengineer-badge,
+          [id*="gptengineer"],
+          [class*="lovable-badge"],
+          div[class*="lovable"],
+          iframe[src*="gptengineer"],
+          iframe[src*="lovable"] {
+            display: none !important;
+            visibility: hidden !important;
+            opacity: 0 !important;
+            pointer-events: none !important;
+          }
+        `}</style>
         <script
           dangerouslySetInnerHTML={{
             __html: `try{var t=localStorage.getItem('salman-theme')||'dark';if(t==='dark')document.documentElement.classList.add('dark');}catch(e){document.documentElement.classList.add('dark');}`,
@@ -145,6 +158,34 @@ function RootShell({ children }: { children: ReactNode }) {
 function RootComponent() {
   const { queryClient } = Route.useRouteContext();
   const router = useRouter();
+
+  // تنظيف شارة Lovable تلقائياً وبشكل مستمر
+  useEffect(() => {
+    const purgeBadge = () => {
+      const selectors = [
+        "#gptengineer-badge",
+        '[id*="gptengineer"]',
+        '[class*="lovable-badge"]',
+        'iframe[src*="gptengineer"]',
+        'iframe[src*="lovable"]',
+      ];
+      selectors.forEach((selector) => {
+        document.querySelectorAll(selector).forEach((el) => el.remove());
+      });
+    };
+
+    purgeBadge();
+
+    const observer = new MutationObserver(purgeBadge);
+    observer.observe(document.body, { childList: true, subtree: true });
+
+    const interval = setInterval(purgeBadge, 250);
+
+    return () => {
+      observer.disconnect();
+      clearInterval(interval);
+    };
+  }, []);
 
   useEffect(() => {
     const { data } = supabase.auth.onAuthStateChange((event) => {

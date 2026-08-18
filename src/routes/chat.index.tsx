@@ -1,6 +1,6 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { Loader2, Send, Plus, Paperclip, Square, User } from "lucide-react";
+import { Loader2, Send, Plus, Paperclip, X, Image as ImageIcon, Copy, Edit2, RotateCcw } from "lucide-react";
 import { useEffect, useState, useRef } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -18,247 +18,488 @@ export const Route = createFileRoute("/chat/")({
 interface Message {
   role: "user" | "assistant";
   content: string;
+  attachment?: {
+    name: string;
+    type: string;
+    url: string;
+    base64?: string;
+    textContent?: string;
+  };
 }
+
+const QUICK_SUGGESTIONS = [
+  "أحدث الأخبار الرياضية",
+  "اشرح لي فكرة مشروع",
+  "كتابة كود برمجي",
+  "تلخيص نص مطول",
+];
+
+const SEARCH_STATUSES = [
+  "جاري البحث في المصادر المحدثة...",
+  "جاري تحليل البيانات...",
+  "جاري صياغة الإجابة..."
+];
+
+const CHAT_STATUSES = [
+  "Salman يكتب الآن...",
+  "جاري التفكير في الرد...",
+  "جاري تجهيز الإجابة..."
+];
 
 function ChatIndexScreen() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const { session, isGuest } = useSession();
+  const { session, loading } = useSession();
 
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
-  const [isLoading, setIsLoading] = useState(false);
-  const [slogan, setSlogan] = useState("");
+  const [isSending, setIsSending] = useState(false);
+  const [statusIndex, setStatusIndex] = useState(0);
+  const [activeStatuses, setActiveStatuses] = useState<string[]>(CHAT_STATUSES);
+  const [activeActionIndex, setActiveActionIndex] = useState<number | null>(null);
+  const [selectedFile, setSelectedFile] = useState<{
+    name: string;
+    type: string;
+    url: string;
+    base64: string;
+    textContent?: string;
+  } | null>(null);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const abortControllerRef = useRef<AbortController | null>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const pressTimerRef = useRef<NodeJS.Timeout | null>(null);
 
-  const slogans = [
-    "مساعدك الذكي لإنجاز المهام، كتابة الأكواد، وتحليل البيانات بكفاءة.",
-    "منصة الذكاء الاصطناعي المبتكرة لتطوير الأفكار وتسريع الإنتاجية.",
-    "كيف يمكنني مساعدتك اليوم؟",
-    "Salman AI | قوتك المعرفية والبرمجية في مكان واحد.",
-    "تجربة ذكاء اصطناعي متطورة بتطوير المهندس سلمان فارس.",
-  ];
-
-  useEffect(() => {
-    const random = slogans[Math.floor(Math.random() * slogans.length)];
-    setSlogan(random);
-  }, []);
-
-  useEffect(() => {
+  const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages, isLoading]);
-
-  const handleSend = async (customText?: string) => {
-    const text = customText || input;
-
-    if (isLoading) {
-      if (abortControllerRef.current) {
-        abortControllerRef.current.abort();
-        abortControllerRef.current = null;
-      }
-      setIsLoading(false);
-      return;
-    }
-
-    if (!text.trim()) return;
-
-    const newMessages: Message[] = [...messages, { role: "user", content: text.trim() }];
-    setMessages(newMessages);
-    setInput("");
-    setIsLoading(true);
-
-    const controller = new AbortController();
-    abortControllerRef.current = controller;
-
-    try {
-      const responseText = await askSalmanAI(newMessages, controller.signal);
-      setMessages((prev) => [...prev, { role: "assistant", content: responseText }]);
-    } catch (err: any) {
-      if (err.name === "AbortError") {
-        setMessages((prev) => [
-          ...prev,
-          { role: "assistant", content: "تم إيقاف التوليد بطلب منك." },
-        ]);
-      } else {
-        toast.error("حدث خطأ أثناء التواصل مع النموذج.");
-        setMessages((prev) => [
-          ...prev,
-          { role: "assistant", content: "تعذّر الحصول على رد. يُرجى المحاولة لاحقًا." },
-        ]);
-      }
-    } finally {
-      setIsLoading(false);
-      abortControllerRef.current = null;
-    }
   };
 
-  const handleNewChat = () => {
-    if (isLoading && abortControllerRef.current) {
-      abortControllerRef.current.abort();
+  useEffect(() => {
+    scrollToBottom();
+  }, [messages, isSending]);
+
+  useEffect(() => {
+    if (!isSending) {
+      setStatusIndex(0);
+      return;
     }
+    const interval = setInterval(() => {
+      setStatusIndex((prev) => (prev + 1) % activeStatuses.length);
+    }, 1500);
+
+    return () => clearInterval(interval);
+  }, [isSending, activeStatuses]);
+
+  const handleNewChat = () => {
     setMessages([]);
     setInput("");
-    setIsLoading(false);
+    setSelectedFile(null);
+    setActiveActionIndex(null);
     toast.success("تم بدء محادثة جديدة");
   };
 
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      toast.info(`تم اختيار الملف: ${file.name}`);
+  const handleTouchStart = (index: number) => {
+    pressTimerRef.current = setTimeout(() => {
+      setActiveActionIndex(index);
+    }, 600);
+  };
+
+  const handleTouchEnd = () => {
+    if (pressTimerRef.current) {
+      clearTimeout(pressTimerRef.current);
     }
   };
 
-  return (
-    <div className="flex flex-col h-full bg-background text-foreground dir-rtl">
-      {/* شريط الإجراءات العلوي السريع */}
-      <div className="flex items-center justify-between px-4 py-2 border-b border-border/50 bg-background/50 backdrop-blur-sm">
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={handleNewChat}
-          className="gap-1.5 rounded-xl text-xs font-bold"
-        >
-          <Plus className="size-3.5" />
-          محادثة جديدة
-        </Button>
-      </div>
+  const handleCopy = (text: string) => {
+    navigator.clipboard.writeText(text);
+    toast.success("تم نسخ النص إلى الحافظة");
+    setActiveActionIndex(null);
+  };
 
-      {/* منطقة الرسائل */}
-      <main className="flex-1 overflow-y-auto px-4 py-4 space-y-4">
+  const handleEdit = (text: string) => {
+    setInput(text);
+    setActiveActionIndex(null);
+    if (textareaRef.current) {
+      textareaRef.current.focus();
+    }
+  };
+
+  const handleRetry = (index: number) => {
+    setActiveActionIndex(null);
+    const historyToRetry = messages.slice(0, index + 1);
+    const lastUserMessage = historyToRetry[historyToRetry.length - 1];
+    if (lastUserMessage && lastUserMessage.role === "user") {
+      executeSend(historyToRetry, lastUserMessage.content);
+    }
+  };
+
+  const executeSend = async (chatHistory: Message[], userQuery: string) => {
+    const isSearchQuery = /بحث|أخبار|أحدث|ابحث|معلومات|مصادر/i.test(userQuery);
+    setActiveStatuses(isSearchQuery ? SEARCH_STATUSES : CHAT_STATUSES);
+
+    setIsSending(true);
+    setMessages([...chatHistory, { role: "assistant", content: "" }]);
+
+    try {
+      const formattedHistory = chatHistory.map((m) => {
+        let finalContent = m.content;
+        
+        // إذا كان هناك ملف نصي مرفق
+        if (m.attachment?.textContent) {
+          finalContent = `${m.content ? m.content + "\n\n" : ""}[محتوى الملف المرفق: ${m.attachment.name}]\n\`\`\`\n${m.attachment.textContent}\n\`\`\``;
+        }
+
+        // تجهيز بيانات الصورة بشكل صريح ومطابق لـ Vision APIs
+        if (m.attachment?.base64 && (m.attachment.type.startsWith("image/") || m.attachment.base64.startsWith("data:image/"))) {
+          const rawBase64 = m.attachment.base64.includes(",") 
+            ? m.attachment.base64.split(",")[1] 
+            : m.attachment.base64;
+          const mimeType = m.attachment.type || "image/jpeg";
+          const promptText = finalContent.trim() || "حلل هذه الصورة واشرح محتواها بالتفصيل وأجب عن أي سؤال حولها.";
+
+          return {
+            role: m.role,
+            content: [
+              { type: "text", text: promptText },
+              { type: "image_url", image_url: { url: `data:${mimeType};base64,${rawBase64}` } }
+            ],
+            image: `data:${mimeType};base64,${rawBase64}`,
+            imageBase64: rawBase64,
+            imageMimeType: mimeType
+          };
+        }
+
+        return { role: m.role, content: finalContent };
+      });
+
+      const fullResponse = await askSalmanAI(formattedHistory);
+
+      let currentText = "";
+      const words = fullResponse.split(" ");
+      
+      for (let i = 0; i < words.length; i++) {
+        currentText += (i === 0 ? "" : " ") + words[i];
+        const textToUpdate = currentText;
+        setMessages((prev) => {
+          const newMsgs = [...prev];
+          newMsgs[newMsgs.length - 1] = { role: "assistant", content: textToUpdate };
+          return newMsgs;
+        });
+        await new Promise((resolve) => setTimeout(resolve, 20));
+      }
+    } catch (error) {
+      console.error(error);
+      toast.error("تعذّر جلب الرد حالياً.");
+      setMessages((prev) => {
+        const newMsgs = [...prev];
+        newMsgs[newMsgs.length - 1] = { role: "assistant", content: "عذراً، حدث خطأ أثناء معالجة الصورة أو الطلب." };
+        return newMsgs;
+      });
+    } finally {
+      setIsSending(false);
+    }
+  };
+
+  const handleSend = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+
+    // إجبار الكيبورد على الحفظ وإلغاء التركيز لالتقاط أحدث كلمة
+    if (textareaRef.current) {
+      textareaRef.current.blur();
+    }
+
+    setTimeout(async () => {
+      const rawText = textareaRef.current?.value || input;
+      const userText = rawText.trim();
+
+      if ((!userText && !selectedFile) || isSending) return;
+
+      const currentAttachment = selectedFile;
+      const userMessage: Message = {
+        role: "user",
+        content: userText,
+        attachment: currentAttachment ? { ...currentAttachment } : undefined,
+      };
+
+      const updatedMessages = [...messages, userMessage];
+      setMessages(updatedMessages);
+      setInput("");
+      setSelectedFile(null);
+
+      await executeSend(updatedMessages, userText);
+    }, 80);
+  };
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (file.size > 8 * 1024 * 1024) {
+      toast.error("حجم الملف يجب ألا يتجاوز 8 ميجابايت");
+      return;
+    }
+
+    const isTextFile =
+      file.type.startsWith("text/") ||
+      /\.(txt|json|js|ts|tsx|jsx|py|md|html|css|csv|xml|json)$/i.test(file.name);
+
+    if (isTextFile) {
+      const reader = new FileReader();
+      reader.onload = () => {
+        setSelectedFile({
+          name: file.name,
+          type: file.type || "text/plain",
+          url: URL.createObjectURL(file),
+          base64: "",
+          textContent: reader.result as string,
+        });
+      };
+      reader.readAsText(file);
+    } else {
+      const reader = new FileReader();
+      reader.onload = () => {
+        setSelectedFile({
+          name: file.name,
+          type: file.type || "image/jpeg",
+          url: URL.createObjectURL(file),
+          base64: reader.result as string,
+        });
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="flex h-full flex-col items-center justify-center gap-4 bg-[#0b101b] px-6 text-center text-slate-100">
+        <BrandMark size={64} className="shadow-glow" />
+        <h1 className="text-xl font-extrabold">
+          مرحباً بك، أنا <span className="brand-gradient-text">Salman AI</span>
+        </h1>
+        <p className="flex items-center gap-2 text-sm text-slate-400">
+          <Loader2 className="size-4 animate-spin" />
+          جارٍ التجهيز...
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="relative flex h-full flex-col justify-between bg-[#0b101b] text-slate-100" dir="rtl">
+      
+      {/* زر محادثة جديدة العائم */}
+      <Button
+        onClick={handleNewChat}
+        variant="outline"
+        size="sm"
+        className="absolute left-4 top-4 z-10 flex items-center gap-1.5 rounded-full border-slate-800 bg-slate-900/60 px-3 py-1.5 text-xs text-slate-200 hover:bg-slate-800"
+      >
+        محادثة جديدة
+        <Plus className="size-4 text-[#2dd4bf]" />
+      </Button>
+
+      {/* منطقة المحتوى والرسائل */}
+      <div className="flex flex-1 flex-col justify-between space-y-5 overflow-y-auto px-4 py-4">
+        
         {messages.length === 0 && (
-          <div className="flex flex-col items-center justify-center my-12 text-center space-y-3">
-            <BrandMark size={64} />
-            <h1 className="text-2xl font-extrabold text-foreground tracking-wide">
-              Salman AI
-            </h1>
-            <p className="text-muted-foreground text-xs max-w-sm leading-relaxed px-4 min-h-[36px] flex items-center justify-center">
-              {slogan}
+          <div className="my-auto flex flex-col items-center justify-center space-y-3 py-6 text-center">
+            <div className="rounded-2xl border border-slate-800 bg-slate-900/80 p-3 shadow-xl">
+              <BrandMark size={64} />
+            </div>
+            <h2 className="text-xl font-black tracking-tight text-white">مرحباً بك مع Salman AI</h2>
+            <p className="max-w-xs text-xs leading-relaxed text-slate-400">
+              أسألني أي شيء، أرفق صوراً، واستفد من خيارات النقر المطوّل على الرسائل.
             </p>
           </div>
         )}
 
-        {messages.map((m, idx) => {
-          if (!m.content) return null;
-          const isUser = m.role === "user";
-          return (
-            <div
-              key={idx}
-              className={`flex items-start gap-2.5 ${
-                isUser ? "justify-start" : "justify-end"
-              }`}
-            >
-              {!isUser && (
-                <div className="w-8 h-8 rounded-full bg-primary/20 border border-primary/30 flex items-center justify-center shrink-0 mt-0.5">
-                  <BrandMark size={18} />
-                </div>
-              )}
-
+        {messages.length > 0 && (
+          <div className="w-full space-y-4 pt-10">
+            {messages.map((msg, idx) => (
               <div
-                className={`max-w-[88%] p-3.5 rounded-2xl text-xs leading-relaxed break-words ${
-                  isUser
-                    ? "bg-primary text-primary-foreground font-medium rounded-tr-none whitespace-pre-wrap"
-                    : "bg-secondary text-secondary-foreground border border-border rounded-tl-none"
+                key={idx}
+                className={`flex w-full flex-col ${
+                  msg.role === "user" ? "items-end" : "items-start"
                 }`}
               >
-                {isUser ? (
-                  m.content
-                ) : (
-                  <ReactMarkdown
-                    remarkPlugins={[remarkGfm]}
-                    className="prose dark:prose-invert max-w-none text-xs space-y-2 [&_p]:leading-relaxed [&_pre]:bg-background/80 [&_pre]:p-3 [&_pre]:rounded-xl [&_code]:font-mono"
+                <div className="flex max-w-[88%] items-start gap-2.5">
+                  {msg.role === "assistant" && (
+                    <div className="mt-1 shrink-0">
+                      <BrandMark size={32} />
+                    </div>
+                  )}
+
+                  <div
+                    onTouchStart={() => handleTouchStart(idx)}
+                    onTouchEnd={handleTouchEnd}
+                    onMouseDown={() => handleTouchStart(idx)}
+                    onMouseUp={handleTouchEnd}
+                    className={`relative w-fit cursor-pointer select-none break-words whitespace-pre-wrap px-4 py-3 text-right text-sm leading-relaxed shadow-sm ${
+                      msg.role === "user"
+                        ? "rounded-2xl rounded-bl-none bg-[#2dd4bf] font-medium text-slate-950"
+                        : "rounded-2xl rounded-tr-none border border-slate-700/60 bg-slate-800/90 text-slate-100"
+                    }`}
                   >
-                    {m.content}
-                  </ReactMarkdown>
+                    {msg.attachment && (
+                      <div className="mb-2 flex items-center gap-2 rounded-xl bg-black/10 p-2 text-xs">
+                        {msg.attachment.type.startsWith("image/") ? (
+                          <img
+                            src={msg.attachment.url}
+                            alt="attachment"
+                            className="h-24 w-auto rounded-lg object-cover"
+                          />
+                        ) : (
+                          <div className="flex items-center gap-1.5 font-bold">
+                            <Paperclip className="size-4" />
+                            <span className="max-w-[180px] truncate">{msg.attachment.name}</span>
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {msg.role === "assistant" ? (
+                      <div className="prose prose-invert prose-sm max-w-none space-y-3 leading-relaxed">
+                        <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                          {msg.content}
+                        </ReactMarkdown>
+                      </div>
+                    ) : (
+                      msg.content
+                    )}
+                  </div>
+                </div>
+
+                {activeActionIndex === idx && (
+                  <div className="animate-in fade-in z-10 mt-1.5 flex items-center gap-1 rounded-xl border border-slate-700 bg-slate-900 p-1 shadow-lg">
+                    <button
+                      onClick={() => handleCopy(msg.content)}
+                      className="flex items-center gap-1 rounded-lg px-2 py-1 text-xs text-slate-200 hover:bg-slate-800"
+                    >
+                      <Copy className="size-3.5" />
+                      نسخ
+                    </button>
+                    {msg.role === "user" && (
+                      <>
+                        <button
+                          onClick={() => handleEdit(msg.content)}
+                          className="flex items-center gap-1 rounded-lg px-2 py-1 text-xs text-slate-200 hover:bg-slate-800"
+                        >
+                          <Edit2 className="size-3.5" />
+                          تعديل
+                        </button>
+                        <button
+                          onClick={() => handleRetry(idx)}
+                          className="flex items-center gap-1 rounded-lg px-2 py-1 text-xs text-slate-200 hover:bg-slate-800"
+                        >
+                          <RotateCcw className="size-3.5" />
+                          إعادة المحاولة
+                        </button>
+                      </>
+                    )}
+                    <button
+                      onClick={() => setActiveActionIndex(null)}
+                      className="px-1 text-slate-500 hover:text-slate-300"
+                    >
+                      <X className="size-3.5" />
+                    </button>
+                  </div>
                 )}
               </div>
-
-              {isUser && (
-                <div className="w-8 h-8 rounded-full bg-secondary border border-border flex items-center justify-center shrink-0 mt-0.5 text-muted-foreground">
-                  <User className="size-4" />
-                </div>
-              )}
-            </div>
-          );
-        })}
-
-        {isLoading && (
-          <div className="flex items-start gap-2.5 justify-end">
-            <div className="w-8 h-8 rounded-full bg-primary/20 border border-primary/30 flex items-center justify-center shrink-0 mt-0.5">
-              <Loader2 className="size-4 animate-spin text-primary" />
-            </div>
-            <div className="bg-secondary border border-border p-3.5 rounded-2xl rounded-tl-none text-primary text-xs font-medium animate-pulse">
-              Salman يكتب الآن...
-            </div>
+            ))}
           </div>
         )}
 
+        {isSending && messages[messages.length - 1]?.content === "" && (
+          <div className="flex w-full items-center justify-start gap-2.5">
+            <div className="shrink-0">
+              <BrandMark size={32} />
+            </div>
+            <div className="w-fit max-w-[85%] animate-pulse rounded-2xl rounded-tr-none border border-slate-700/60 bg-slate-800/90 px-4 py-3 text-right text-sm font-medium text-[#2dd4bf]">
+              {activeStatuses[statusIndex]}
+            </div>
+          </div>
+        )}
         <div ref={messagesEndRef} />
-      </main>
+      </div>
 
-      {/* منطقة الإدخال */}
-      <footer className="p-3 bg-background border-t border-border space-y-2">
-        <input
-          type="file"
-          ref={fileInputRef}
-          onChange={handleFileUpload}
-          className="hidden"
-        />
+      {/* الشريط السفلي للإدخال والاقتراحات */}
+      <div className="shrink-0 space-y-2.5 border-t border-slate-800/80 bg-[#0b101b] p-3">
+        <div className="no-scrollbar flex items-center gap-2 overflow-x-auto pb-1">
+          {QUICK_SUGGESTIONS.map((item, i) => (
+            <button
+              key={i}
+              onClick={() => setInput(item)}
+              className="shrink-0 rounded-full border border-slate-800 bg-slate-900/60 px-3 py-1.5 text-xs font-semibold text-slate-300 transition hover:bg-slate-800 hover:text-white"
+            >
+              {item}
+            </button>
+          ))}
+        </div>
 
-        <div className="flex items-center gap-2 bg-secondary border border-border rounded-2xl p-1.5 focus-within:border-primary transition-all">
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            onClick={() => fileInputRef.current?.click()}
-            className="size-9 rounded-xl text-muted-foreground hover:text-foreground shrink-0"
-            title="إرفاق ملف"
-          >
-            <Paperclip className="size-4" />
-          </Button>
+        {selectedFile && (
+          <div className="flex items-center justify-between rounded-xl border border-slate-800 bg-slate-900 px-3 py-2 text-xs">
+            <div className="flex items-center gap-2 truncate">
+              {selectedFile.type.startsWith("image/") ? (
+                <ImageIcon className="size-4 shrink-0 text-[#2dd4bf]" />
+              ) : (
+                <Paperclip className="size-4 shrink-0 text-[#2dd4bf]" />
+              )}
+              <span className="max-w-[200px] truncate font-bold text-white">{selectedFile.name}</span>
+            </div>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="size-6 rounded-full text-slate-400 hover:text-white"
+              onClick={() => setSelectedFile(null)}
+            >
+              <X className="size-3.5" />
+            </Button>
+          </div>
+        )}
 
-          <textarea
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            placeholder="اكتب رسالتك لـ Salman AI..."
-            rows={1}
-            className="flex-1 bg-transparent text-foreground placeholder-muted-foreground text-xs border-none outline-none resize-none px-2 dir-rtl"
-            autoComplete="on"
-            autoCorrect="on"
-            spellCheck={true}
-            inputMode="text"
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && !e.shiftKey) {
-                e.preventDefault();
-                handleSend();
-              }
-            }}
-          />
+        <div className="flex items-center gap-2">
+          <div className="relative flex flex-1 items-center rounded-2xl border border-slate-800 bg-slate-900/90 transition focus-within:border-[#2dd4bf]">
+            <input
+              type="file"
+              ref={fileInputRef}
+              onChange={handleFileChange}
+              className="hidden"
+              accept="image/*,.pdf,.doc,.docx,.txt,.json,.js,.ts,.tsx,.py,.md,.csv"
+            />
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              className="absolute right-2 rounded-xl p-2 text-slate-400 transition hover:bg-slate-800 hover:text-white"
+              title="إرفاق صورة أو ملف"
+            >
+              <Plus className="size-5" />
+            </button>
+
+            <textarea
+              ref={textareaRef}
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              placeholder="اكتب رسالتك لـ Salman AI..."
+              rows={1}
+              autoComplete="on"
+              autoCorrect="on"
+              spellCheck={true}
+              className="max-h-32 min-h-[44px] w-full resize-none bg-transparent py-3 pl-4 pr-11 text-right text-xs text-white placeholder:text-slate-500 focus:outline-none"
+            />
+          </div>
 
           <Button
             type="button"
             onClick={() => handleSend()}
+            disabled={isSending || (!input.trim() && !selectedFile)}
             size="icon"
-            className={`size-9 rounded-xl transition-all shrink-0 ${
-              isLoading
-                ? "bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                : "bg-primary text-primary-foreground hover:opacity-90"
-            }`}
-            title={isLoading ? "إيقاف الرد" : "إرسال"}
+            className="h-11 w-11 shrink-0 rounded-2xl bg-[#2dd4bf] text-slate-950 hover:bg-[#26b8a5]"
           >
-            {isLoading ? (
-              <Square className="size-4 fill-current" />
-            ) : (
-              <Send className="size-4 rotate-180" />
-            )}
+            <Send className="-rotate-90 size-4" />
           </Button>
         </div>
-      </footer>
+      </div>
     </div>
   );
 }
-
-export default ChatIndexScreen;

@@ -11,6 +11,12 @@ const Textarea = React.forwardRef<HTMLTextAreaElement, React.ComponentProps<"tex
           className,
         )}
         ref={ref}
+        /* تفعيل شريط اقتراحات وتوقع الكلمات في كيبورد الهاتف */
+        autoCorrect="on"
+        autoCapitalize="sentences"
+        autoComplete="on"
+        spellCheck={true}
+        inputMode="text"
         {...props}
       />
     );

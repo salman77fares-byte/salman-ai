@@ -144,12 +144,10 @@ function ChatIndexScreen() {
       const formattedHistory = chatHistory.map((m) => {
         let finalContent = m.content;
         
-        // إذا كان هناك ملف نصي مرفق
         if (m.attachment?.textContent) {
           finalContent = `${m.content ? m.content + "\n\n" : ""}[محتوى الملف المرفق: ${m.attachment.name}]\n\`\`\`\n${m.attachment.textContent}\n\`\`\``;
         }
 
-        // تجهيز بيانات الصورة بشكل صريح ومطابق لـ Vision APIs
         if (m.attachment?.base64 && (m.attachment.type.startsWith("image/") || m.attachment.base64.startsWith("data:image/"))) {
           const rawBase64 = m.attachment.base64.includes(",") 
             ? m.attachment.base64.split(",")[1] 
@@ -203,7 +201,6 @@ function ChatIndexScreen() {
   const handleSend = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
 
-    // إجبار الكيبورد على الحفظ وإلغاء التركيز لالتقاط أحدث كلمة
     if (textareaRef.current) {
       textareaRef.current.blur();
     }
@@ -315,97 +312,102 @@ function ChatIndexScreen() {
 
         {messages.length > 0 && (
           <div className="w-full space-y-4 pt-10">
-            {messages.map((msg, idx) => (
-              <div
-                key={idx}
-                className={`flex w-full flex-col ${
-                  msg.role === "user" ? "items-end" : "items-start"
-                }`}
-              >
-                <div className="flex max-w-[88%] items-start gap-2.5">
-                  {msg.role === "assistant" && (
-                    <div className="mt-1 shrink-0">
-                      <BrandMark size={32} />
+            {messages.map((msg, idx) => {
+              // منع عرض فقاعة فارغة للمساعد أثناء التفكير
+              if (msg.role === "assistant" && !msg.content.trim()) return null;
+
+              return (
+                <div
+                  key={idx}
+                  className={`flex w-full flex-col ${
+                    msg.role === "user" ? "items-end" : "items-start"
+                  }`}
+                >
+                  <div className="flex max-w-[88%] items-start gap-2.5">
+                    {msg.role === "assistant" && (
+                      <div className="mt-1 shrink-0">
+                        <BrandMark size={32} />
+                      </div>
+                    )}
+
+                    <div
+                      onTouchStart={() => handleTouchStart(idx)}
+                      onTouchEnd={handleTouchEnd}
+                      onMouseDown={() => handleTouchStart(idx)}
+                      onMouseUp={handleTouchEnd}
+                      className={`relative w-fit cursor-pointer select-none break-words whitespace-pre-wrap px-4 py-3 text-right text-sm leading-relaxed shadow-sm ${
+                        msg.role === "user"
+                          ? "rounded-2xl rounded-bl-none bg-[#2dd4bf] font-medium text-slate-950"
+                          : "rounded-2xl rounded-tr-none border border-slate-700/60 bg-slate-800/90 text-slate-100"
+                      }`}
+                    >
+                      {msg.attachment && (
+                        <div className="mb-2 flex items-center gap-2 rounded-xl bg-black/10 p-2 text-xs">
+                          {msg.attachment.type.startsWith("image/") ? (
+                            <img
+                              src={msg.attachment.url}
+                              alt="attachment"
+                              className="h-24 w-auto rounded-lg object-cover"
+                            />
+                          ) : (
+                            <div className="flex items-center gap-1.5 font-bold">
+                              <Paperclip className="size-4" />
+                              <span className="max-w-[180px] truncate">{msg.attachment.name}</span>
+                            </div>
+                          )}
+                        </div>
+                      )}
+
+                      {msg.role === "assistant" ? (
+                        <div className="prose prose-invert prose-sm max-w-none space-y-3 leading-relaxed">
+                          <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                            {msg.content}
+                          </ReactMarkdown>
+                        </div>
+                      ) : (
+                        msg.content
+                      )}
+                    </div>
+                  </div>
+
+                  {activeActionIndex === idx && (
+                    <div className="animate-in fade-in z-10 mt-1.5 flex items-center gap-1 rounded-xl border border-slate-700 bg-slate-900 p-1 shadow-lg">
+                      <button
+                        onClick={() => handleCopy(msg.content)}
+                        className="flex items-center gap-1 rounded-lg px-2 py-1 text-xs text-slate-200 hover:bg-slate-800"
+                      >
+                        <Copy className="size-3.5" />
+                        نسخ
+                      </button>
+                      {msg.role === "user" && (
+                        <>
+                          <button
+                            onClick={() => handleEdit(msg.content)}
+                            className="flex items-center gap-1 rounded-lg px-2 py-1 text-xs text-slate-200 hover:bg-slate-800"
+                          >
+                            <Edit2 className="size-3.5" />
+                            تعديل
+                          </button>
+                          <button
+                            onClick={() => handleRetry(idx)}
+                            className="flex items-center gap-1 rounded-lg px-2 py-1 text-xs text-slate-200 hover:bg-slate-800"
+                          >
+                            <RotateCcw className="size-3.5" />
+                            إعادة المحاولة
+                          </button>
+                        </>
+                      )}
+                      <button
+                        onClick={() => setActiveActionIndex(null)}
+                        className="px-1 text-slate-500 hover:text-slate-300"
+                      >
+                        <X className="size-3.5" />
+                      </button>
                     </div>
                   )}
-
-                  <div
-                    onTouchStart={() => handleTouchStart(idx)}
-                    onTouchEnd={handleTouchEnd}
-                    onMouseDown={() => handleTouchStart(idx)}
-                    onMouseUp={handleTouchEnd}
-                    className={`relative w-fit cursor-pointer select-none break-words whitespace-pre-wrap px-4 py-3 text-right text-sm leading-relaxed shadow-sm ${
-                      msg.role === "user"
-                        ? "rounded-2xl rounded-bl-none bg-[#2dd4bf] font-medium text-slate-950"
-                        : "rounded-2xl rounded-tr-none border border-slate-700/60 bg-slate-800/90 text-slate-100"
-                    }`}
-                  >
-                    {msg.attachment && (
-                      <div className="mb-2 flex items-center gap-2 rounded-xl bg-black/10 p-2 text-xs">
-                        {msg.attachment.type.startsWith("image/") ? (
-                          <img
-                            src={msg.attachment.url}
-                            alt="attachment"
-                            className="h-24 w-auto rounded-lg object-cover"
-                          />
-                        ) : (
-                          <div className="flex items-center gap-1.5 font-bold">
-                            <Paperclip className="size-4" />
-                            <span className="max-w-[180px] truncate">{msg.attachment.name}</span>
-                          </div>
-                        )}
-                      </div>
-                    )}
-
-                    {msg.role === "assistant" ? (
-                      <div className="prose prose-invert prose-sm max-w-none space-y-3 leading-relaxed">
-                        <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                          {msg.content}
-                        </ReactMarkdown>
-                      </div>
-                    ) : (
-                      msg.content
-                    )}
-                  </div>
                 </div>
-
-                {activeActionIndex === idx && (
-                  <div className="animate-in fade-in z-10 mt-1.5 flex items-center gap-1 rounded-xl border border-slate-700 bg-slate-900 p-1 shadow-lg">
-                    <button
-                      onClick={() => handleCopy(msg.content)}
-                      className="flex items-center gap-1 rounded-lg px-2 py-1 text-xs text-slate-200 hover:bg-slate-800"
-                    >
-                      <Copy className="size-3.5" />
-                      نسخ
-                    </button>
-                    {msg.role === "user" && (
-                      <>
-                        <button
-                          onClick={() => handleEdit(msg.content)}
-                          className="flex items-center gap-1 rounded-lg px-2 py-1 text-xs text-slate-200 hover:bg-slate-800"
-                        >
-                          <Edit2 className="size-3.5" />
-                          تعديل
-                        </button>
-                        <button
-                          onClick={() => handleRetry(idx)}
-                          className="flex items-center gap-1 rounded-lg px-2 py-1 text-xs text-slate-200 hover:bg-slate-800"
-                        >
-                          <RotateCcw className="size-3.5" />
-                          إعادة المحاولة
-                        </button>
-                      </>
-                    )}
-                    <button
-                      onClick={() => setActiveActionIndex(null)}
-                      className="px-1 text-slate-500 hover:text-slate-300"
-                    >
-                      <X className="size-3.5" />
-                    </button>
-                  </div>
-                )}
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
 
@@ -503,3 +505,5 @@ function ChatIndexScreen() {
     </div>
   );
 }
+
+export default ChatIndexScreen;

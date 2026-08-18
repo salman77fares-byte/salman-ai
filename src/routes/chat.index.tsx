@@ -74,9 +74,10 @@ function ChatIndexScreen() {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   };
 
+  // التمرير التلقائي يعمل فقط عند إضافة رسالة جديدة بدلاً من التمرير المستمر عند كل كلمة
   useEffect(() => {
     scrollToBottom();
-  }, [messages, isSending]);
+  }, [messages.length]);
 
   useEffect(() => {
     if (!isSending) {
@@ -328,7 +329,7 @@ function ChatIndexScreen() {
                     msg.role === "user" ? "items-end" : "items-start"
                   }`}
                 >
-                  <div className="flex max-w-[88%] items-start gap-2.5">
+                  <div className="flex max-w-[96%] items-start gap-2.5">
                     {msg.role === "assistant" && (
                       <div className="mt-1 shrink-0">
                         <BrandMark size={32} />
@@ -421,7 +422,7 @@ function ChatIndexScreen() {
             <div className="shrink-0">
               <BrandMark size={32} />
             </div>
-            <div className="w-fit max-w-[85%] animate-pulse rounded-2xl rounded-tr-none border border-slate-700/60 bg-slate-800/90 px-4 py-3 text-right text-sm font-medium text-[#2dd4bf]">
+            <div className="w-fit max-w-[96%] animate-pulse rounded-2xl rounded-tr-none border border-slate-700/60 bg-slate-800/90 px-4 py-3 text-right text-sm font-medium text-[#2dd4bf]">
               {activeStatuses[statusIndex]}
             </div>
           </div>

@@ -172,8 +172,13 @@ function ChatIndexScreen() {
 
       const fullResponse = await askSalmanAI(formattedHistory);
 
+      // تصفية وإزالة أي وسم <think>...</think> إنجليزي قبل العرض
+      const cleanedResponse = fullResponse
+        .replace(/<think>[\s\S]*?(?:<\/think>|$)/gi, "")
+        .trim();
+
       let currentText = "";
-      const words = fullResponse.split(" ");
+      const words = cleanedResponse.split(" ");
       
       for (let i = 0; i < words.length; i++) {
         currentText += (i === 0 ? "" : " ") + words[i];
@@ -296,7 +301,7 @@ function ChatIndexScreen() {
       </Button>
 
       {/* منطقة المحتوى والرسائل */}
-      <div className="flex flex-1 flex-col justify-between space-y-5 overflow-y-auto px-4 py-4">
+      <div className="flex flex-1 flex-col justify-start space-y-5 overflow-y-auto px-4 py-4">
         
         {messages.length === 0 && (
           <div className="my-auto flex flex-col items-center justify-center space-y-3 py-6 text-center">

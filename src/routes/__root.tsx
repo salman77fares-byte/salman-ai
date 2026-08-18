@@ -170,10 +170,8 @@ function RootComponent() {
   const { queryClient } = Route.useRouteContext();
   const router = useRouter();
 
-  // تنظيف شارة Lovable وحذف عناصر Shadow DOM تلقائياً وبشكل مستمر
   useEffect(() => {
     const purgeBadge = () => {
-      // 1. مسح العناصر المباشرة
       const selectors = [
         "#gptengineer-badge",
         "gptengineer-badge",
@@ -188,7 +186,6 @@ function RootComponent() {
         document.querySelectorAll(selector).forEach((el) => el.remove());
       });
 
-      // 2. اختراق العناصر المحقونة داخل Shadow DOM
       document.querySelectorAll("*").forEach((el) => {
         const name = el.tagName.toLowerCase();
         if (name.includes("lovable") || name.includes("gptengineer")) {
@@ -229,7 +226,6 @@ function RootComponent() {
   return (
     <QueryClientProvider client={queryClient}>
       <ThemeProvider>
-        {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
         <Outlet />
         <Toaster position="top-center" />
       </ThemeProvider>

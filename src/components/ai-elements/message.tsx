@@ -17,7 +17,7 @@ import { code } from "@streamdown/code";
 import { math } from "@streamdown/math";
 import { mermaid } from "@streamdown/mermaid";
 import type { UIMessage } from "ai";
-import { ChevronLeftIcon, ChevronRightIcon } from "lucide-react";
+import { CheckIcon, ChevronLeftIcon, ChevronRightIcon, CopyIcon } from "lucide-react";
 import type { ComponentProps, HTMLAttributes, ReactElement } from "react";
 import {
   createContext,
@@ -26,6 +26,7 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from "react";
 import { Streamdown } from "streamdown";
@@ -37,7 +38,7 @@ export type MessageProps = HTMLAttributes<HTMLDivElement> & {
 export const Message = ({ className, from, ...props }: MessageProps) => (
   <div
     className={cn(
-      "group flex w-full max-w-[95%] flex-col gap-2",
+      "group flex w-full max-w-[95%] min-w-0 flex-col gap-2 overflow-hidden",
       from === "user" ? "is-user ml-auto justify-end" : "is-assistant",
       className
     )}
@@ -54,7 +55,7 @@ export const MessageContent = ({
 }: MessageContentProps) => (
   <div
     className={cn(
-      "is-user:dark flex w-fit min-w-0 max-w-full flex-col gap-2 overflow-hidden text-sm",
+      "is-user:dark flex w-fit min-w-0 max-w-full flex-col gap-2 overflow-hidden text-sm break-words [overflow-wrap:anywhere]",
       "group-[.is-user]:ml-auto group-[.is-user]:rounded-lg group-[.is-user]:bg-secondary group-[.is-user]:px-4 group-[.is-user]:py-3 group-[.is-user]:text-foreground",
       "group-[.is-assistant]:text-foreground",
       className
@@ -206,7 +207,6 @@ export const MessageBranchContent = ({
     [children]
   );
 
-  // Use useEffect to update branches when they change
   useEffect(() => {
     if (branches.length !== childrenArray.length) {
       setBranches(childrenArray);
@@ -235,7 +235,6 @@ export const MessageBranchSelector = ({
 }: MessageBranchSelectorProps) => {
   const { totalBranches } = useMessageBranch();
 
-  // Don't render if there's only one branch
   if (totalBranches <= 1) {
     return null;
   }
@@ -319,18 +318,68 @@ export const MessageBranchPage = ({
   );
 };
 
+/* مكون صندوق الكود المخصص مع زر النسخ والتفاف النصوص */
+const CodeBlockPre = ({ children, className, ...props }: ComponentProps<"pre">) => {
+  const [copied, setCopied] = useState(false);
+  const preRef = useRef<HTMLPreElement>(null);
+
+  const handleCopy = useCallback(() => {
+    if (!preRef.current) return;
+    const codeText = preRef.current.innerText || "";
+    navigator.clipboard.writeText(codeText);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  }, []);
+
+  return (
+    <div className="group/code relative my-3 max-w-full overflow-hidden rounded-xl border border-border/80 bg-zinc-950 text-zinc-50 dark:border-border/50 [direction:ltr] [text-align:left]">
+      <div className="flex items-center justify-between border-b border-border/40 bg-zinc-900/90 px-3 py-1.5 text-xs text-zinc-400">
+        <span className="font-mono text-[11px] font-medium uppercase tracking-wider">Code</span>
+        <Button
+          size="icon-sm"
+          variant="ghost"
+          type="button"
+          className="h-7 w-7 text-zinc-400 hover:bg-zinc-800 hover:text-zinc-100"
+          onClick={handleCopy}
+          aria-label="Copy code"
+        >
+          {copied ? (
+            <CheckIcon className="size-3.5 text-emerald-400" />
+          ) : (
+            <CopyIcon className="size-3.5" />
+          )}
+        </Button>
+      </div>
+      <pre
+        ref={preRef}
+        className={cn(
+          "max-w-full overflow-x-auto p-4 font-mono text-xs leading-relaxed text-zinc-100 whitespace-pre-wrap break-words",
+          className
+        )}
+        {...props}
+      >
+        {children}
+      </pre>
+    </div>
+  );
+};
+
 export type MessageResponseProps = ComponentProps<typeof Streamdown>;
 
 const streamdownPlugins = { cjk, code, math, mermaid };
 
 export const MessageResponse = memo(
-  ({ className, ...props }: MessageResponseProps) => (
+  ({ className, components, ...props }: MessageResponseProps) => (
     <Streamdown
       className={cn(
-        "size-full [&>*:first-child]:mt-0 [&>*:last-child]:mb-0",
+        "size-full min-w-0 max-w-full break-words [overflow-wrap:anywhere] [&>*:first-child]:mt-0 [&>*:last-child]:mb-0",
         className
       )}
       plugins={streamdownPlugins}
+      components={{
+        pre: CodeBlockPre,
+        ...components,
+      }}
       {...props}
     />
   ),

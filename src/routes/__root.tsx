@@ -106,6 +106,7 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
     ],
     links: [
       { rel: "stylesheet", href: appCss },
+      { rel: "stylesheet", href: "https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css" },
       { rel: "icon", type: "image/png", href: "/favicon.png" },
       { rel: "apple-touch-icon", sizes: "180x180", href: "/apple-touch-icon.png" },
       { rel: "manifest", href: "/manifest.webmanifest" },
@@ -130,15 +131,25 @@ function RootShell({ children }: { children: ReactNode }) {
         <HeadContent />
         <style>{`
           #gptengineer-badge,
+          gptengineer-badge,
+          lovable-badge,
           [id*="gptengineer"],
-          [class*="lovable-badge"],
-          div[class*="lovable"],
+          [class*="lovable"],
+          [id*="lovable"],
           iframe[src*="gptengineer"],
           iframe[src*="lovable"] {
             display: none !important;
             visibility: hidden !important;
             opacity: 0 !important;
             pointer-events: none !important;
+            width: 0 !important;
+            height: 0 !important;
+          }
+
+          .katex, .katex-display, .katex-html, [class*="math"] {
+            direction: ltr !important;
+            unicode-bidi: isolate !important;
+            text-align: left;
           }
         `}</style>
         <script
@@ -159,27 +170,46 @@ function RootComponent() {
   const { queryClient } = Route.useRouteContext();
   const router = useRouter();
 
-  // تنظيف شارة Lovable تلقائياً وبشكل مستمر
+  // تنظيف شارة Lovable وحذف عناصر Shadow DOM تلقائياً وبشكل مستمر
   useEffect(() => {
     const purgeBadge = () => {
+      // 1. مسح العناصر المباشرة
       const selectors = [
         "#gptengineer-badge",
+        "gptengineer-badge",
+        "lovable-badge",
         '[id*="gptengineer"]',
-        '[class*="lovable-badge"]',
+        '[class*="lovable"]',
+        '[id*="lovable"]',
         'iframe[src*="gptengineer"]',
         'iframe[src*="lovable"]',
       ];
       selectors.forEach((selector) => {
         document.querySelectorAll(selector).forEach((el) => el.remove());
       });
+
+      // 2. اختراق العناصر المحقونة داخل Shadow DOM
+      document.querySelectorAll("*").forEach((el) => {
+        const name = el.tagName.toLowerCase();
+        if (name.includes("lovable") || name.includes("gptengineer")) {
+          el.remove();
+        } else if (el.shadowRoot) {
+          const shadowBadge = el.shadowRoot.querySelector(
+            '#gptengineer-badge, [class*="badge"], [id*="badge"], a[href*="lovable"]'
+          );
+          if (shadowBadge) el.remove();
+        }
+      });
     };
 
     purgeBadge();
 
     const observer = new MutationObserver(purgeBadge);
-    observer.observe(document.body, { childList: true, subtree: true });
+    if (document.body) {
+      observer.observe(document.body, { childList: true, subtree: true });
+    }
 
-    const interval = setInterval(purgeBadge, 250);
+    const interval = setInterval(purgeBadge, 200);
 
     return () => {
       observer.disconnect();

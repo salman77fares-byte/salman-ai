@@ -1,6 +1,6 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { Loader2, Send, Plus, Paperclip, X, Image as ImageIcon, Copy, Edit2, RotateCcw, Check } from "lucide-react";
+import { Loader2, Send, Plus, Paperclip, X, Image as ImageIcon, Copy, Edit2, RotateCcw, Check, Square } from "lucide-react";
 import { useEffect, useState, useRef } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -116,6 +116,8 @@ function ChatIndexScreen() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const pressTimerRef = useRef<NodeJS.Timeout | null>(null);
+  // مرجع لإيقاف التوليد فوراً
+  const stopGenerationRef = useRef(false);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -142,6 +144,8 @@ function ChatIndexScreen() {
     setInput("");
     setSelectedFile(null);
     setActiveActionIndex(null);
+    stopGenerationRef.current = true;
+    setIsSending(false);
     toast.success("تم بدء محادثة جديدة");
   };
 
@@ -180,10 +184,16 @@ function ChatIndexScreen() {
     }
   };
 
+  const handleStop = () => {
+    stopGenerationRef.current = true;
+    setIsSending(false);
+  };
+
   const executeSend = async (chatHistory: Message[], userQuery: string) => {
     const isSearchQuery = /بحث|أخبار|أحدث|ابحث|معلومات|مصادر/i.test(userQuery);
     setActiveStatuses(isSearchQuery ? SEARCH_STATUSES : CHAT_STATUSES);
 
+    stopGenerationRef.current = false;
     setIsSending(true);
     setMessages([...chatHistory, { role: "assistant", content: "" }]);
 
@@ -219,6 +229,9 @@ function ChatIndexScreen() {
 
       const fullResponse = await askSalmanAI(formattedHistory);
 
+      // إذا ضغط المستخدم على إيقاف أثناء انتظار رد السيرفر
+      if (stopGenerationRef.current) return;
+
       const cleanedResponse = fullResponse
         .replace(/<think>[\s\S]*?(?:<\/think>|$)/gi, "")
         .trim();
@@ -227,6 +240,9 @@ function ChatIndexScreen() {
       const words = cleanedResponse.split(" ");
       
       for (let i = 0; i < words.length; i++) {
+        // التحقق من حالة الإيقاف في كل خطوة طباعة
+        if (stopGenerationRef.current) break;
+
         currentText += (i === 0 ? "" : " ") + words[i];
         const textToUpdate = currentText;
         setMessages((prev) => {
@@ -237,13 +253,15 @@ function ChatIndexScreen() {
         await new Promise((resolve) => setTimeout(resolve, 20));
       }
     } catch (error) {
-      console.error(error);
-      toast.error("تعذّر جلب الرد حالياً.");
-      setMessages((prev) => {
-        const newMsgs = [...prev];
-        newMsgs[newMsgs.length - 1] = { role: "assistant", content: "عذراً، حدث خطأ أثناء معالجة الصورة أو الطلب." };
-        return newMsgs;
-      });
+      if (!stopGenerationRef.current) {
+        console.error(error);
+        toast.error("تعذّر جلب الرد حالياً.");
+        setMessages((prev) => {
+          const newMsgs = [...prev];
+          newMsgs[newMsgs.length - 1] = { role: "assistant", content: "عذراً، حدث خطأ أثناء معالجة الصورة أو الطلب." };
+          return newMsgs;
+        });
+      }
     } finally {
       setIsSending(false);
     }
@@ -562,15 +580,28 @@ function ChatIndexScreen() {
             />
           </div>
 
-          <Button
-            type="button"
-            onClick={() => handleSend()}
-            disabled={isSending || (!input.trim() && !selectedFile)}
-            size="icon"
-            className="h-11 w-11 shrink-0 rounded-2xl bg-[#2dd4bf] text-slate-950 hover:bg-[#26b8a5]"
-          >
-            <Send className="-rotate-90 size-4" />
-          </Button>
+          {/* تبديل الزر بين الإرسال والإيقاف */}
+          {isSending ? (
+            <Button
+              type="button"
+              onClick={handleStop}
+              size="icon"
+              className="h-11 w-11 shrink-0 rounded-2xl border border-slate-700 bg-slate-800 text-slate-300 hover:bg-slate-700 hover:text-white transition-all"
+              title="إيقاف الرد"
+            >
+              <Square className="size-4 fill-current" />
+            </Button>
+          ) : (
+            <Button
+              type="button"
+              onClick={() => handleSend()}
+              disabled={!input.trim() && !selectedFile}
+              size="icon"
+              className="h-11 w-11 shrink-0 rounded-2xl bg-[#2dd4bf] text-slate-950 hover:bg-[#26b8a5] transition-all"
+            >
+              <Send className="-rotate-90 size-4" />
+            </Button>
+          )}
         </div>
       </div>
     </div>

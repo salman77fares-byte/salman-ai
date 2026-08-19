@@ -1,7 +1,7 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { Loader2, Send, Plus, Paperclip, X, Image as ImageIcon, Copy, Edit2, RotateCcw } from "lucide-react";
-import { useEffect, useState, useRef } from "react";
+import { Loader2, Send, Plus, Paperclip, X, Image as ImageIcon, Copy, Edit2, RotateCcw, Check } from "lucide-react";
+import { useEffect, useState, useRef, useCallback } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { toast } from "sonner";
@@ -46,6 +46,53 @@ const CHAT_STATUSES = [
   "جاري تجهيز الإجابة..."
 ];
 
+// مكون مخصص لصناديق الأكواد البرمجية والمحتوى المنسق
+const CodeBlock = ({ children }: { children: React.ReactNode }) => {
+  const [copied, setCopied] = useState(false);
+  const codeRef = useRef<HTMLPreElement>(null);
+
+  const handleCopyCode = () => {
+    if (codeRef.current) {
+      const text = codeRef.current.innerText || codeRef.current.textContent || "";
+      navigator.clipboard.writeText(text);
+      setCopied(true);
+      toast.success("تم نسخ الكود");
+      setTimeout(() => setCopied(false), 2000);
+    }
+  };
+
+  return (
+    <div className="group/code relative my-3 w-full max-w-full min-w-0 overflow-hidden rounded-xl border border-slate-700/80 bg-slate-950 text-slate-100 shadow-md [direction:ltr] [text-align:left]">
+      <div className="flex items-center justify-between border-b border-slate-800 bg-slate-900/90 px-3 py-1.5 text-xs text-slate-400 select-none">
+        <span className="font-mono text-[11px] font-semibold text-slate-300 uppercase">Code</span>
+        <button
+          type="button"
+          onClick={handleCopyCode}
+          className="flex items-center gap-1 rounded bg-slate-800 px-2 py-0.5 text-[11px] font-medium text-slate-300 hover:bg-slate-700 hover:text-white transition-colors"
+        >
+          {copied ? (
+            <>
+              <Check className="size-3 text-emerald-400" />
+              <span className="text-emerald-400">تم النسخ</span>
+            </>
+          ) : (
+            <>
+              <Copy className="size-3" />
+              <span>نسخ</span>
+            </>
+          )}
+        </button>
+      </div>
+      <pre
+        ref={codeRef}
+        className="w-full max-w-full overflow-x-auto p-3 font-mono text-xs leading-relaxed text-slate-100 whitespace-pre-wrap break-words [overflow-wrap:anywhere]"
+      >
+        {children}
+      </pre>
+    </div>
+  );
+};
+
 function ChatIndexScreen() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
@@ -74,7 +121,6 @@ function ChatIndexScreen() {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   };
 
-  // التمرير التلقائي يعمل فقط عند إضافة رسالة جديدة بدلاً من التمرير المستمر عند كل كلمة
   useEffect(() => {
     scrollToBottom();
   }, [messages.length]);
@@ -173,7 +219,6 @@ function ChatIndexScreen() {
 
       const fullResponse = await askSalmanAI(formattedHistory);
 
-      // تصفية وإزالة أي وسم <think>...</think> إنجليزي قبل العرض
       const cleanedResponse = fullResponse
         .replace(/<think>[\s\S]*?(?:<\/think>|$)/gi, "")
         .trim();
@@ -288,7 +333,7 @@ function ChatIndexScreen() {
   }
 
   return (
-    <div className="relative flex h-full flex-col justify-between bg-[#0b101b] text-slate-100" dir="rtl">
+    <div className="relative flex h-full w-full max-w-full overflow-x-hidden flex-col justify-between bg-[#0b101b] text-slate-100" dir="rtl">
       
       {/* زر محادثة جديدة العائم */}
       <Button
@@ -302,7 +347,7 @@ function ChatIndexScreen() {
       </Button>
 
       {/* منطقة المحتوى والرسائل */}
-      <div className="flex flex-1 flex-col justify-start space-y-5 overflow-y-auto px-4 py-4">
+      <div className="flex flex-1 flex-col justify-start space-y-5 overflow-y-auto overflow-x-hidden px-3 py-4 w-full max-w-full">
         
         {messages.length === 0 && (
           <div className="my-auto flex flex-col items-center justify-center space-y-3 py-6 text-center">
@@ -317,19 +362,18 @@ function ChatIndexScreen() {
         )}
 
         {messages.length > 0 && (
-          <div className="w-full space-y-4 pt-10">
+          <div className="w-full max-w-full space-y-4 pt-10">
             {messages.map((msg, idx) => {
-              // منع عرض فقاعة فارغة للمساعد أثناء التفكير
               if (msg.role === "assistant" && !msg.content.trim()) return null;
 
               return (
                 <div
                   key={idx}
-                  className={`flex w-full flex-col ${
+                  className={`flex w-full min-w-0 max-w-full flex-col ${
                     msg.role === "user" ? "items-end" : "items-start"
                   }`}
                 >
-                  <div className="flex max-w-[96%] items-start gap-2.5">
+                  <div className="flex w-full min-w-0 max-w-full items-start gap-2.5">
                     {msg.role === "assistant" && (
                       <div className="mt-1 shrink-0">
                         <BrandMark size={32} />
@@ -341,14 +385,14 @@ function ChatIndexScreen() {
                       onTouchEnd={handleTouchEnd}
                       onMouseDown={() => handleTouchStart(idx)}
                       onMouseUp={handleTouchEnd}
-                      className={`relative w-fit cursor-pointer select-none break-words whitespace-pre-wrap px-4 py-3 text-right text-sm leading-relaxed shadow-sm ${
+                      className={`relative min-w-0 max-w-full cursor-pointer select-none break-words whitespace-pre-wrap px-4 py-3 text-right text-sm leading-relaxed shadow-sm ${
                         msg.role === "user"
-                          ? "rounded-2xl rounded-bl-none bg-[#2dd4bf] font-medium text-slate-950"
-                          : "rounded-2xl rounded-tr-none border border-slate-700/60 bg-slate-800/90 text-slate-100"
+                          ? "rounded-2xl rounded-bl-none bg-[#2dd4bf] font-medium text-slate-950 ml-auto"
+                          : "rounded-2xl rounded-tr-none border border-slate-700/60 bg-slate-800/90 text-slate-100 w-full"
                       }`}
                     >
                       {msg.attachment && (
-                        <div className="mb-2 flex items-center gap-2 rounded-xl bg-black/10 p-2 text-xs">
+                        <div className="mb-2 flex items-center gap-2 rounded-xl bg-black/10 p-2 text-xs max-w-full overflow-hidden">
                           {msg.attachment.type.startsWith("image/") ? (
                             <img
                               src={msg.attachment.url}
@@ -356,8 +400,8 @@ function ChatIndexScreen() {
                               className="h-24 w-auto rounded-lg object-cover"
                             />
                           ) : (
-                            <div className="flex items-center gap-1.5 font-bold">
-                              <Paperclip className="size-4" />
+                            <div className="flex items-center gap-1.5 font-bold truncate">
+                              <Paperclip className="size-4 shrink-0" />
                               <span className="max-w-[180px] truncate">{msg.attachment.name}</span>
                             </div>
                           )}
@@ -365,8 +409,25 @@ function ChatIndexScreen() {
                       )}
 
                       {msg.role === "assistant" ? (
-                        <div className="prose prose-invert prose-sm max-w-none space-y-3 leading-relaxed">
-                          <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                        <div className="prose prose-invert prose-sm max-w-full min-w-0 space-y-3 leading-relaxed break-words [overflow-wrap:anywhere]">
+                          <ReactMarkdown
+                            remarkPlugins={[remarkGfm]}
+                            components={{
+                              pre({ children }) {
+                                return <CodeBlock>{children}</CodeBlock>;
+                              },
+                              code({ node, inline, className, children, ...props }: any) {
+                                if (inline) {
+                                  return (
+                                    <code className="rounded bg-slate-900/80 px-1.5 py-0.5 font-mono text-xs text-[#2dd4bf] break-words" {...props}>
+                                      {children}
+                                    </code>
+                                  );
+                                }
+                                return <code className="font-mono text-xs" {...props}>{children}</code>;
+                              }
+                            }}
+                          >
                             {msg.content}
                           </ReactMarkdown>
                         </div>
@@ -431,7 +492,7 @@ function ChatIndexScreen() {
       </div>
 
       {/* الشريط السفلي للإدخال والاقتراحات */}
-      <div className="shrink-0 space-y-2.5 border-t border-slate-800/80 bg-[#0b101b] p-3">
+      <div className="shrink-0 space-y-2.5 border-t border-slate-800/80 bg-[#0b101b] p-3 w-full max-w-full">
         <div className="no-scrollbar flex items-center gap-2 overflow-x-auto pb-1">
           {QUICK_SUGGESTIONS.map((item, i) => (
             <button
@@ -466,7 +527,7 @@ function ChatIndexScreen() {
           </div>
         )}
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 w-full">
           <div className="relative flex flex-1 items-center rounded-2xl border border-slate-800 bg-slate-900/90 transition focus-within:border-[#2dd4bf]">
             <input
               type="file"

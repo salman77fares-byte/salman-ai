@@ -10,6 +10,8 @@ import { BrandMark } from "@/components/salman/BrandMark";
 import { Button } from "@/components/ui/button";
 import { useSession } from "@/hooks/useSession";
 import { askSalmanAI } from "@/lib/aiService";
+// استيراد وظائف السيرفر الجاهزة لديك
+import { createConversation, appendMessages } from "@/lib/chat.functions";
 
 export const Route = createFileRoute("/chat/")({
   component: ChatIndexScreen,
@@ -46,7 +48,7 @@ const CHAT_STATUSES = [
   "جاري تجهيز الإجابة..."
 ];
 
-// مكون مخصص لصناديق الأكواد البرمجية
+// مكون عرض الأكواد البرمجية
 const CodeBlock = ({ children }: { children: React.ReactNode }) => {
   const [copied, setCopied] = useState(false);
   const codeRef = useRef<HTMLPreElement>(null);
@@ -104,6 +106,8 @@ function ChatIndexScreen() {
   const [statusIndex, setStatusIndex] = useState(0);
   const [activeStatuses, setActiveStatuses] = useState<string[]>(CHAT_STATUSES);
   const [activeActionIndex, setActiveActionIndex] = useState<number | null>(null);
+  const [currentConversationId, setCurrentConversationId] = useState<string | null>(null);
+
   const [selectedFile, setSelectedFile] = useState<{
     name: string;
     type: string;
@@ -116,7 +120,6 @@ function ChatIndexScreen() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const pressTimerRef = useRef<NodeJS.Timeout | null>(null);
-  // مرجع لإيقاف التوليد فوراً
   const stopGenerationRef = useRef(false);
 
   const scrollToBottom = () => {
@@ -144,6 +147,7 @@ function ChatIndexScreen() {
     setInput("");
     setSelectedFile(null);
     setActiveActionIndex(null);
+    setCurrentConversationId(null);
     stopGenerationRef.current = true;
     setIsSending(false);
     toast.success("تم بدء محادثة جديدة");
@@ -197,17 +201,33 @@ function ChatIndexScreen() {
     setIsSending(true);
     setMessages([...chatHistory, { role: "assistant", content: "" }]);
 
+    // 1. إذا كان المستخدم مسجلاً ولا توجد محادثة نشطة، قم بإنشاء محادثة جديدة في DB
+    let convId = currentConversationId;
+    const isRegistered = !!session?.user;
+
+    if (isRegistered && !convId) {
+      try {
+        const newConv = await createConversation();
+        if (newConv?.id) {
+          convId = newConv.id;
+          setCurrentConversationId(convId);
+        }
+      } catch (err) {
+        console.error("خطأ في إنشاء المحادثة:", err);
+      }
+    }
+
     try {
       const formattedHistory = chatHistory.map((m) => {
         let finalContent = m.content;
-        
+
         if (m.attachment?.textContent) {
           finalContent = `${m.content ? m.content + "\n\n" : ""}[محتوى الملف المرفق: ${m.attachment.name}]\n\`\`\`\n${m.attachment.textContent}\n\`\`\``;
         }
 
         if (m.attachment?.base64 && (m.attachment.type.startsWith("image/") || m.attachment.base64.startsWith("data:image/"))) {
-          const rawBase64 = m.attachment.base64.includes(",") 
-            ? m.attachment.base64.split(",")[1] 
+          const rawBase64 = m.attachment.base64.includes(",")
+            ? m.attachment.base64.split(",")[1]
             : m.attachment.base64;
           const mimeType = m.attachment.type || "image/jpeg";
           const promptText = finalContent.trim() || "حلل هذه الصورة واشرح محتواها بالتفصيل وأجب عن أي سؤال حولها.";
@@ -229,7 +249,6 @@ function ChatIndexScreen() {
 
       const fullResponse = await askSalmanAI(formattedHistory);
 
-      // إذا ضغط المستخدم على إيقاف أثناء انتظار رد السيرفر
       if (stopGenerationRef.current) return;
 
       const cleanedResponse = fullResponse
@@ -238,9 +257,8 @@ function ChatIndexScreen() {
 
       let currentText = "";
       const words = cleanedResponse.split(" ");
-      
+
       for (let i = 0; i < words.length; i++) {
-        // التحقق من حالة الإيقاف في كل خطوة طباعة
         if (stopGenerationRef.current) break;
 
         currentText += (i === 0 ? "" : " ") + words[i];
@@ -252,6 +270,27 @@ function ChatIndexScreen() {
         });
         await new Promise((resolve) => setTimeout(resolve, 20));
       }
+
+      // 2. حفظ الرسائل للمستخدم المسجل فور اكتمال الإجابة
+      if (isRegistered && convId && cleanedResponse) {
+        try {
+          await appendMessages({
+            data: {
+              conversationId: convId,
+              messages: [
+                { sender: "user", content: userQuery || "صورة مرفقة" },
+                { sender: "assistant", content: cleanedResponse },
+              ],
+              title: userQuery.slice(0, 50) || "محادثة جديدة",
+            },
+          });
+          // إعادة جلب قائمة المحادثات في القائمة الجانبية لتحديث اليوم/أمس
+          queryClient.invalidateQueries();
+        } catch (saveErr) {
+          console.error("خطأ أثناء حفظ الرسائل:", saveErr);
+        }
+      }
+
     } catch (error) {
       if (!stopGenerationRef.current) {
         console.error(error);
@@ -352,8 +391,7 @@ function ChatIndexScreen() {
 
   return (
     <div className="relative flex h-full w-full max-w-full overflow-x-hidden flex-col justify-between bg-[#0b101b] text-slate-100" dir="rtl">
-      
-      {/* زر محادثة جديدة العائم */}
+
       <Button
         onClick={handleNewChat}
         variant="outline"
@@ -364,9 +402,8 @@ function ChatIndexScreen() {
         <Plus className="size-4 text-[#2dd4bf]" />
       </Button>
 
-      {/* منطقة المحتوى والرسائل */}
       <div className="flex flex-1 flex-col justify-start space-y-5 overflow-y-auto overflow-x-hidden px-3 py-4 w-full max-w-full">
-        
+
         {messages.length === 0 && (
           <div className="my-auto flex flex-col items-center justify-center space-y-3 py-6 text-center">
             <div className="rounded-2xl border border-slate-800 bg-slate-900/80 p-3 shadow-xl">
@@ -393,7 +430,6 @@ function ChatIndexScreen() {
                     isUser ? "items-end" : "items-start"
                   }`}
                 >
-                  {/* رأس رسالة المساعد (الأيقونة والاسم فوق الفقاعة) */}
                   {!isUser && (
                     <div className="mb-1.5 flex items-center gap-2 pr-1">
                       <BrandMark size={26} />
@@ -457,7 +493,6 @@ function ChatIndexScreen() {
                     )}
                   </div>
 
-                  {/* شريط الإجراءات (نسخ / تعديل / إعادة محاولة) */}
                   {activeActionIndex === idx && (
                     <div className="animate-in fade-in z-10 mt-1.5 flex items-center gap-1 rounded-xl border border-slate-700 bg-slate-900 p-1 shadow-lg">
                       <button
@@ -513,7 +548,6 @@ function ChatIndexScreen() {
         <div ref={messagesEndRef} />
       </div>
 
-      {/* الشريط السفلي للإدخال والاقتراحات */}
       <div className="shrink-0 space-y-2.5 border-t border-slate-800/80 bg-[#0b101b] p-3 w-full max-w-full">
         <div className="no-scrollbar flex items-center gap-2 overflow-x-auto pb-1">
           {QUICK_SUGGESTIONS.map((item, i) => (
@@ -580,7 +614,6 @@ function ChatIndexScreen() {
             />
           </div>
 
-          {/* تبديل الزر بين الإرسال والإيقاف */}
           {isSending ? (
             <Button
               type="button"

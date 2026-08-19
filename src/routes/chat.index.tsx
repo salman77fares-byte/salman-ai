@@ -1,7 +1,7 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { Loader2, Send, Plus, Paperclip, X, Image as ImageIcon, Copy, Edit2, RotateCcw, Check } from "lucide-react";
-import { useEffect, useState, useRef, useCallback } from "react";
+import { useEffect, useState, useRef } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { toast } from "sonner";
@@ -46,7 +46,7 @@ const CHAT_STATUSES = [
   "جاري تجهيز الإجابة..."
 ];
 
-// مكون مخصص لصناديق الأكواد البرمجية والمحتوى المنسق
+// مكون مخصص لصناديق الأكواد البرمجية
 const CodeBlock = ({ children }: { children: React.ReactNode }) => {
   const [copied, setCopied] = useState(false);
   const codeRef = useRef<HTMLPreElement>(null);
@@ -362,81 +362,84 @@ function ChatIndexScreen() {
         )}
 
         {messages.length > 0 && (
-          <div className="w-full max-w-full space-y-4 pt-10">
+          <div className="w-full max-w-full space-y-5 pt-10">
             {messages.map((msg, idx) => {
               if (msg.role === "assistant" && !msg.content.trim()) return null;
+
+              const isUser = msg.role === "user";
 
               return (
                 <div
                   key={idx}
-                  className={`flex w-full min-w-0 max-w-full flex-col ${
-                    msg.role === "user" ? "items-end" : "items-start"
+                  className={`flex w-full max-w-full flex-col ${
+                    isUser ? "items-end" : "items-start"
                   }`}
                 >
-                  <div className="flex w-full min-w-0 max-w-full items-start gap-2.5">
-                    {msg.role === "assistant" && (
-                      <div className="mt-1 shrink-0">
-                        <BrandMark size={32} />
+                  {/* رأس رسالة المساعد (الأيقونة والاسم فوق الفقاعة) */}
+                  {!isUser && (
+                    <div className="mb-1.5 flex items-center gap-2 pr-1">
+                      <BrandMark size={26} />
+                      <span className="text-xs font-extrabold text-slate-200">Salman AI</span>
+                    </div>
+                  )}
+
+                  <div
+                    onTouchStart={() => handleTouchStart(idx)}
+                    onTouchEnd={handleTouchEnd}
+                    onMouseDown={() => handleTouchStart(idx)}
+                    onMouseUp={handleTouchEnd}
+                    className={`relative cursor-pointer select-none break-words whitespace-pre-wrap px-4 py-3 text-right text-sm leading-relaxed shadow-sm ${
+                      isUser
+                        ? "max-w-[85%] rounded-2xl rounded-bl-none bg-[#2dd4bf] font-medium text-slate-950"
+                        : "w-full max-w-full rounded-2xl rounded-tr-none border border-slate-700/60 bg-slate-800/90 text-slate-100"
+                    }`}
+                  >
+                    {msg.attachment && (
+                      <div className="mb-2 flex items-center gap-2 rounded-xl bg-black/10 p-2 text-xs max-w-full overflow-hidden">
+                        {msg.attachment.type.startsWith("image/") ? (
+                          <img
+                            src={msg.attachment.url}
+                            alt="attachment"
+                            className="h-24 w-auto rounded-lg object-cover"
+                          />
+                        ) : (
+                          <div className="flex items-center gap-1.5 font-bold truncate">
+                            <Paperclip className="size-4 shrink-0" />
+                            <span className="max-w-[180px] truncate">{msg.attachment.name}</span>
+                          </div>
+                        )}
                       </div>
                     )}
 
-                    <div
-                      onTouchStart={() => handleTouchStart(idx)}
-                      onTouchEnd={handleTouchEnd}
-                      onMouseDown={() => handleTouchStart(idx)}
-                      onMouseUp={handleTouchEnd}
-                      className={`relative min-w-0 max-w-full cursor-pointer select-none break-words whitespace-pre-wrap px-4 py-3 text-right text-sm leading-relaxed shadow-sm ${
-                        msg.role === "user"
-                          ? "rounded-2xl rounded-bl-none bg-[#2dd4bf] font-medium text-slate-950 ml-auto"
-                          : "rounded-2xl rounded-tr-none border border-slate-700/60 bg-slate-800/90 text-slate-100 w-full"
-                      }`}
-                    >
-                      {msg.attachment && (
-                        <div className="mb-2 flex items-center gap-2 rounded-xl bg-black/10 p-2 text-xs max-w-full overflow-hidden">
-                          {msg.attachment.type.startsWith("image/") ? (
-                            <img
-                              src={msg.attachment.url}
-                              alt="attachment"
-                              className="h-24 w-auto rounded-lg object-cover"
-                            />
-                          ) : (
-                            <div className="flex items-center gap-1.5 font-bold truncate">
-                              <Paperclip className="size-4 shrink-0" />
-                              <span className="max-w-[180px] truncate">{msg.attachment.name}</span>
-                            </div>
-                          )}
-                        </div>
-                      )}
-
-                      {msg.role === "assistant" ? (
-                        <div className="prose prose-invert prose-sm max-w-full min-w-0 space-y-3 leading-relaxed break-words [overflow-wrap:anywhere]">
-                          <ReactMarkdown
-                            remarkPlugins={[remarkGfm]}
-                            components={{
-                              pre({ children }) {
-                                return <CodeBlock>{children}</CodeBlock>;
-                              },
-                              code({ node, inline, className, children, ...props }: any) {
-                                if (inline) {
-                                  return (
-                                    <code className="rounded bg-slate-900/80 px-1.5 py-0.5 font-mono text-xs text-[#2dd4bf] break-words" {...props}>
-                                      {children}
-                                    </code>
-                                  );
-                                }
-                                return <code className="font-mono text-xs" {...props}>{children}</code>;
+                    {!isUser ? (
+                      <div className="prose prose-invert prose-sm max-w-full min-w-0 space-y-3 leading-relaxed break-words [overflow-wrap:anywhere]">
+                        <ReactMarkdown
+                          remarkPlugins={[remarkGfm]}
+                          components={{
+                            pre({ children }) {
+                              return <CodeBlock>{children}</CodeBlock>;
+                            },
+                            code({ node, inline, className, children, ...props }: any) {
+                              if (inline) {
+                                return (
+                                  <code className="rounded bg-slate-900/80 px-1.5 py-0.5 font-mono text-xs text-[#2dd4bf] break-words" {...props}>
+                                    {children}
+                                  </code>
+                                );
                               }
-                            }}
-                          >
-                            {msg.content}
-                          </ReactMarkdown>
-                        </div>
-                      ) : (
-                        msg.content
-                      )}
-                    </div>
+                              return <code className="font-mono text-xs" {...props}>{children}</code>;
+                            }
+                          }}
+                        >
+                          {msg.content}
+                        </ReactMarkdown>
+                      </div>
+                    ) : (
+                      msg.content
+                    )}
                   </div>
 
+                  {/* شريط الإجراءات (نسخ / تعديل / إعادة محاولة) */}
                   {activeActionIndex === idx && (
                     <div className="animate-in fade-in z-10 mt-1.5 flex items-center gap-1 rounded-xl border border-slate-700 bg-slate-900 p-1 shadow-lg">
                       <button
@@ -446,7 +449,7 @@ function ChatIndexScreen() {
                         <Copy className="size-3.5" />
                         نسخ
                       </button>
-                      {msg.role === "user" && (
+                      {isUser && (
                         <>
                           <button
                             onClick={() => handleEdit(msg.content)}
@@ -479,9 +482,10 @@ function ChatIndexScreen() {
         )}
 
         {isSending && messages[messages.length - 1]?.content === "" && (
-          <div className="flex w-full items-center justify-start gap-2.5">
-            <div className="shrink-0">
-              <BrandMark size={32} />
+          <div className="flex w-full flex-col items-start gap-1.5">
+            <div className="flex items-center gap-2 pr-1">
+              <BrandMark size={26} />
+              <span className="text-xs font-extrabold text-slate-200">Salman AI</span>
             </div>
             <div className="w-fit max-w-[96%] animate-pulse rounded-2xl rounded-tr-none border border-slate-700/60 bg-slate-800/90 px-4 py-3 text-right text-sm font-medium text-[#2dd4bf]">
               {activeStatuses[statusIndex]}

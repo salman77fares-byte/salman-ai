@@ -19,7 +19,7 @@ import { mermaid } from "@streamdown/mermaid";
 import type { UIMessage } from "ai";
 import { CheckIcon, ChevronLeftIcon, ChevronRightIcon, CopyIcon } from "lucide-react";
 import type { ComponentProps, HTMLAttributes, ReactElement } from "react";
-import {
+import React, {
   createContext,
   memo,
   useCallback,
@@ -38,7 +38,7 @@ export type MessageProps = HTMLAttributes<HTMLDivElement> & {
 export const Message = ({ className, from, ...props }: MessageProps) => (
   <div
     className={cn(
-      "group flex w-full max-w-[95%] min-w-0 flex-col gap-2 overflow-hidden",
+      "group flex w-full max-w-full min-w-0 flex-col gap-2 overflow-hidden",
       from === "user" ? "is-user ml-auto justify-end" : "is-assistant",
       className
     )}
@@ -56,8 +56,8 @@ export const MessageContent = ({
   <div
     className={cn(
       "is-user:dark flex w-fit min-w-0 max-w-full flex-col gap-2 overflow-hidden text-sm break-words [overflow-wrap:anywhere]",
-      "group-[.is-user]:ml-auto group-[.is-user]:rounded-lg group-[.is-user]:bg-secondary group-[.is-user]:px-4 group-[.is-user]:py-3 group-[.is-user]:text-foreground",
-      "group-[.is-assistant]:text-foreground",
+      "group-[.is-user]:ml-auto group-[.is-user]:rounded-2xl group-[.is-user]:bg-primary group-[.is-user]:px-4 group-[.is-user]:py-3 group-[.is-user]:text-primary-foreground",
+      "group-[.is-assistant]:text-foreground group-[.is-assistant]:w-full",
       className
     )}
     {...props}
@@ -313,47 +313,70 @@ export const MessageBranchPage = ({
       )}
       {...props}
     >
-      {currentBranch + 1} of {totalBranches}
+      {currentBranch + 1} من {totalBranches}
     </ButtonGroupText>
   );
 };
 
-/* مكون صندوق الكود المخصص مع زر النسخ والتفاف النصوص */
+/* مكون صندوق الكود المحسّن مع استخراج اللغة وزر النسخ المرئي */
 const CodeBlockPre = ({ children, className, ...props }: ComponentProps<"pre">) => {
   const [copied, setCopied] = useState(false);
   const preRef = useRef<HTMLPreElement>(null);
 
+  // استخراج اسم لغة البرمجة تلقائياً من المكونات الفرعية
+  const language = useMemo(() => {
+    if (React.isValidElement(children)) {
+      const childProps = children.props as { className?: string };
+      if (childProps?.className) {
+        const match = /language-(\w+)/.exec(childProps.className);
+        if (match) return match[1].toUpperCase();
+      }
+    }
+    return "CODE";
+  }, [children]);
+
   const handleCopy = useCallback(() => {
     if (!preRef.current) return;
-    const codeText = preRef.current.innerText || "";
-    navigator.clipboard.writeText(codeText);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+    const codeText = preRef.current.innerText || preRef.current.textContent || "";
+    if (codeText) {
+      navigator.clipboard.writeText(codeText);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    }
   }, []);
 
   return (
-    <div className="group/code relative my-3 max-w-full overflow-hidden rounded-xl border border-border/80 bg-zinc-950 text-zinc-50 dark:border-border/50 [direction:ltr] [text-align:left]">
-      <div className="flex items-center justify-between border-b border-border/40 bg-zinc-900/90 px-3 py-1.5 text-xs text-zinc-400">
-        <span className="font-mono text-[11px] font-medium uppercase tracking-wider">Code</span>
-        <Button
-          size="icon-sm"
-          variant="ghost"
+    <div className="group/code relative my-3.5 w-full max-w-full min-w-0 overflow-hidden rounded-xl border border-border/80 bg-zinc-950 text-zinc-50 shadow-md dark:border-border/50 [direction:ltr] [text-align:left]">
+      {/* الشريط العلوي لصندوق الكود */}
+      <div className="flex items-center justify-between border-b border-border/40 bg-zinc-900/90 px-3.5 py-1.5 text-xs text-zinc-400 select-none">
+        <span className="font-mono text-[11px] font-semibold uppercase tracking-wider text-zinc-300">
+          {language}
+        </span>
+        <button
           type="button"
-          className="h-7 w-7 text-zinc-400 hover:bg-zinc-800 hover:text-zinc-100"
           onClick={handleCopy}
+          className="flex items-center gap-1.5 rounded-md bg-zinc-800/80 px-2 py-1 text-[11px] font-medium text-zinc-300 hover:bg-zinc-700 hover:text-white transition-colors"
           aria-label="Copy code"
         >
           {copied ? (
-            <CheckIcon className="size-3.5 text-emerald-400" />
+            <>
+              <CheckIcon className="size-3.5 text-emerald-400" />
+              <span className="text-emerald-400">تم النسخ</span>
+            </>
           ) : (
-            <CopyIcon className="size-3.5" />
+            <>
+              <CopyIcon className="size-3.5" />
+              <span>نسخ</span>
+            </>
           )}
-        </Button>
+        </button>
       </div>
+
+      {/* منطقة الأكواد البرمجية مع حماية التمدد */}
       <pre
         ref={preRef}
         className={cn(
-          "max-w-full overflow-x-auto p-4 font-mono text-xs leading-relaxed text-zinc-100 whitespace-pre-wrap break-words",
+          "w-full max-w-full overflow-x-auto p-3.5 font-mono text-xs leading-relaxed text-zinc-100 whitespace-pre-wrap break-words [overflow-wrap:anywhere]",
           className
         )}
         {...props}
@@ -372,7 +395,7 @@ export const MessageResponse = memo(
   ({ className, components, ...props }: MessageResponseProps) => (
     <Streamdown
       className={cn(
-        "size-full min-w-0 max-w-full break-words [overflow-wrap:anywhere] [&>*:first-child]:mt-0 [&>*:last-child]:mb-0",
+        "salman-prose size-full min-w-0 max-w-full break-words [overflow-wrap:anywhere] [&>*:first-child]:mt-0 [&>*:last-child]:mb-0",
         className
       )}
       plugins={streamdownPlugins}

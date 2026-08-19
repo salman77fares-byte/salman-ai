@@ -162,6 +162,14 @@
 @layer base {
   * {
     border-color: var(--color-border);
+    box-sizing: border-box;
+  }
+
+  html, body, #root {
+    max-width: 100vw !important;
+    overflow-x: hidden !important;
+    margin: 0;
+    padding: 0;
   }
 
   html {
@@ -230,10 +238,12 @@
   font-size: 0.975rem;
   word-break: break-word;
   overflow-wrap: anywhere;
-  max-width: 100%;
+  max-width: 100% !important;
+  min-width: 0 !important;
 }
 .salman-prose > * {
-  max-width: 100%;
+  max-width: 100% !important;
+  min-width: 0 !important;
 }
 .salman-prose > * + * {
   margin-top: 0.85rem;
@@ -279,7 +289,7 @@
 }
 .salman-prose table {
   width: 100%;
-  max-width: 100%;
+  max-width: 100% !important;
   border-collapse: collapse;
   font-size: 0.9rem;
   display: block;
@@ -297,22 +307,28 @@
 }
 
 /* ==========================================
-   Gemini-Style Rounded Code Blocks
+   Gemini-Style Rounded Code Blocks & Trees
    ========================================== */
+pre,
+code,
+.salman-prose pre {
+  max-width: 100% !important;
+  white-space: pre-wrap !important;
+  word-break: break-all !important;
+  overflow-wrap: anywhere !important;
+  box-sizing: border-box !important;
+}
+
 .salman-prose pre {
   background-color: oklch(0.12 0.02 250) !important;
   border: 1px solid oklch(1 0 0 / 12%);
   border-radius: 1.25rem !important;
   overflow-x: auto !important;
-  max-width: 100% !important;
-  box-sizing: border-box !important;
   margin: 1.25rem 0;
   padding: 0 !important;
   direction: ltr !important;
   text-align: left !important;
   box-shadow: 0 4px 24px -6px rgba(0, 0, 0, 0.45);
-  white-space: pre-wrap !important;
-  word-break: break-word !important;
 }
 
 [data-code-block-header],
@@ -362,7 +378,8 @@
   text-align: left !important;
   unicode-bidi: isolate !important;
   white-space: pre-wrap !important;
-  word-break: break-word !important;
+  word-break: break-all !important;
+  overflow-wrap: anywhere !important;
 }
 
 .salman-prose :not(pre) > code {
@@ -375,7 +392,13 @@
   border: 1px solid oklch(1 0 0 / 12%);
   padding: 0.15rem 0.4rem;
   border-radius: var(--radius-sm);
-  word-break: break-word;
+  word-break: break-all;
+  overflow-wrap: anywhere;
+}
+
+/* Flex item safety for mobile chat screens */
+div[class*="flex"] {
+  min-width: 0;
 }
 
 /* Syntax Highlighting */

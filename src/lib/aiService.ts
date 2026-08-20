@@ -1,3 +1,4 @@
+// ضغط الصور لتقليل استهلاك الـ API وسرعة الرد
 async function compressImage(dataUrl: string, maxWidth = 800, quality = 0.7): Promise<string> {
   return new Promise((resolve) => {
     if (typeof window === "undefined" || !dataUrl.startsWith("data:image")) return resolve(dataUrl);
@@ -17,118 +18,99 @@ async function compressImage(dataUrl: string, maxWidth = 800, quality = 0.7): Pr
   });
 }
 
-// جلب النماذج النشطة فقط وحظر النماذج الموقوفة أو القديمة
-async function getActiveGroqModels(apiKey: string, hasImage: boolean): Promise<string[]> {
-  const safeTextFallbacks = ["llama-3.3-70b-versatile", "deepseek-r1-distill-llama-70b"];
-  const safeVisionFallbacks = ["llama-3.2-11b-vision-instruct", "llama-3.2-90b-vision-instruct"];
+// 1. مزود Google Gemini (الخيار الأول والأساسي)
+async function callGemini(contents: any[], systemInstructionText: string, apiKey: string, signal?: AbortSignal) {
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
+  
+  const response = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      systemInstruction: { parts: [{ text: systemInstructionText }] },
+      contents: contents,
+      tools: [{ googleSearch: {} }], // البحث المباشر في جوجل
+    }),
+    signal,
+  });
 
-  try {
-    const res = await fetch("https://api.groq.com/openai/v1/models", {
-      headers: { Authorization: `Bearer ${apiKey}` },
-    });
-
-    if (res.ok) {
-      const data = await res.json();
-      const rawModels: any[] = data.data || [];
-
-      const validActive = rawModels
-        .filter((m) => m.active !== false)
-        .map((m) => m.id as string)
-        .filter((id) => {
-          const lower = id.toLowerCase();
-          return (
-            !lower.includes("specdec") &&
-            !lower.includes("preview") &&
-            !lower.includes("deprecated") &&
-            !lower.includes("whisper") &&
-            !lower.includes("guard") &&
-            !lower.includes("gemma") &&
-            !lower.includes("mixtral") &&
-            !lower.includes("8192")
-          );
-        });
-
-      if (hasImage) {
-        const visionList = validActive.filter((id) => id.includes("vision"));
-        if (visionList.length > 0) return visionList;
-      } else {
-        const textList = validActive.filter((id) => !id.includes("vision"));
-        textList.sort((a, b) => {
-          if (a.includes("llama-3.3-70b-versatile")) return -1;
-          if (b.includes("llama-3.3-70b-versatile")) return 1;
-          return 0;
-        });
-        if (textList.length > 0) return textList;
-      }
-    }
-  } catch (e) {
-    console.warn("تعذر استعلام النماذج الحية، استخدام القائمة الافتراضية:", e);
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    throw new Error(errorData?.error?.message || `Gemini Status ${response.status}`);
   }
 
-  return hasImage ? safeVisionFallbacks : safeTextFallbacks;
+  const data = await response.json();
+  const text = data.candidates?.[0]?.content?.parts?.map((p: any) => p.text).join("") || "";
+  if (!text) throw new Error("Gemini returned empty text");
+  return text;
 }
 
-// جلب نتائج البحث المباشر دون الوقوع في مشاكل CORS
-async function fetchLiveSearchResults(query: string, tavilyApiKey?: string): Promise<string> {
-  if (tavilyApiKey) {
-    try {
-      const tavilyRes = await fetch("https://api.tavily.com/search", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          api_key: tavilyApiKey,
-          query: query,
-          search_depth: "basic",
-          max_results: 5,
-        }),
-      });
-      if (tavilyRes.ok) {
-        const tavilyData = await tavilyRes.json();
-        if (tavilyData.results?.length) {
-          return tavilyData.results.map((r: any) => `- ${r.title}: ${r.content}`).join("\n");
-        }
-      }
-    } catch (e) {
-      console.warn("تعذر البحث عبر Tavily:", e);
-    }
+// 2. مزود OpenRouter (الخيار الثاني / احتياطي)
+async function callOpenRouter(openaiMessages: any[], apiKey: string, signal?: AbortSignal) {
+  const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+    method: "POST",
+    headers: {
+      "Authorization": `Bearer ${apiKey}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      model: "deepseek/deepseek-r1",
+      messages: openaiMessages,
+      temperature: 0.3,
+      max_tokens: 2048,
+    }),
+    signal,
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    throw new Error(errorData?.error?.message || `OpenRouter Status ${response.status}`);
   }
 
-  try {
-    const proxyUrl = "https://api.allorigins.win/get?url=" + encodeURIComponent(`https://html.duckduckgo.com/html/?q=${encodeURIComponent(query)}`);
-    const ddgRes = await fetch(proxyUrl);
-    if (ddgRes.ok) {
-      const ddgData = await ddgRes.json();
-      if (ddgData.contents) {
-        const parser = new DOMParser();
-        const doc = parser.parseFromString(ddgData.contents, "text/html");
-        const snippets = Array.from(doc.querySelectorAll(".result__snippet"))
-          .slice(0, 4)
-          .map((el) => `- ${el.textContent?.trim()}`)
-          .filter((t) => (t?.length ?? 0) > 10);
-        if (snippets.length > 0) return snippets.join("\n");
-      }
-    }
-  } catch (e) {
-    console.warn("تعذر البحث عبر البروكسي الاحتياطي:", e);
-  }
-
-  return "";
+  const data = await response.json();
+  const text = data.choices?.[0]?.message?.content || "";
+  if (!text) throw new Error("OpenRouter returned empty text");
+  return text;
 }
 
+// 3. مزود Groq (الخيار الثالث / الأخير)
+async function callGroq(openaiMessages: any[], apiKey: string, hasImage: boolean, signal?: AbortSignal) {
+  const model = hasImage ? "llama-3.2-11b-vision-instruct" : "llama-3.3-70b-versatile";
+
+  const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+    method: "POST",
+    headers: {
+      "Authorization": `Bearer ${apiKey}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      model: model,
+      messages: openaiMessages,
+      temperature: 0.3,
+      max_tokens: 2048,
+    }),
+    signal,
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    throw new Error(errorData?.error?.message || `Groq Status ${response.status}`);
+  }
+
+  const data = await response.json();
+  const text = data.choices?.[0]?.message?.content || "";
+  if (!text) throw new Error("Groq returned empty text");
+  return text;
+}
+
+// الوظيفة الرئيسية لتنسيق الطلبات والتحويل التلقائي عند الفشل
 export async function askSalmanAI(messages: any[], signal?: AbortSignal) {
+  const geminiApiKey = import.meta.env.VITE_GEMINI_API_KEY?.trim();
+  const openRouterApiKey = import.meta.env.VITE_OPENROUTER_API_KEY?.trim();
   const groqApiKey = import.meta.env.VITE_GROQ_API_KEY?.trim();
-  const tavilyApiKey = import.meta.env.VITE_TAVILY_API_KEY?.trim();
-
-  if (!groqApiKey) {
-    return "خطأ: مفتاح Groq مفقود في إعدادات البيئة (VITE_GROQ_API_KEY).";
-  }
 
   const validMessages = (messages || []).filter(
     (m) => (m.role === "user" || m.role === "assistant") && (m.content || m.attachment || m.image || m.imageBase64)
   );
-
-  const lastUserMsg = [...validMessages].reverse().find((m) => m.role === "user");
-  let userQuery = typeof lastUserMsg?.content === "string" ? lastUserMsg.content : "";
 
   const now = new Date();
   const formattedDate = now.toLocaleDateString("ar-EG", {
@@ -138,100 +120,95 @@ export async function askSalmanAI(messages: any[], signal?: AbortSignal) {
     day: "numeric",
   });
 
-  let searchResultsContext = "";
-  const needsSearch = /بحث|أخبار|أحدث|ابحث|معلومات|مصادر|رياضة|مباراة|اليوم|سعر|من هو|ما هو|متى|كم|جديد|تاريخ|نتيجة|ترتيب/i.test(userQuery);
-
-  if (needsSearch && userQuery) {
-    const rawSearch = await fetchLiveSearchResults(userQuery, tavilyApiKey);
-    if (rawSearch) {
-      searchResultsContext = `\n\n[معلومات ونتائج البحث المباشرة من الويب]:\n${rawSearch}`;
-    }
-  }
-
-  const systemPrompt = {
-    role: "system",
-    content: `أنت "Salman AI"، مساعد ذكي متقدم بتطوير المهندس سلمان فارس.
+  const systemInstructionText = `أنت "Salman AI"، مساعد ذكي متقدم بتطوير المهندس سلمان فارس.
 - تاريخ اليوم المرجعي هو: ${formattedDate}.
 - **قواعد التنسيق الصارمة**:
   1. يُمنع تماماً استخدام الجداول (Markdown Tables) لأنها تخرج عن حدود الشاشة في الهواتف.
   2. اعرض جميع الإجابات والمعلومات والنتائج في شكل **سرد متسلسل، فقرات واضحة، أو نقاط محدودة (Bullet Points)** فقط.
-  3. لا تعتذر ولا تقل "لا يمكنني الوصول للإنترنت"، واعرض الأخبار والمعلومات المطلوبة مباشرة بشكل جذاب ومباشر.`
-  };
+  3. لا تعتذر ولا تقل "لا يمكنني الوصول للإنترنت"، واعرض الأخبار والمعلومات المطلوبة مباشرة بشكل جذاب ومباشر.`;
 
   let hasImage = false;
 
-  const formattedMessages = await Promise.all(
-    validMessages.map(async (m, index) => {
-      const isLast = index === validMessages.length - 1;
-      let rawImgUrl = m.attachment?.base64 || m.image || m.imageBase64;
+  // إعداد بيانات الرسائل لصيغتي Gemini و OpenAI
+  const geminiContents: any[] = [];
+  const openaiMessages: any[] = [{ role: "system", content: systemInstructionText }];
 
-      if (rawImgUrl) {
-        hasImage = true;
-        const url = typeof rawImgUrl === "string" && rawImgUrl.startsWith("data:")
-          ? rawImgUrl
-          : `data:image/jpeg;base64,${rawImgUrl}`;
-        const compressed = await compressImage(url);
+  for (const m of validMessages) {
+    const role = m.role === "assistant" ? "model" : "user";
+    const openAiRole = m.role === "assistant" ? "assistant" : "user";
+    let rawImgUrl = m.attachment?.base64 || m.image || m.imageBase64;
 
-        let textPrompt = (typeof m.content === "string" && m.content.trim()) ? m.content : "اشرح الصورة بالتفصيل.";
-        if (isLast && searchResultsContext) textPrompt += searchResultsContext;
+    if (rawImgUrl) {
+      hasImage = true;
+      const url = typeof rawImgUrl === "string" && rawImgUrl.startsWith("data:")
+        ? rawImgUrl
+        : `data:image/jpeg;base64,${rawImgUrl}`;
+      const compressed = await compressImage(url);
+      const base64Data = compressed.split(",")[1] || compressed;
+      let textPrompt = (typeof m.content === "string" && m.content.trim()) ? m.content : "اشرح الصورة بالتفصيل.";
 
-        return {
-          role: m.role,
-          content: [
-            { type: "text", text: textPrompt },
-            { type: "image_url", image_url: { url: compressed } },
-          ],
-        };
-      }
-
-      let textContent = typeof m.content === "string" ? m.content.trim() : JSON.stringify(m.content || "");
-      if (!textContent) textContent = "...";
-      if (isLast && searchResultsContext) textContent += searchResultsContext;
-
-      return { role: m.role, content: textContent };
-    })
-  );
-
-  const finalMessages = [systemPrompt, ...formattedMessages];
-  const candidateModels = await getActiveGroqModels(groqApiKey, hasImage);
-
-  let lastErrorMessage = "";
-
-  for (const model of candidateModels) {
-    try {
-      const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
-        method: "POST",
-        headers: {
-          "Authorization": `Bearer ${groqApiKey}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          model: model,
-          messages: finalMessages,
-          temperature: 0.3,
-          max_tokens: 2048,
-        }),
-        signal,
+      // صيغة Gemini
+      geminiContents.push({
+        role: role,
+        parts: [
+          { text: textPrompt },
+          { inlineData: { mimeType: "image/jpeg", data: base64Data } }
+        ]
       });
 
-      if (response.ok) {
-        const data = await response.json();
-        return data.choices?.[0]?.message?.content || "لا يوجد رد متوفر.";
-      }
+      // صيغة OpenAI/Groq/OpenRouter
+      openaiMessages.push({
+        role: openAiRole,
+        content: [
+          { type: "text", text: textPrompt },
+          { type: "image_url", image_url: { url: compressed } }
+        ]
+      });
+    } else {
+      let textContent = typeof m.content === "string" ? m.content.trim() : JSON.stringify(m.content || "");
+      if (!textContent) textContent = "...";
 
-      const errorData = await response.json().catch(() => ({}));
-      lastErrorMessage = errorData?.error?.message || `Status ${response.status}`;
+      geminiContents.push({
+        role: role,
+        parts: [{ text: textContent }]
+      });
 
-      if (response.status === 401) {
-        return "خطأ 401: المفتاح غير صالح. تأكد من تحديثه في Lovable Secrets واضغط Publish.";
-      }
-    } catch (e: any) {
-      if (e.name === "AbortError") {
-        throw e;
-      }
-      console.warn(`تعذر الاتصال بالنموذج ${model}:`, e);
+      openaiMessages.push({
+        role: openAiRole,
+        content: textContent
+      });
     }
   }
 
-  return `خطأ من Groq: ${lastErrorMessage}`;
+  // 1. المحاولة الأولى: Google Gemini
+  if (geminiApiKey) {
+    try {
+      return await callGemini(geminiContents, systemInstructionText, geminiApiKey, signal);
+    } catch (e: any) {
+      if (e.name === "AbortError") throw e;
+      console.warn("فشل الاتصال بـ Gemini، جاري التحول إلى OpenRouter:", e);
+    }
+  }
+
+  // 2. المحاولة الثانية: OpenRouter
+  if (openRouterApiKey) {
+    try {
+      return await callOpenRouter(openaiMessages, openRouterApiKey, signal);
+    } catch (e: any) {
+      if (e.name === "AbortError") throw e;
+      console.warn("فشل الاتصال بـ OpenRouter، جاري التحول إلى Groq:", e);
+    }
+  }
+
+  // 3. المحاولة الثالثة: Groq
+  if (groqApiKey) {
+    try {
+      return await callGroq(openaiMessages, groqApiKey, hasImage, signal);
+    } catch (e: any) {
+      if (e.name === "AbortError") throw e;
+      console.error("فشل الاتصال بـ Groq أيضاً:", e);
+    }
+  }
+
+  return "عذراً، تعذّر الاتصال بجميع مزودي الخدمة حالياً. يرجى التحقق من مفاتيح API الخاصة بك والاتصال بالشبكة.";
 }

@@ -42,10 +42,13 @@ function ConversationScreen() {
     if (!loading && !session) void navigate({ to: "/chat", replace: true });
   }, [loading, navigate, session]);
 
+  // حفظ الرسائل في الكاش (staleTime) لفتح أي محادثة سابقة فوراً بـ 0 ثانية تأخير
   const { data, isPending } = useQuery({
     queryKey: ["messages", conversationId],
     queryFn: () => fetchMessages({ data: { conversationId } }),
     enabled: Boolean(session && conversationId),
+    staleTime: 1000 * 60 * 15, // الاحتفاظ بالرسائل جاهزة لمدة 15 دقيقة
+    gcTime: 1000 * 60 * 60,
   });
 
   const initialMessages = useMemo(() => toUIMessages(data ?? []), [data]);
@@ -54,10 +57,12 @@ function ConversationScreen() {
     void queryClient.invalidateQueries({ queryKey: ["conversations"] });
   }, [queryClient]);
 
-  if (loading || !session || isPending) {
+  if (loading || !session) return null;
+
+  if (isPending) {
     return (
       <div className="flex h-full items-center justify-center">
-        <Loader2 className="size-5 animate-spin text-primary" />
+        <Loader2 className="size-6 animate-spin text-primary" />
       </div>
     );
   }

@@ -64,7 +64,6 @@ function messageText(message: UIMessage): string {
   return message.parts.map((part) => (part.type === "text" ? part.text : "")).join("");
 }
 
-/** Reads a blob/object URL into a data URL so the server can actually see the file. */
 async function toDataUrl(url: string): Promise<string> {
   if (url.startsWith("data:")) return url;
   const blob = await (await fetch(url)).blob();
@@ -76,7 +75,6 @@ async function toDataUrl(url: string): Promise<string> {
   });
 }
 
-/** Plus (+) menu with two dedicated pickers: images and documents. */
 function PlusMenu() {
   const attachments = usePromptInputAttachments();
   const imageRef = useRef<HTMLInputElement | null>(null);
@@ -140,7 +138,6 @@ function PlusMenu() {
   );
 }
 
-/** Thumbnails / chips for the currently attached files. */
 function AttachmentPreviews() {
   const attachments = usePromptInputAttachments();
   if (attachments.files.length === 0) return null;
@@ -234,6 +231,11 @@ export function ChatWindow({
     },
   });
 
+  // تحديث محتوى المحادثة عند اختيار محادثة جديدة من القائمة
+  useEffect(() => {
+    setMessages(initialMessages);
+  }, [chatKey, conversationId, initialMessages, setMessages]);
+
   const isBusy = status === "submitted" || status === "streaming" || generatingImage;
   const isEmpty = messages.length === 0;
   const lastMessage = messages[messages.length - 1];
@@ -244,7 +246,6 @@ export function ChatWindow({
     generatingImage ||
     status === "submitted" ||
     (status === "streaming" && (lastMessage?.role === "user" || lastAssistantEmpty));
-
 
   const focusInput = useCallback(() => {
     requestAnimationFrame(() => textareaRef.current?.focus());
@@ -258,7 +259,6 @@ export function ChatWindow({
     if (status === "ready") focusInput();
   }, [status, focusInput]);
 
-  // Watchdog: if the model never starts answering within 15s, fail loudly.
   useEffect(() => {
     if (status !== "submitted") return;
     setStalled(false);
@@ -274,7 +274,6 @@ export function ChatWindow({
     if (status === "streaming") setStalled(false);
   }, [status]);
 
-  /** Renders a Pollinations (Flux) image for an already-translated English prompt. */
   const renderImage = useCallback(
     ({
       englishPrompt,
@@ -325,7 +324,6 @@ export function ChatWindow({
     [conversationId, focusInput, isGuest, queryClient, saveMessages, setMessages],
   );
 
-  /** Translates the request to a detailed English prompt, then generates. */
   const runImageGeneration = useCallback(
     async ({ request, userText }: { request: string; userText?: string | undefined }) => {
       setGeneratingImage(true);
@@ -358,7 +356,6 @@ export function ChatWindow({
         return;
       }
 
-      // Attachments arrive as blob URLs; inline them so the model receives the bytes.
       let files = message.files;
       try {
         files = await Promise.all(
@@ -404,7 +401,6 @@ export function ChatWindow({
     const recognition = new Ctor();
     const base = textareaRef.current?.value ?? "";
     recognition.lang = "ar-SA";
-    // Live transcription: interim results stream into the textarea while speaking.
     recognition.interimResults = true;
     recognition.continuous = true;
     recognition.onresult = (event) => {
@@ -439,7 +435,6 @@ export function ChatWindow({
     toast.success("تم نسخ الرسالة");
   }, []);
 
-  /** Puts a previous user message back in the input and drops it (and later turns). */
   const editAndResend = useCallback(
     (id: string, text: string) => {
       setMessages((current) => {
@@ -515,7 +510,6 @@ export function ChatWindow({
                 <Message
                   from={message.role}
                   key={message.id}
-                  // RTL: user bubbles hug the right edge, Salman AI hugs the left.
                   className={cn(
                     "flex w-full max-w-full flex-col",
                     isUser ? "items-end text-right" : "items-start text-right",
@@ -561,7 +555,6 @@ export function ChatWindow({
                           "group-[.is-assistant]:rounded-2xl group-[.is-assistant]:bg-secondary group-[.is-assistant]:px-3.5 group-[.is-assistant]:py-2.5",
                       )}
                     >
-
                       {fileParts.length > 0 ? (
                         <div className="flex flex-wrap gap-2">
                           {fileParts.map((part, fileIndex) =>
@@ -600,7 +593,6 @@ export function ChatWindow({
                   </div>
                   {message.role === "assistant" && text && !image ? (
                     <MessageActions className="ms-9 justify-start">
-
                       <MessageAction
                         label="نسخ الرسالة"
                         tooltip="نسخ الرسالة"
@@ -648,7 +640,6 @@ export function ChatWindow({
               </span>
             </div>
           ) : null}
-
 
           {error || stalled ? (
             <div className="mx-auto flex flex-col items-center gap-2 rounded-2xl border border-destructive/30 bg-destructive/5 px-4 py-3 text-center">
@@ -733,7 +724,6 @@ export function ChatWindow({
                     event.currentTarget.form?.requestSubmit();
                     return;
                   }
-                  // Plain Enter inserts a newline instead of sending.
                   const textarea = event.currentTarget;
                   if (!document.execCommand("insertText", false, "\n")) {
                     const { selectionStart, selectionEnd, value } = textarea;

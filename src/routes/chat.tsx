@@ -165,7 +165,6 @@ function ChatLayout() {
       isGuest={isGuest}
       userEmail={user?.email ?? null}
       onDeleteConversation={(id) => removeChat.mutate(id)}
-      // تم حذف onClearAll من هنا لضمان عدم ظهوره في القائمة الجانبية
       onOpenSettings={() => {
         setSettingsOpen(true);
         onClose?.();

@@ -36,7 +36,7 @@ function ConversationScreen() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const fetchMessages = useServerFn(getConversationMessages);
-  const { session, loading } = useSession();
+  const { session, loading, isGuest } = useSession();
 
   useEffect(() => {
     if (!loading && !session) void navigate({ to: "/chat", replace: true });
@@ -45,7 +45,7 @@ function ConversationScreen() {
   const { data, isPending } = useQuery({
     queryKey: ["messages", conversationId],
     queryFn: () => fetchMessages({ data: { conversationId } }),
-    enabled: Boolean(session),
+    enabled: Boolean(session && conversationId),
   });
 
   const initialMessages = useMemo(() => toUIMessages(data ?? []), [data]);
@@ -68,6 +68,7 @@ function ConversationScreen() {
       chatKey={conversationId}
       conversationId={conversationId}
       initialMessages={initialMessages}
+      isGuest={isGuest}
       onFirstMessage={handleFirstMessage}
     />
   );

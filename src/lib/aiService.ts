@@ -1,21 +1,19 @@
 // src/lib/aiService.ts
 
 // =========================================================
-// 🗝️ المفاتيح الاحتياطية المباشرة:
+// 🗝️ المفاتيح الاحتياطية (مقبولة من ملف .env والمستندة للمفتاح المباشر)
 // =========================================================
 const FALLBACK_GEMINI_KEY = "AQ.Ab8RN6ImcuSsUlnTqxMEMu4McIjltEZgkXiMjafzzOx6cTRPmA";
 const FALLBACK_GROQ_KEY = "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";
 const FALLBACK_OPENROUTER_KEY = "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";
 
-// رسالة الخطأ العامة الموحدة للظهور للمستخدم النهائي
-const GENERAL_ERROR_MESSAGE = "عذراً، تعذّر الاتصال بالخدمة حالياً. يرجى التحقق من اتصالك بالإنترنت والمحاولة لاحقاً.";
+const SYSTEM_PROMPT = "أنت Salman AI، نموذج ذكاء اصطناعي متطور طوره المهندس سلمان فارس. أجب بدقة ووضوح وبطريقة احترافية.";
 
-// دالة لاستخراج النص بدقة سواء كانت الرسالة تحوي content أو parts
+// دالة تنظيف واستخراج النص
 function extractText(m: any): string {
   if (!m) return "";
   if (typeof m === "string") return m.trim();
 
-  // إذا كانت الرسالة تحوي content مباشر
   if (m.content) {
     if (typeof m.content === "string") return m.content.trim();
     if (Array.isArray(m.content)) {
@@ -27,7 +25,6 @@ function extractText(m: any): string {
     }
   }
 
-  // إذا كانت الرسالة تعتمد على مصفوفة parts (خاص بـ AI SDK الحديثة)
   if (Array.isArray(m.parts)) {
     return m.parts
       .map((p: any) => (p.type === "text" ? p.text : p.text || ""))
@@ -51,13 +48,7 @@ async function callGemini(messages: any[], apiKey: string, signal?: AbortSignal)
         role: m.role === "assistant" ? "model" : "user",
         parts: [{ text: extractText(m) }],
       })),
-      systemInstruction: {
-        parts: [
-          {
-            text: "أنت Salman AI، نموذج ذكاء اصطناعي متطور طوره المهندس سلمان فارس. أجب بدقة ووضوح.",
-          },
-        ],
-      },
+      systemInstruction: { parts: [{ text: SYSTEM_PROMPT }] },
     }),
     signal,
   });
@@ -68,9 +59,8 @@ async function callGemini(messages: any[], apiKey: string, signal?: AbortSignal)
   }
 
   const data = await res.json();
-  const parts = data.candidates?.[0]?.content?.parts || [];
-  const text = parts.map((p: any) => p.text || "").join("\n").trim();
-  if (!text) throw new Error("Gemini returned empty response");
+  const text = data.candidates?.[0]?.content?.parts?.map((p: any) => p.text || "").join("\n").trim();
+  if (!text) throw new Error("Gemini returned empty text");
   return text;
 }
 
@@ -85,25 +75,17 @@ async function callGroq(messages: any[], apiKey: string, signal?: AbortSignal) {
     body: JSON.stringify({
       model: "llama-3.3-70b-versatile",
       messages: [
-        {
-          role: "system",
-          content: "أنت Salman AI، نموذج ذكاء اصطناعي متطور طوره المهندس سلمان فارس. أجب بدقة ووضوح.",
-        },
+        { role: "system", content: SYSTEM_PROMPT },
         ...messages.map((m) => ({
           role: m.role === "assistant" ? "assistant" : "user",
           content: extractText(m),
         })),
       ],
-      temperature: 0.7,
     }),
     signal,
   });
 
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(err?.error?.message || `Groq Status ${res.status}`);
-  }
-
+  if (!res.ok) throw new Error(`Groq Status ${res.status}`);
   const data = await res.json();
   return data.choices?.[0]?.message?.content;
 }
@@ -119,10 +101,7 @@ async function callOpenRouter(messages: any[], apiKey: string, signal?: AbortSig
     body: JSON.stringify({
       model: "meta-llama/llama-3.3-70b-instruct:free",
       messages: [
-        {
-          role: "system",
-          content: "أنت Salman AI، نموذج ذكاء اصطناعي متطور طوره المهندس سلمان فارس.",
-        },
+        { role: "system", content: SYSTEM_PROMPT },
         ...messages.map((m) => ({
           role: m.role === "assistant" ? "assistant" : "user",
           content: extractText(m),
@@ -137,23 +116,42 @@ async function callOpenRouter(messages: any[], apiKey: string, signal?: AbortSig
   return data.choices?.[0]?.message?.content;
 }
 
-// المنسق الرئيسي للخدمة (Gemini ⬅️ Groq ⬅️ OpenRouter)
-export async function askSalmanAI(messages: any[], signal?: AbortSignal): Promise<string> {
-  if (typeof navigator !== "undefined" && !navigator.onLine) {
-    return GENERAL_ERROR_MESSAGE;
-  }
+// 4. Pollinations AI (مزود مجاني أخير)
+async function callFreePollinations(messages: any[], signal?: AbortSignal) {
+  const res = await fetch("https://text.pollinations.ai/", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      messages: [
+        { role: "system", content: SYSTEM_PROMPT },
+        ...messages.map((m) => ({
+          role: m.role === "assistant" ? "assistant" : "user",
+          content: extractText(m),
+        })),
+      ],
+      model: "openai",
+    }),
+    signal,
+  });
 
+  if (!res.ok) throw new Error(`Pollinations Status ${res.status}`);
+  const text = await res.text();
+  if (!text) throw new Error("Empty response from Pollinations");
+  return text;
+}
+
+// المنسق الرئيسي للخدمة (Gemini ⬅️ Groq ⬅️ OpenRouter ⬅️ Pollinations)
+export async function askSalmanAI(messages: any[], signal?: AbortSignal): Promise<string> {
   const geminiKey = import.meta.env.VITE_GEMINI_API_KEY || FALLBACK_GEMINI_KEY;
   const groqKey = import.meta.env.VITE_GROQ_API_KEY || FALLBACK_GROQ_KEY;
   const openRouterKey = import.meta.env.VITE_OPENROUTER_API_KEY || FALLBACK_OPENROUTER_KEY;
 
-  // 1. تجربة Google Gemini (تقبل جميع المفاتيح بما فيها تبدأ بـ AQ)
+  // 1. تجربة Google Gemini (تستخدم المفتاح الممرر من .env أو المفتاح المباشر)
   if (geminiKey && !geminiKey.startsWith("ضع_")) {
     try {
       return await callGemini(messages, geminiKey, signal);
     } catch (e: any) {
-      if (e.name === "AbortError") throw e;
-      console.error("[Internal Log] Gemini failed:", e.message);
+      console.warn("[Gemini Failed]:", e.message);
     }
   }
 
@@ -162,8 +160,7 @@ export async function askSalmanAI(messages: any[], signal?: AbortSignal): Promis
     try {
       return await callGroq(messages, groqKey, signal);
     } catch (e: any) {
-      if (e.name === "AbortError") throw e;
-      console.error("[Internal Log] Groq failed:", e.message);
+      console.warn("[Groq Failed]:", e.message);
     }
   }
 
@@ -172,10 +169,16 @@ export async function askSalmanAI(messages: any[], signal?: AbortSignal): Promis
     try {
       return await callOpenRouter(messages, openRouterKey, signal);
     } catch (e: any) {
-      if (e.name === "AbortError") throw e;
-      console.error("[Internal Log] OpenRouter failed:", e.message);
+      console.warn("[OpenRouter Failed]:", e.message);
     }
   }
 
-  return GENERAL_ERROR_MESSAGE;
+  // 4. المحاولة المجانية المضمونة في حال تعثر باقي المفاتيح
+  try {
+    return await callFreePollinations(messages, signal);
+  } catch (e: any) {
+    console.error("[Pollinations Failed]:", e.message);
+  }
+
+  return "عذراً، تعذّر الاتصال بالخدمة حالياً. يرجى إعادة المحاولة لاحقاً.";
 }

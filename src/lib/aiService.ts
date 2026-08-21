@@ -1,3 +1,9 @@
+// src/lib/aiService.ts
+
+// رسالة الخطأ العامة الموحدة للظهور للمستخدم النهائي
+const GENERAL_ERROR_MESSAGE = "عذراً، تعذّر الاتصال بالخدمة حالياً. يرجى التحقق من اتصالك بالإنترنت والمحاولة لاحقاً.";
+
+// دالة تنظيف واستخراج النص من الرسائل
 function extractText(content: any): string {
   if (!content) return "";
   if (typeof content === "string") return content.trim();
@@ -11,7 +17,7 @@ function extractText(content: any): string {
   return String(content?.text || content || "").trim();
 }
 
-// 1. Google Gemini API (الأقوى والأجود)
+// 1. Google Gemini API
 async function callGemini(messages: any[], apiKey: string, signal?: AbortSignal) {
   const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
 
@@ -46,7 +52,7 @@ async function callGemini(messages: any[], apiKey: string, signal?: AbortSignal)
   return text;
 }
 
-// 2. Groq API (الأسرع)
+// 2. Groq API
 async function callGroq(messages: any[], apiKey: string, signal?: AbortSignal) {
   const res = await fetch("https://api.groq.com/openai/v1/chat/completions", {
     method: "POST",
@@ -80,7 +86,7 @@ async function callGroq(messages: any[], apiKey: string, signal?: AbortSignal) {
   return data.choices?.[0]?.message?.content;
 }
 
-// 3. OpenRouter API (احتياطي)
+// 3. OpenRouter API
 async function callOpenRouter(messages: any[], apiKey: string, signal?: AbortSignal) {
   const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
     method: "POST",
@@ -109,41 +115,47 @@ async function callOpenRouter(messages: any[], apiKey: string, signal?: AbortSig
   return data.choices?.[0]?.message?.content;
 }
 
-// المنسق الرئيسي حسب ترتيب الأفضلية (Gemini ⬅️ Groq ⬅️ OpenRouter)
+// المنسق الرئيسي لاستدعاء النماذج
 export async function askSalmanAI(messages: any[], signal?: AbortSignal): Promise<string> {
+  // الفحص الأولي للاتصال بالإنترنت
+  if (typeof navigator !== "undefined" && !navigator.onLine) {
+    return GENERAL_ERROR_MESSAGE;
+  }
+
   const geminiKey = import.meta.env.VITE_GEMINI_API_KEY;
   const groqKey = import.meta.env.VITE_GROQ_API_KEY;
   const openRouterKey = import.meta.env.VITE_OPENROUTER_API_KEY;
 
-  // 1. Google Gemini (الأفضل والأعلى جودة)
+  // 1. تجربة Google Gemini
   if (geminiKey) {
     try {
       return await callGemini(messages, geminiKey, signal);
     } catch (e: any) {
       if (e.name === "AbortError") throw e;
-      console.warn("Gemini failed, switching to Groq:", e.message);
+      console.error("[Internal Log] Gemini failed:", e.message);
     }
   }
 
-  // 2. Groq (الأسرع مع Llama 3.3)
+  // 2. تجربة Groq
   if (groqKey) {
     try {
       return await callGroq(messages, groqKey, signal);
     } catch (e: any) {
       if (e.name === "AbortError") throw e;
-      console.warn("Groq failed, switching to OpenRouter:", e.message);
+      console.error("[Internal Log] Groq failed:", e.message);
     }
   }
 
-  // 3. OpenRouter (احتياطي أخير)
+  // 3. تجربة OpenRouter
   if (openRouterKey) {
     try {
       return await callOpenRouter(messages, openRouterKey, signal);
     } catch (e: any) {
       if (e.name === "AbortError") throw e;
-      console.error("OpenRouter failed:", e.message);
+      console.error("[Internal Log] OpenRouter failed:", e.message);
     }
   }
 
-  return "عذراً، تعذّر الوصول إلى شبكة الذكاء الاصطناعي حالياً. يرجى التأكد من إدخال المفاتيح بالأسماء الصحيحة في ملف .env وتحديث المعاينة.";
+  // عند تعذر جميع المزودين أو عدم قراءة المفاتيح تظهر رسالة عامة للمستخدم
+  return GENERAL_ERROR_MESSAGE;
 }

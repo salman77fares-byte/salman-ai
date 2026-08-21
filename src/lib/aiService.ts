@@ -1,5 +1,12 @@
 // src/lib/aiService.ts
 
+// =========================================================
+// 🗝️ ضع مفاتيحك الحقيقية هنا بين العلامات لتجاوز عدم قراءة .env في المعاينة:
+// =========================================================
+const FALLBACK_GEMINI_KEY = "AQ.Ab8RN6ImcuSsUlnTqxMEMu4McIjltEZgkXiMjafzzOx6cTRPmA";
+const FALLBACK_GROQ_KEY = "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";
+const FALLBACK_OPENROUTER_KEY = "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";
+
 // رسالة الخطأ العامة الموحدة للظهور للمستخدم النهائي
 const GENERAL_ERROR_MESSAGE = "عذراً، تعذّر الاتصال بالخدمة حالياً. يرجى التحقق من اتصالك بالإنترنت والمحاولة لاحقاً.";
 
@@ -17,7 +24,7 @@ function extractText(content: any): string {
   return String(content?.text || content || "").trim();
 }
 
-// 1. Google Gemini API
+// 1. Google Gemini API (الخيار الأول والأفضل)
 async function callGemini(messages: any[], apiKey: string, signal?: AbortSignal) {
   const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
 
@@ -52,7 +59,7 @@ async function callGemini(messages: any[], apiKey: string, signal?: AbortSignal)
   return text;
 }
 
-// 2. Groq API
+// 2. Groq API (الخيار الثاني والأسرع)
 async function callGroq(messages: any[], apiKey: string, signal?: AbortSignal) {
   const res = await fetch("https://api.groq.com/openai/v1/chat/completions", {
     method: "POST",
@@ -86,7 +93,7 @@ async function callGroq(messages: any[], apiKey: string, signal?: AbortSignal) {
   return data.choices?.[0]?.message?.content;
 }
 
-// 3. OpenRouter API
+// 3. OpenRouter API (الخيار الاحتياطي الثالث)
 async function callOpenRouter(messages: any[], apiKey: string, signal?: AbortSignal) {
   const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
     method: "POST",
@@ -115,19 +122,20 @@ async function callOpenRouter(messages: any[], apiKey: string, signal?: AbortSig
   return data.choices?.[0]?.message?.content;
 }
 
-// المنسق الرئيسي لاستدعاء النماذج
+// المنسق الرئيسي للخدمة (Gemini ⬅️ Groq ⬅️ OpenRouter)
 export async function askSalmanAI(messages: any[], signal?: AbortSignal): Promise<string> {
-  // الفحص الأولي للاتصال بالإنترنت
+  // فحص الاتصال بالإنترنت
   if (typeof navigator !== "undefined" && !navigator.onLine) {
     return GENERAL_ERROR_MESSAGE;
   }
 
-  const geminiKey = import.meta.env.VITE_GEMINI_API_KEY;
-  const groqKey = import.meta.env.VITE_GROQ_API_KEY;
-  const openRouterKey = import.meta.env.VITE_OPENROUTER_API_KEY;
+  // قراءة المتغيرات إما من البيئة أو من المفاتيح المباشرة في الأعلى
+  const geminiKey = import.meta.env.VITE_GEMINI_API_KEY || FALLBACK_GEMINI_KEY;
+  const groqKey = import.meta.env.VITE_GROQ_API_KEY || FALLBACK_GROQ_KEY;
+  const openRouterKey = import.meta.env.VITE_OPENROUTER_API_KEY || FALLBACK_OPENROUTER_KEY;
 
   // 1. تجربة Google Gemini
-  if (geminiKey) {
+  if (geminiKey && !geminiKey.startsWith("ضع_")) {
     try {
       return await callGemini(messages, geminiKey, signal);
     } catch (e: any) {
@@ -137,7 +145,7 @@ export async function askSalmanAI(messages: any[], signal?: AbortSignal): Promis
   }
 
   // 2. تجربة Groq
-  if (groqKey) {
+  if (groqKey && !groqKey.startsWith("ضع_")) {
     try {
       return await callGroq(messages, groqKey, signal);
     } catch (e: any) {
@@ -147,7 +155,7 @@ export async function askSalmanAI(messages: any[], signal?: AbortSignal): Promis
   }
 
   // 3. تجربة OpenRouter
-  if (openRouterKey) {
+  if (openRouterKey && !openRouterKey.startsWith("ضع_")) {
     try {
       return await callOpenRouter(messages, openRouterKey, signal);
     } catch (e: any) {
@@ -156,6 +164,5 @@ export async function askSalmanAI(messages: any[], signal?: AbortSignal): Promis
     }
   }
 
-  // عند تعذر جميع المزودين أو عدم قراءة المفاتيح تظهر رسالة عامة للمستخدم
   return GENERAL_ERROR_MESSAGE;
 }

@@ -12,17 +12,6 @@ function extractText(content: any): string {
   return String(content?.text || content || "").trim();
 }
 
-// دالة جلب المفاتيح بأمان من import.meta.env الخاص بـ Vite
-function getApiKey(possibleNames: string[]): string {
-  const env = (import.meta as any).env || {};
-  for (const name of possibleNames) {
-    if (env[name] && typeof env[name] === "string" && env[name].trim() !== "") {
-      return env[name].trim();
-    }
-  }
-  return "";
-}
-
 // 1. Groq API
 async function callGroq(messages: any[], apiKey: string, signal?: AbortSignal) {
   const res = await fetch("https://api.groq.com/openai/v1/chat/completions", {
@@ -105,15 +94,13 @@ async function callOpenRouter(messages: any[], apiKey: string, signal?: AbortSig
   return data.choices?.[0]?.message?.content;
 }
 
-// المنسق الرئيسي
+// المنسق الرئيسي - الوصول المباشر الصريح لمتغيرات Vite
 export async function askSalmanAI(messages: any[], signal?: AbortSignal): Promise<string> {
-  // البحث عن المفاتيح بجميع الأسماء المحتملة
-  const groqKey = getApiKey(["VITE_GROQ_API_KEY", "VITE_Cr7", "Cr7"]);
-  const googleKey = getApiKey(["VITE_GOOGLE_API_KEY", "VITE_Google", "Google"]);
-  const openRouterKey = getApiKey(["VITE_OPENROUTER_API_KEY", "VITE_OpenRouter", "OpenRouter"]);
+  const groqKey = import.meta.env.VITE_GROQ_API_KEY || import.meta.env.VITE_Cr7;
+  const googleKey = import.meta.env.VITE_GEMINI_API_KEY || import.meta.env.VITE_GOOGLE_API_KEY || import.meta.env.VITE_Google;
+  const openRouterKey = import.meta.env.VITE_OPENROUTER_API_KEY || import.meta.env.VITE_OpenRouter;
 
-  // طباعة حالة المفاتيح في Console لتسهيل التتبع
-  console.log("API Keys Detected:", {
+  console.log("API Keys Status:", {
     Groq: !!groqKey,
     Google: !!googleKey,
     OpenRouter: !!openRouterKey,
@@ -149,5 +136,5 @@ export async function askSalmanAI(messages: any[], signal?: AbortSignal): Promis
     }
   }
 
-  return "عذراً، تعذّر الوصول إلى شبكة الذكاء الاصطناعي حالياً. يرجى التأكد من إدخال المفاتيح ببادئة VITE_ في قائمة Secrets.";
+  return "عذراً، تعذّر الوصول إلى شبكة الذكاء الاصطناعي حالياً. يرجى التأكد من إضافة المفاتيح بالأسماء الصحيحة في ملف .env وتحديث المعاينة.";
 }

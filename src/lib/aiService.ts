@@ -1,9 +1,3 @@
-// src/lib/aiService.ts
-
-// 1. ضع مفاتيحك مباشرة بين التنصيص هنا
-const GROQ_API_KEY = "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";
-const OPENROUTER_API_KEY = "sk-or-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";
-
 const SYSTEM_PROMPT = "أنت Salman AI، نموذج ذكاء اصطناعي متطور طوره المهندس سلمان فارس. أجب بدقة ووضوح وبطريقة احترافية.";
 
 function extractText(m: any): string {
@@ -21,32 +15,7 @@ function extractText(m: any): string {
   return String(m.text || "").trim();
 }
 
-// Groq API
-async function callGroq(messages: any[], apiKey: string): Promise<string> {
-  const res = await fetch("https://api.groq.com/openai/v1/chat/completions", {
-    method: "POST",
-    headers: {
-      "Authorization": `Bearer ${apiKey}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      model: "llama-3.3-70b-versatile",
-      messages: [
-        { role: "system", content: SYSTEM_PROMPT },
-        ...messages.map((m) => ({
-          role: m.role === "assistant" ? "assistant" : "user",
-          content: extractText(m),
-        })),
-      ],
-    }),
-  });
-
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(`Groq Error: ${data?.error?.message || res.statusText}`);
-  return data.choices?.[0]?.message?.content || "";
-}
-
-// OpenRouter API
+// 1. OpenRouter API
 async function callOpenRouter(messages: any[], apiKey: string): Promise<string> {
   const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
     method: "POST",
@@ -72,47 +41,96 @@ async function callOpenRouter(messages: any[], apiKey: string): Promise<string> 
   return data.choices?.[0]?.message?.content || "";
 }
 
-// Free Public Engine (GET - No CORS)
+// 2. Groq API
+async function callGroq(messages: any[], apiKey: string): Promise<string> {
+  const res = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+    method: "POST",
+    headers: {
+      "Authorization": `Bearer ${apiKey}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      model: "llama-3.3-70b-versatile",
+      messages: [
+        { role: "system", content: SYSTEM_PROMPT },
+        ...messages.map((m) => ({
+          role: m.role === "assistant" ? "assistant" : "user",
+          content: extractText(m),
+        })),
+      ],
+    }),
+  });
+
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(`Groq Error: ${data?.error?.message || res.statusText}`);
+  return data.choices?.[0]?.message?.content || "";
+}
+
+// 3. Free Backup Engine (مزدوج لضمان الاستجابة)
 async function callFreeEngine(promptText: string): Promise<string> {
-  const url = `https://text.pollinations.ai/${encodeURIComponent(promptText)}?system=${encodeURIComponent(SYSTEM_PROMPT)}&model=openai`;
-  const res = await fetch(url);
-  if (!res.ok) throw new Error("Free engine failed");
+  try {
+    const res = await fetch("https://text.pollinations.ai/", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        messages: [
+          { role: "system", content: SYSTEM_PROMPT },
+          { role: "user", content: promptText }
+        ],
+        model: "openai"
+      }),
+    });
+    if (res.ok) {
+      const text = await res.text();
+      if (text && text.trim() && !text.includes("An error occurred")) return text.trim();
+    }
+  } catch (e) {
+    console.warn("Free Engine POST failed, trying GET...");
+  }
+
+  const cleanQuery = encodeURIComponent(promptText);
+  const res = await fetch(`https://text.pollinations.ai/${cleanQuery}?model=openai`);
+  if (!res.ok) throw new Error("Free Engine GET failed");
   const text = await res.text();
-  if (!text || text.trim().startsWith("An error occurred")) throw new Error("Response error");
+  if (!text || text.includes("An error occurred")) throw new Error("Invalid response");
   return text.trim();
 }
 
+// المنسق الرئيسي
 export async function askSalmanAI(messages: any[]): Promise<string> {
+  const openRouterKey = (import.meta.env.VITE_OPENROUTER_API_KEY || "").trim();
+  const groqKey = (import.meta.env.VITE_GROQ_API_KEY || "").trim();
+
   const lastUserMsg = messages.filter((m) => m.role === "user").pop();
   const lastText = extractText(lastUserMsg) || "مرحباً";
 
-  // 1. Groq
-  if (GROQ_API_KEY && GROQ_API_KEY.startsWith("gsk_")) {
+  // 1. تجربة OpenRouter
+  if (openRouterKey && openRouterKey.startsWith("sk-or-")) {
     try {
-      const text = await callGroq(messages, GROQ_API_KEY.trim());
+      const text = await callOpenRouter(messages, openRouterKey);
       if (text) return text;
     } catch (e: any) {
-      console.warn("Groq failed:", e.message);
+      console.warn("[OpenRouter Failed]:", e.message);
     }
   }
 
-  // 2. OpenRouter
-  if (OPENROUTER_API_KEY && OPENROUTER_API_KEY.startsWith("sk-or-")) {
+  // 2. تجربة Groq
+  if (groqKey && groqKey.startsWith("gsk_")) {
     try {
-      const text = await callOpenRouter(messages, OPENROUTER_API_KEY.trim());
+      const text = await callGroq(messages, groqKey);
       if (text) return text;
     } catch (e: any) {
-      console.warn("OpenRouter failed:", e.message);
+      console.warn("[Groq Failed]:", e.message);
     }
   }
 
-  // 3. المحرك المجاني المباشر
+  // 3. المحرك المجاني الاحتياطي
   try {
     const text = await callFreeEngine(lastText);
     if (text) return text;
   } catch (e: any) {
-    console.error("Free Engine failed:", e.message);
+    console.error("[Free Engine Failed]:", e.message);
   }
 
-  return "عذراً، تعذّر الاتصال بالسيرفرات. يرجى التأكد من إضافة المفتاح الصحيح أعلى ملف aiService.ts.";
+  return "عذراً، تعذّر الاتصال بالسيرفرات حالياً. يرجى التأكد من إضافة المفاتيح الصحيحة وإعادة المحاولة.";
 }

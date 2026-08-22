@@ -2,7 +2,6 @@
 
 const SYSTEM_PROMPT = "أنت Salman AI، نموذج ذكاء اصطناعي متطور طوره المهندس سلمان فارس. أجب بدقة ووضوح وبطريقة احترافية.";
 
-// دالة تنظيف واستخراج النص من الرسائل
 function extractText(m: any): string {
   if (!m) return "";
   if (typeof m === "string") return m.trim();
@@ -81,61 +80,54 @@ async function callGroq(messages: any[], apiKey: string): Promise<string> {
   return data.choices?.[0]?.message?.content || "";
 }
 
-// 3. Pollinations Free Direct Engine (محرّك احتياطي يعمل بدون مفاتيح)
-async function callPollinations(messages: any[]): Promise<string> {
-  const res = await fetch("https://text.pollinations.ai/", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      messages: [
-        { role: "system", content: SYSTEM_PROMPT },
-        ...messages.map((m) => ({
-          role: m.role === "assistant" ? "assistant" : "user",
-          content: extractText(m),
-        })),
-      ],
-      model: "openai",
-    }),
-  });
+// 3. Pollinations Free Engine (احتياطي عام)
+async function callPollinations(promptText: string): Promise<string> {
+  const cleanQuery = encodeURIComponent(`${SYSTEM_PROMPT}\n\nسؤال المستخدم: ${promptText}`);
+  const res = await fetch(`https://text.pollinations.ai/${cleanQuery}?model=openai`);
 
   if (!res.ok) throw new Error(`Pollinations Status ${res.status}`);
   const text = await res.text();
-  if (!text || text.startsWith("Error")) throw new Error("Invalid response");
+  if (!text || text.includes("Error")) throw new Error("Invalid response");
   return text.trim();
 }
 
-// المنسق الرئيسي للخدمة (OpenRouter ⬅️ Groq ⬅️ Pollinations)
+// المنسق الرئيسي للخدمة
 export async function askSalmanAI(messages: any[]): Promise<string> {
-  const openRouterKey = import.meta.env.VITE_OPENROUTER_API_KEY;
-  const groqKey = import.meta.env.VITE_GROQ_API_KEY;
+  // قراءة المفاتيح سواء بـ VITE_ أو بدونها
+  const env = import.meta.env || {};
+  const openRouterKey = (env.OPENROUTER_API_KEY || env.VITE_OPENROUTER_API_KEY || "").trim();
+  const groqKey = (env.GROQ_API_KEY || env.VITE_GROQ_API_KEY || "").trim();
 
-  // 1. المحاولة الأولى: OpenRouter
-  if (openRouterKey && openRouterKey.trim() !== "" && !openRouterKey.includes("ضع_مفتاح")) {
+  const lastUserMsg = messages.filter((m) => m.role === "user").pop();
+  const lastText = extractText(lastUserMsg) || "مرحباً";
+
+  // 1. OpenRouter
+  if (openRouterKey && !openRouterKey.includes("ضع_مفتاح")) {
     try {
-      const res = await callOpenRouter(messages, openRouterKey.trim());
+      const res = await callOpenRouter(messages, openRouterKey);
       if (res) return res;
     } catch (e: any) {
       console.warn("[OpenRouter Error]:", e.message);
     }
   }
 
-  // 2. المحاولة الثانية: Groq
-  if (groqKey && groqKey.trim() !== "" && !groqKey.includes("ضع_مفتاح")) {
+  // 2. Groq
+  if (groqKey && !groqKey.includes("ضع_مفتاح")) {
     try {
-      const res = await callGroq(messages, groqKey.trim());
+      const res = await callGroq(messages, groqKey);
       if (res) return res;
     } catch (e: any) {
       console.warn("[Groq Error]:", e.message);
     }
   }
 
-  // 3. المحاولة الثالثة: المحرك المجاني المباشر
+  // 3. Pollinations
   try {
-    const res = await callPollinations(messages);
+    const res = await callPollinations(lastText);
     if (res) return res;
   } catch (e: any) {
     console.error("[Pollinations Error]:", e.message);
   }
 
-  return "عذراً، تعذّر الاتصال بجميع سيرفرات الذكاء الاصطناعي حالياً. يرجى التأكد من إضافة المفاتيح في Secrets وإعادة المحاولة.";
+  return "عذراً، تعذّر الاتصال بالسيرفرات. يرجى إعادة المحاولة لاحقاً.";
 }

@@ -1,5 +1,3 @@
-// src/lib/aiService.ts
-
 const SYSTEM_PROMPT = "أنت Salman AI، نموذج ذكاء اصطناعي متطور طوره المهندس سلمان فارس. أجب بدقة ووضوح وبطريقة احترافية.";
 
 function extractText(m: any): string {
@@ -28,14 +26,12 @@ function extractText(m: any): string {
   return String(m.text || "").trim();
 }
 
-// 1. OpenRouter API
 async function callOpenRouter(messages: any[], apiKey: string): Promise<string> {
   const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
     method: "POST",
     headers: {
       "Authorization": `Bearer ${apiKey}`,
       "Content-Type": "application/json",
-      "HTTP-Referer": typeof window !== "undefined" ? window.location.origin : "",
       "X-Title": "Salman AI",
     },
     body: JSON.stringify({
@@ -51,11 +47,10 @@ async function callOpenRouter(messages: any[], apiKey: string): Promise<string> 
   });
 
   const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(`OpenRouter (${res.status}): ${data?.error?.message || "Invalid Key"}`);
+  if (!res.ok) throw new Error(`OpenRouter Error: ${data?.error?.message || res.statusText}`);
   return data.choices?.[0]?.message?.content || "";
 }
 
-// 2. Groq API
 async function callGroq(messages: any[], apiKey: string): Promise<string> {
   const res = await fetch("https://api.groq.com/openai/v1/chat/completions", {
     method: "POST",
@@ -76,58 +71,52 @@ async function callGroq(messages: any[], apiKey: string): Promise<string> {
   });
 
   const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(`Groq (${res.status}): ${data?.error?.message || "Invalid Key"}`);
+  if (!res.ok) throw new Error(`Groq Error: ${data?.error?.message || res.statusText}`);
   return data.choices?.[0]?.message?.content || "";
 }
 
-// 3. Pollinations Free Engine (احتياطي عام)
-async function callPollinations(promptText: string): Promise<string> {
+async function callBackup(promptText: string): Promise<string> {
   const cleanQuery = encodeURIComponent(`${SYSTEM_PROMPT}\n\nسؤال المستخدم: ${promptText}`);
   const res = await fetch(`https://text.pollinations.ai/${cleanQuery}?model=openai`);
 
-  if (!res.ok) throw new Error(`Pollinations Status ${res.status}`);
+  if (!res.ok) throw new Error("Backup failed");
   const text = await res.text();
   if (!text || text.includes("Error")) throw new Error("Invalid response");
   return text.trim();
 }
 
-// المنسق الرئيسي للخدمة
 export async function askSalmanAI(messages: any[]): Promise<string> {
-  // قراءة المفاتيح سواء بـ VITE_ أو بدونها
-  const env = import.meta.env || {};
-  const openRouterKey = (env.OPENROUTER_API_KEY || env.VITE_OPENROUTER_API_KEY || "").trim();
-  const groqKey = (env.GROQ_API_KEY || env.VITE_GROQ_API_KEY || "").trim();
+  const env = (import.meta as any).env || {};
+  const openRouterKey = (env.VITE_OPENROUTER_API_KEY || env.OPENROUTER_API_KEY || "").trim();
+  const groqKey = (env.VITE_GROQ_API_KEY || env.GROQ_API_KEY || "").trim();
 
   const lastUserMsg = messages.filter((m) => m.role === "user").pop();
   const lastText = extractText(lastUserMsg) || "مرحباً";
 
-  // 1. OpenRouter
   if (openRouterKey && !openRouterKey.includes("ضع_مفتاح")) {
     try {
-      const res = await callOpenRouter(messages, openRouterKey);
-      if (res) return res;
+      const text = await callOpenRouter(messages, openRouterKey);
+      if (text) return text;
     } catch (e: any) {
-      console.warn("[OpenRouter Error]:", e.message);
+      console.warn("OpenRouter failed:", e.message);
     }
   }
 
-  // 2. Groq
   if (groqKey && !groqKey.includes("ضع_مفتاح")) {
     try {
-      const res = await callGroq(messages, groqKey);
-      if (res) return res;
+      const text = await callGroq(messages, groqKey);
+      if (text) return text;
     } catch (e: any) {
-      console.warn("[Groq Error]:", e.message);
+      console.warn("Groq failed:", e.message);
     }
   }
 
-  // 3. Pollinations
   try {
-    const res = await callPollinations(lastText);
-    if (res) return res;
+    const text = await callBackup(lastText);
+    if (text) return text;
   } catch (e: any) {
-    console.error("[Pollinations Error]:", e.message);
+    console.error("Backup failed:", e.message);
   }
 
-  return "عذراً، تعذّر الاتصال بالسيرفرات. يرجى إعادة المحاولة لاحقاً.";
+  return "عذراً، تعذّر الاتصال بالسيرفرات. يرجى التأكد من إضافة المفاتيح في ملف .env وإعادة المحاولة.";
 }

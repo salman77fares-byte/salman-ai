@@ -2,9 +2,8 @@
 
 const SYSTEM_PROMPT = "أنت Salman AI، نموذج ذكاء اصطناعي متطور طوره المهندس سلمان فارس. أجب بدقة ووضوح وبطريقة احترافية.";
 
-// جلب المفاتيح من .env مع تعيين المفاتيح كقيم افتراضية لضمان عدم التوقف
-const OPENROUTER_KEY = (import.meta.env.VITE_OPENROUTER_API_KEY || "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").trim();
 const GROQ_KEY = (import.meta.env.VITE_GROQ_API_KEY || "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").trim();
+const OPENROUTER_KEY = (import.meta.env.VITE_OPENROUTER_API_KEY || "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").trim();
 
 function extractText(m: any): string {
   if (!m) return "";
@@ -21,11 +20,12 @@ function extractText(m: any): string {
   return String(m.text || "").trim();
 }
 
-async function callGroq(messages: any[], apiKey: string): Promise<string> {
+// 1. محرك Groq
+async function callGroq(messages: any[]): Promise<string> {
   const res = await fetch("https://api.groq.com/openai/v1/chat/completions", {
     method: "POST",
     headers: {
-      "Authorization": `Bearer ${apiKey}`,
+      "Authorization": `Bearer ${GROQ_KEY}`,
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
@@ -40,17 +40,19 @@ async function callGroq(messages: any[], apiKey: string): Promise<string> {
     }),
   });
 
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(`Groq Error: ${data?.error?.message || res.statusText}`);
+  const data = await res.json();
+  if (!res.ok) throw new Error(data?.error?.message || `Groq error status: ${res.status}`);
   return data.choices?.[0]?.message?.content || "";
 }
 
-async function callOpenRouter(messages: any[], apiKey: string): Promise<string> {
+// 2. محرك OpenRouter
+async function callOpenRouter(messages: any[]): Promise<string> {
   const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
     method: "POST",
     headers: {
-      "Authorization": `Bearer ${apiKey}`,
+      "Authorization": `Bearer ${OPENROUTER_KEY}`,
       "Content-Type": "application/json",
+      "HTTP-Referer": typeof window !== "undefined" ? window.location.origin : "",
       "X-Title": "Salman AI",
     },
     body: JSON.stringify({
@@ -65,58 +67,48 @@ async function callOpenRouter(messages: any[], apiKey: string): Promise<string> 
     }),
   });
 
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(`OpenRouter Error: ${data?.error?.message || res.statusText}`);
+  const data = await res.json();
+  if (!res.ok) throw new Error(data?.error?.message || `OpenRouter error status: ${res.status}`);
   return data.choices?.[0]?.message?.content || "";
 }
 
-async function callBackup(promptText: string): Promise<string> {
-  const res = await fetch("https://text.pollinations.ai/", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      messages: [
-        { role: "system", content: SYSTEM_PROMPT },
-        { role: "user", content: promptText }
-      ],
-      model: "openai"
-    })
-  });
-  if (!res.ok) throw new Error("Backup failed");
-  return (await res.text()).trim();
+// 3. محرك مجاني مباشر (بدون قيود CORS)
+async function callPollinations(promptText: string): Promise<string> {
+  const query = `${SYSTEM_PROMPT}\n\nسؤال المستخدم: ${promptText}`;
+  const res = await fetch(`https://text.pollinations.ai/${encodeURIComponent(query)}`);
+  if (!res.ok) throw new Error(`Pollinations HTTP ${res.status}`);
+  const text = await res.text();
+  if (!text || text.includes("An error occurred")) throw new Error("Pollinations empty or invalid response");
+  return text.trim();
 }
 
 export async function askSalmanAI(messages: any[]): Promise<string> {
   const lastUserMsg = messages.filter((m) => m.role === "user").pop();
   const lastText = extractText(lastUserMsg) || "مرحباً";
 
-  // 1. المحرك الأول: Groq
-  if (GROQ_KEY && GROQ_KEY.startsWith("gsk_")) {
-    try {
-      const text = await callGroq(messages, GROQ_KEY);
-      if (text) return text;
-    } catch (e: any) {
-      console.warn("Groq failed:", e.message);
-    }
-  }
-
-  // 2. المحرك الثاني: OpenRouter
-  if (OPENROUTER_KEY && OPENROUTER_KEY.startsWith("sk-or-")) {
-    try {
-      const text = await callOpenRouter(messages, OPENROUTER_KEY);
-      if (text) return text;
-    } catch (e: any) {
-      console.warn("OpenRouter failed:", e.message);
-    }
-  }
-
-  // 3. المحرك الاحتياطي
+  // تجربة Groq
   try {
-    const text = await callBackup(lastText);
+    const text = await callGroq(messages);
     if (text) return text;
   } catch (e: any) {
-    console.error("Backup failed:", e.message);
+    console.error("Groq Error:", e?.message || e);
   }
 
-  return "عذراً، تعذّر الاتصال بالسيرفرات حالياً. يرجى إعادة المحاولة بعد لحظات.";
+  // تجربة OpenRouter
+  try {
+    const text = await callOpenRouter(messages);
+    if (text) return text;
+  } catch (e: any) {
+    console.error("OpenRouter Error:", e?.message || e);
+  }
+
+  // تجربة المحرك الاحتياطي المباشر
+  try {
+    const text = await callPollinations(lastText);
+    if (text) return text;
+  } catch (e: any) {
+    console.error("Pollinations Error:", e?.message || e);
+  }
+
+  return "عذراً، حدثت مشكلة في الاتصال بالخدمة. يرجى مراجعة وحدة التحكم (Console) للتأكد من حالة المفاتيح.";
 }

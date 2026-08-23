@@ -20,50 +20,55 @@ function extractText(m: any): string {
 }
 
 export async function askSalmanAI(messages: any[]): Promise<string> {
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 20000);
+  const FREE_MODELS = [
+    "google/gemma-2-9b-it:free",
+    "mistralai/mistral-7b-instruct:free",
+    "qwen/qwen-2.5-7b-instruct:free",
+    "meta-llama/llama-3.2-11b-vision-instruct:free"
+  ];
 
-  try {
-    const formattedMessages = [
-      { role: "system", content: SYSTEM_PROMPT },
-      ...messages.map((m) => ({
-        role: m.role === "assistant" ? "assistant" : "user",
-        content: extractText(m),
-      })),
-    ];
+  const formattedMessages = [
+    { role: "system", content: SYSTEM_PROMPT },
+    ...messages.map((m) => ({
+      role: m.role === "assistant" ? "assistant" : "user",
+      content: extractText(m),
+    })),
+  ];
 
-    const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        "Authorization": `Bearer ${OPENROUTER_KEY}`,
-        "Content-Type": "application/json",
-        "HTTP-Referer": typeof window !== "undefined" ? window.location.origin : "https://salman-ai.lovable.app",
-        "X-Title": "Salman AI",
-      },
-      body: JSON.stringify({
-        model: "meta-llama/llama-3.3-70b-instruct:free",
-        messages: formattedMessages,
-      }),
-      signal: controller.signal,
-    });
+  for (const model of FREE_MODELS) {
+    const controller = new AbortController();
+    // مهلة فائقة السرعة: 4 ثوانٍ فقط لكل نموذج
+    const timeoutId = setTimeout(() => controller.abort(), 5000);
 
-    clearTimeout(timeoutId);
+    try {
+      const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${OPENROUTER_KEY}`,
+          "Content-Type": "application/json",
+          "HTTP-Referer": typeof window !== "undefined" ? window.location.origin : "https://salman-ai.lovable.app",
+          "X-Title": "Salman AI",
+        },
+        body: JSON.stringify({
+          model: model,
+          messages: formattedMessages,
+        }),
+        signal: controller.signal,
+      });
 
-    const data = await res.json();
-    if (!res.ok) {
-      throw new Error(data?.error?.message || `OpenRouter status: ${res.status}`);
+      clearTimeout(timeoutId);
+
+      if (res.ok) {
+        const data = await res.json();
+        const reply = data.choices?.[0]?.message?.content;
+        if (reply) {
+          return reply.trim();
+        }
+      }
+    } catch (e: any) {
+      clearTimeout(timeoutId);
     }
-
-    const reply = data.choices?.[0]?.message?.content;
-    if (!reply) throw new Error("لم يتم استلام نص من OpenRouter");
-
-    return reply.trim();
-  } catch (e: any) {
-    clearTimeout(timeoutId);
-    console.error("OpenRouter Error:", e);
-    if (e.name === "AbortError") {
-      return "عذراً، استغرقت الاستجابة وقتاً أطول من المعتاد. يرجى إعادة إرسال السؤال.";
-    }
-    return `خطأ في الاتصال بـ OpenRouter: ${e.message || "يرجى التأكد من حالة المفتاح"}`;
   }
+
+  return "عذراً، الخوادم تتلقى ضغطاً استثنائياً حالياً. يرجى إعادة محاولة إرسال الرسالة فوراً.";
 }

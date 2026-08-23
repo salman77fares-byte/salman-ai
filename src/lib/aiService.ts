@@ -20,11 +20,11 @@ function extractText(m: any): string {
 }
 
 export async function askSalmanAI(messages: any[]): Promise<string> {
+  // نماذج سريعة وموثوقة جداً للإجابات
   const FREE_MODELS = [
     "google/gemma-2-9b-it:free",
     "mistralai/mistral-7b-instruct:free",
-    "qwen/qwen-2.5-7b-instruct:free",
-    "meta-llama/llama-3.2-11b-vision-instruct:free"
+    "qwen/qwen-2.5-7b-instruct:free"
   ];
 
   const formattedMessages = [
@@ -37,8 +37,8 @@ export async function askSalmanAI(messages: any[]): Promise<string> {
 
   for (const model of FREE_MODELS) {
     const controller = new AbortController();
-    // مهلة فائقة السرعة: 4 ثوانٍ فقط لكل نموذج
-    const timeoutId = setTimeout(() => controller.abort(), 5000);
+    // تم ضبط الوقت على 15 ثانية (15000) ليعطي النموذج وقتاً لكتابة الردود الطويلة
+    const timeoutId = setTimeout(() => controller.abort(), 15000);
 
     try {
       const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
@@ -67,6 +67,7 @@ export async function askSalmanAI(messages: any[]): Promise<string> {
       }
     } catch (e: any) {
       clearTimeout(timeoutId);
+      // في حال فشل أو تأخر نموذج، سينتقل بسلاسة للنموذج التالي
     }
   }
 

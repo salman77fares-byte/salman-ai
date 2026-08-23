@@ -2,6 +2,7 @@
 
 const SYSTEM_PROMPT = "أنت Salman AI، نموذج ذكاء اصطناعي متطور طوره المهندس سلمان فارس. أجب بدقة ووضوح وبطريقة احترافية.";
 
+// مفتاح OpenRouter
 const OPENROUTER_KEY = (import.meta.env.VITE_OPENROUTER_API_KEY || "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").trim();
 
 function extractText(m: any): string {
@@ -20,13 +21,6 @@ function extractText(m: any): string {
 }
 
 export async function askSalmanAI(messages: any[]): Promise<string> {
-  // نماذج سريعة وموثوقة جداً للإجابات
-  const FREE_MODELS = [
-    "google/gemma-2-9b-it:free",
-    "mistralai/mistral-7b-instruct:free",
-    "qwen/qwen-2.5-7b-instruct:free"
-  ];
-
   const formattedMessages = [
     { role: "system", content: SYSTEM_PROMPT },
     ...messages.map((m) => ({
@@ -35,11 +29,13 @@ export async function askSalmanAI(messages: any[]): Promise<string> {
     })),
   ];
 
-  for (const model of FREE_MODELS) {
-    const controller = new AbortController();
-    // تم ضبط الوقت على 15 ثانية (15000) ليعطي النموذج وقتاً لكتابة الردود الطويلة
-    const timeoutId = setTimeout(() => controller.abort(), 15000);
+  // 1. المحاولة الأولى: أسرع النماذج المجانية وأكثرها استقراراً في OpenRouter
+  const FREE_MODELS = [
+    "meta-llama/llama-3.1-8b-instruct:free",
+    "google/gemma-2-9b-it:free"
+  ];
 
+  for (const model of FREE_MODELS) {
     try {
       const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
         method: "POST",
@@ -53,10 +49,7 @@ export async function askSalmanAI(messages: any[]): Promise<string> {
           model: model,
           messages: formattedMessages,
         }),
-        signal: controller.signal,
       });
-
-      clearTimeout(timeoutId);
 
       if (res.ok) {
         const data = await res.json();
@@ -65,11 +58,35 @@ export async function askSalmanAI(messages: any[]): Promise<string> {
           return reply.trim();
         }
       }
-    } catch (e: any) {
-      clearTimeout(timeoutId);
-      // في حال فشل أو تأخر نموذج، سينتقل بسلاسة للنموذج التالي
+    } catch (e) {
+      console.warn(`OpenRouter model ${model} failed, trying next...`);
     }
   }
 
-  return "عذراً، الخوادم تتلقى ضغطاً استثنائياً حالياً. يرجى إعادة محاولة إرسال الرسالة فوراً.";
+  // 2. محرك الطوارئ (الضامن): يعمل بصمت إذا فشل OpenRouter أو تعطل المفتاح
+  // هذا سيضمن للمستخدمين الحصول على إجابة بدلاً من ظهور رسالة الخطأ
+  try {
+    const res = await fetch("https://text.pollinations.ai/", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        messages: formattedMessages,
+        model: "openai",
+        seed: Math.floor(Math.random() * 100000)
+      }),
+    });
+
+    if (res.ok) {
+      const text = await res.text();
+      if (text && !text.includes("An error occurred")) {
+        return text.trim();
+      }
+    }
+  } catch (e) {
+    console.error("Backup engine failed", e);
+  }
+
+  return "عذراً، الخوادم تتلقى ضغطاً استثنائياً حالياً. يرجى إعادة محاولة إرسال الرسالة بعد قليل.";
 }

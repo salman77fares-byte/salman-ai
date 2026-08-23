@@ -20,7 +20,7 @@ function extractText(m: any): string {
   return String(m.text || "").trim();
 }
 
-// 1. محرك Groq
+// 1. Groq Engine
 async function callGroq(messages: any[]): Promise<string> {
   const res = await fetch("https://api.groq.com/openai/v1/chat/completions", {
     method: "POST",
@@ -40,19 +40,22 @@ async function callGroq(messages: any[]): Promise<string> {
     }),
   });
 
+  if (!res.ok) {
+    const errData = await res.json().catch(() => ({}));
+    throw new Error(errData?.error?.message || `Groq status: ${res.status}`);
+  }
+
   const data = await res.json();
-  if (!res.ok) throw new Error(data?.error?.message || `Groq error status: ${res.status}`);
   return data.choices?.[0]?.message?.content || "";
 }
 
-// 2. محرك OpenRouter
+// 2. OpenRouter Engine
 async function callOpenRouter(messages: any[]): Promise<string> {
   const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
     method: "POST",
     headers: {
       "Authorization": `Bearer ${OPENROUTER_KEY}`,
       "Content-Type": "application/json",
-      "HTTP-Referer": typeof window !== "undefined" ? window.location.origin : "",
       "X-Title": "Salman AI",
     },
     body: JSON.stringify({
@@ -67,48 +70,70 @@ async function callOpenRouter(messages: any[]): Promise<string> {
     }),
   });
 
+  if (!res.ok) {
+    const errData = await res.json().catch(() => ({}));
+    throw new Error(errData?.error?.message || `OpenRouter status: ${res.status}`);
+  }
+
   const data = await res.json();
-  if (!res.ok) throw new Error(data?.error?.message || `OpenRouter error status: ${res.status}`);
   return data.choices?.[0]?.message?.content || "";
 }
 
-// 3. محرك مجاني مباشر (بدون قيود CORS)
-async function callPollinations(promptText: string): Promise<string> {
-  const query = `${SYSTEM_PROMPT}\n\nسؤال المستخدم: ${promptText}`;
-  const res = await fetch(`https://text.pollinations.ai/${encodeURIComponent(query)}`);
-  if (!res.ok) throw new Error(`Pollinations HTTP ${res.status}`);
+// 3. Fallback Engine (Direct JSON POST)
+async function callBackup(messages: any[]): Promise<string> {
+  const formattedMessages = [
+    { role: "system", content: SYSTEM_PROMPT },
+    ...messages.map((m) => ({
+      role: m.role === "assistant" ? "assistant" : "user",
+      content: extractText(m),
+    })),
+  ];
+
+  const res = await fetch("https://text.pollinations.ai/", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      messages: formattedMessages,
+      model: "openai",
+      seed: Math.floor(Math.random() * 100000),
+    }),
+  });
+
+  if (!res.ok) throw new Error(`Backup status: ${res.status}`);
   const text = await res.text();
-  if (!text || text.includes("An error occurred")) throw new Error("Pollinations empty or invalid response");
+  if (!text || text.trim().startsWith("An error occurred")) {
+    throw new Error("Invalid backup response");
+  }
+
   return text.trim();
 }
 
 export async function askSalmanAI(messages: any[]): Promise<string> {
-  const lastUserMsg = messages.filter((m) => m.role === "user").pop();
-  const lastText = extractText(lastUserMsg) || "مرحباً";
-
-  // تجربة Groq
+  // محاولة Groq أولاً
   try {
     const text = await callGroq(messages);
     if (text) return text;
   } catch (e: any) {
-    console.error("Groq Error:", e?.message || e);
+    console.warn("Groq Failed:", e.message);
   }
 
-  // تجربة OpenRouter
+  // محاولة OpenRouter ثانياً
   try {
     const text = await callOpenRouter(messages);
     if (text) return text;
   } catch (e: any) {
-    console.error("OpenRouter Error:", e?.message || e);
+    console.warn("OpenRouter Failed:", e.message);
   }
 
-  // تجربة المحرك الاحتياطي المباشر
+  // المحرك الاحتياطي المباشر ثالثاً
   try {
-    const text = await callPollinations(lastText);
+    const text = await callBackup(messages);
     if (text) return text;
   } catch (e: any) {
-    console.error("Pollinations Error:", e?.message || e);
+    console.warn("Backup Failed:", e.message);
   }
 
-  return "عذراً، حدثت مشكلة في الاتصال بالخدمة. يرجى مراجعة وحدة التحكم (Console) للتأكد من حالة المفاتيح.";
+  return "عذراً، تعذّر الاتصال بالسيرفرات حالياً. يرجى إعادة المحاولة بعد لحظات.";
 }

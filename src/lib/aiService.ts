@@ -15,7 +15,6 @@ function extractText(m: any): string {
 }
 
 export async function askSalmanAI(messages: any[]): Promise<string> {
-  // قراءة المفتاح مباشرة من ملف .env
   const GROQ_KEY = (import.meta.env.VITE_GROQ_API_KEY || "").trim();
 
   if (!GROQ_KEY) {
@@ -30,34 +29,38 @@ export async function askSalmanAI(messages: any[]): Promise<string> {
     })),
   ];
 
-  try {
-    const res = await fetch("https://api.groq.com/openai/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        "Authorization": `Bearer ${GROQ_KEY}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: "llama-3.3-70b-versatile",
-        messages: formattedMessages,
-        temperature: 0.7,
-        max_tokens: 2048,
-      }),
-    });
+  // قائمة أسماء النماذج المعتمدة والرسمية في Groq
+  const MODELS = [
+    "llama-3.1-8b-instant",
+    "llama-3.3-70b-specdec",
+    "mixtral-8x7b-32768"
+  ];
 
-    if (res.ok) {
-      const data = await res.json();
-      const reply = data.choices?.[0]?.message?.content;
-      if (reply) return reply.trim();
-    } else {
-      const err = await res.json().catch(() => ({}));
-      console.error("Groq API Error:", err);
-      return `خطأ في الاتصال (${res.status}): ${err?.error?.message || "يرجى المحاولة لاحقاً."}`;
+  for (const model of MODELS) {
+    try {
+      const res = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${GROQ_KEY}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: model,
+          messages: formattedMessages,
+          temperature: 0.7,
+          max_tokens: 2048,
+        }),
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        const reply = data.choices?.[0]?.message?.content;
+        if (reply) return reply.trim();
+      }
+    } catch (e) {
+      console.error(`Error with Groq model ${model}:`, e);
     }
-  } catch (e) {
-    console.error("Network Fetch Error:", e);
-    return "تعذر الاتصال بالخادم. يرجى التأكد من اتصال الإنترنت وإعادة المحاولة.";
   }
 
-  return "حدث خطأ غير متوقع أثناء معالجة الطلب.";
+  return "عذراً، متعذر الوصول لخادم Groq حالياً. يرجى التأكد من صحة المفتاح في .env وإعادة المحاولة.";
 }

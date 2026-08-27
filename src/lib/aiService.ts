@@ -15,8 +15,12 @@ function extractText(m: any): string {
 }
 
 export async function askSalmanAI(messages: any[]): Promise<string> {
+  // قراءة المفتاح مباشرة من ملف .env
   const GROQ_KEY = (import.meta.env.VITE_GROQ_API_KEY || "").trim();
-  const OPENROUTER_KEY = (import.meta.env.VITE_OPENROUTER_API_KEY || "").trim();
+
+  if (!GROQ_KEY) {
+    return "خطأ: مفتاح VITE_GROQ_API_KEY غير موجود في ملف .env. يرجى إضافته وتحديث النشر.";
+  }
 
   const formattedMessages = [
     { role: "system", content: SYSTEM_PROMPT },
@@ -26,82 +30,34 @@ export async function askSalmanAI(messages: any[]): Promise<string> {
     })),
   ];
 
-  // 1. المحرك الأول: Groq API
-  if (GROQ_KEY) {
-    try {
-      const res = await fetch("https://api.groq.com/openai/v1/chat/completions", {
-        method: "POST",
-        headers: {
-          "Authorization": `Bearer ${GROQ_KEY}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          model: "llama-3.3-70b-versatile",
-          messages: formattedMessages,
-          temperature: 0.7,
-        }),
-      });
-
-      if (res.ok) {
-        const data = await res.json();
-        const reply = data.choices?.[0]?.message?.content;
-        if (reply) return reply.trim();
-      }
-    } catch (e) {
-      console.warn("Groq fetch error:", e);
-    }
-  }
-
-  // 2. المحرك الثاني: OpenRouter API
-  if (OPENROUTER_KEY) {
-    try {
-      const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-        method: "POST",
-        headers: {
-          "Authorization": `Bearer ${OPENROUTER_KEY}`,
-          "Content-Type": "application/json",
-          "X-Title": "Salman AI",
-        },
-        body: JSON.stringify({
-          model: "google/gemma-2-9b-it:free",
-          messages: formattedMessages,
-        }),
-      });
-
-      if (res.ok) {
-        const data = await res.json();
-        const reply = data.choices?.[0]?.message?.content;
-        if (reply) return reply.trim();
-      }
-    } catch (e) {
-      console.warn("OpenRouter fetch error:", e);
-    }
-  }
-
-  // 3. المحرك المباشر المضمون (يعمل فوراً دون الاعتماد على مفاتيح البيئة)
   try {
-    const lastUserMsg = [...messages].reverse().find((m) => m.role === "user");
-    const userPrompt = extractText(lastUserMsg) || "مرحباً";
-
-    const res = await fetch("https://text.pollinations.ai/", {
+    const res = await fetch("https://api.groq.com/openai/v1/chat/completions", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Authorization": `Bearer ${GROQ_KEY}`,
+        "Content-Type": "application/json",
+      },
       body: JSON.stringify({
+        model: "llama-3.3-70b-versatile",
         messages: formattedMessages,
-        model: "openai",
-        seed: Math.floor(Math.random() * 100000),
+        temperature: 0.7,
+        max_tokens: 2048,
       }),
     });
 
     if (res.ok) {
-      const text = await res.text();
-      if (text && text.trim() && !text.includes("An error occurred")) {
-        return text.trim();
-      }
+      const data = await res.json();
+      const reply = data.choices?.[0]?.message?.content;
+      if (reply) return reply.trim();
+    } else {
+      const err = await res.json().catch(() => ({}));
+      console.error("Groq API Error:", err);
+      return `خطأ في الاتصال (${res.status}): ${err?.error?.message || "يرجى المحاولة لاحقاً."}`;
     }
   } catch (e) {
-    console.error("Direct engine error:", e);
+    console.error("Network Fetch Error:", e);
+    return "تعذر الاتصال بالخادم. يرجى التأكد من اتصال الإنترنت وإعادة المحاولة.";
   }
 
-  return "أهلاً بك! يرجى إعادة محاولة إرسال الرسالة الآن.";
+  return "حدث خطأ غير متوقع أثناء معالجة الطلب.";
 }

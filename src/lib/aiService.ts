@@ -24,34 +24,40 @@ export async function askSalmanAI(messages: any[]): Promise<string> {
   const lastUserMsg = [...messages].reverse().find((m) => m.role === "user");
   const userText = extractText(lastUserMsg) || "مرحباً";
 
-  try {
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_KEY}`;
-    const response = await fetch(url, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        contents: [
-          {
-            parts: [{ text: `${SYSTEM_PROMPT}\n\nسؤال المستخدم: ${userText}` }]
-          }
-        ]
-      })
-    });
+  // قائمة بأسماء نماذج Gemini الرسمية للتجربة التلقائية والتعافي السريع
+  const GEMINI_MODELS = [
+    "gemini-2.0-flash",
+    "gemini-1.5-flash-latest",
+    "gemini-1.5-flash-8b",
+    "gemini-1.5-pro"
+  ];
 
-    const data = await response.json();
+  for (const model of GEMINI_MODELS) {
+    try {
+      const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${GEMINI_KEY}`;
+      const response = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          contents: [
+            {
+              parts: [{ text: `${SYSTEM_PROMPT}\n\nسؤال المستخدم: ${userText}` }]
+            }
+          ]
+        })
+      });
 
-    if (response.ok) {
-      const reply = data.candidates?.[0]?.content?.parts?.[0]?.text;
-      if (reply && reply.trim()) {
-        return reply.trim();
+      if (response.ok) {
+        const data = await response.json();
+        const reply = data.candidates?.[0]?.content?.parts?.[0]?.text;
+        if (reply && reply.trim()) {
+          return reply.trim();
+        }
       }
-      return "تم استلام الطلب لكن الاستجابة فارغة، يرجى إرسال السؤال مرة أخرى.";
+    } catch (e) {
+      console.warn(`Model ${model} connection attempt failed, trying fallback model...`, e);
     }
-
-    const errorDetails = data?.error?.message || response.statusText;
-    return `خطأ من خادم جوجل Gemini (${response.status}): ${errorDetails}`;
-  } catch (error: any) {
-    console.error("Gemini Fetch Error:", error);
-    return `خطأ في اتصال الشبكة: ${error?.message || "تعذر الوصول لخوادم جوجل."}`;
   }
+
+  return "خطأ: تعذر الحصول على استجابة من نماذج Google Gemini. يرجى التأكد من صلاحية المفتاح في Google AI Studio.";
 }

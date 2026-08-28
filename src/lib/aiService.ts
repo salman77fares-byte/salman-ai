@@ -15,11 +15,40 @@ function extractText(m: any): string {
 }
 
 export async function askSalmanAI(messages: any[]): Promise<string> {
+  const GEMINI_KEY = (import.meta.env.VITE_GEMINI_API_KEY || "").trim();
+  const GROQ_KEY = (import.meta.env.VITE_GROQ_API_KEY || "").trim();
+  const OPENROUTER_KEY = (import.meta.env.VITE_OPENROUTER_API_KEY || "").trim();
+
   const lastUserMsg = [...messages].reverse().find((m) => m.role === "user");
   const userText = extractText(lastUserMsg) || "مرحباً";
 
-  // 1. التجربة عبر Groq API بواسطة POST
-  const GROQ_KEY = (import.meta.env.VITE_GROQ_API_KEY || "").trim();
+  // 1. المحرك الرئيسي المباشر: Google Gemini API
+  if (GEMINI_KEY && GEMINI_KEY !== "ضع_مفتاح_جوجل_هنا") {
+    try {
+      const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_KEY}`;
+      const res = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          contents: [
+            {
+              parts: [{ text: `${SYSTEM_PROMPT}\n\nسؤال المستخدم: ${userText}` }]
+            }
+          ]
+        })
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        const reply = data.candidates?.[0]?.content?.parts?.[0]?.text;
+        if (reply && reply.trim()) return reply.trim();
+      }
+    } catch (e) {
+      console.warn("Gemini Engine Exception:", e);
+    }
+  }
+
+  // 2. المحرك الثاني: Groq API
   if (GROQ_KEY) {
     try {
       const res = await fetch("https://api.groq.com/openai/v1/chat/completions", {
@@ -34,7 +63,6 @@ export async function askSalmanAI(messages: any[]): Promise<string> {
             { role: "system", content: SYSTEM_PROMPT },
             { role: "user", content: userText }
           ],
-          temperature: 0.7,
         }),
       });
 
@@ -44,33 +72,37 @@ export async function askSalmanAI(messages: any[]): Promise<string> {
         if (reply && reply.trim()) return reply.trim();
       }
     } catch (e) {
-      console.warn("Groq POST error:", e);
+      console.warn("Groq Engine Exception:", e);
     }
   }
 
-  // 2. المحرك الضامن عبر POST (بدون قيود على طول النص)
-  try {
-    const res = await fetch("https://text.pollinations.ai/", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        messages: [
-          { role: "system", content: SYSTEM_PROMPT },
-          { role: "user", content: userText }
-        ],
-        model: "openai"
-      }),
-    });
+  // 3. المحرك الثالث: OpenRouter API
+  if (OPENROUTER_KEY) {
+    try {
+      const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${OPENROUTER_KEY}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "google/gemma-2-9b-it:free",
+          messages: [
+            { role: "system", content: SYSTEM_PROMPT },
+            { role: "user", content: userText }
+          ],
+        }),
+      });
 
-    if (res.ok) {
-      const text = await res.text();
-      if (text && text.trim() && !text.includes("An error occurred")) {
-        return text.trim();
+      if (res.ok) {
+        const data = await res.json();
+        const reply = data.choices?.[0]?.message?.content;
+        if (reply && reply.trim()) return reply.trim();
       }
+    } catch (e) {
+      console.warn("OpenRouter Engine Exception:", e);
     }
-  } catch (e) {
-    console.error("Pollinations POST error:", e);
   }
 
-  return "تعذر جلب الإجابة حالياً، يرجى محاولة إعادة إرسال السؤال.";
+  return "يرجى إدخال مفتاح VITE_GEMINI_API_KEY الصحيح في ملف .env وتحديث النشر برفع الملف للعمل فوراً.";
 }

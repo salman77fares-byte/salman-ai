@@ -15,49 +15,52 @@ function extractText(m: any): string {
 }
 
 export async function askSalmanAI(messages: any[]): Promise<string> {
-  const GEMINI_KEY = (import.meta.env.VITE_GEMINI_API_KEY || "").trim();
+  const OPENROUTER_KEY = (import.meta.env.VITE_OPENROUTER_API_KEY || "").trim();
 
-  if (!GEMINI_KEY || GEMINI_KEY === "ضع_مفتاح_جوجل_الخاص_بك_هنا") {
-    return "خطأ: لم يتم العثور على مفتاح VITE_GEMINI_API_KEY داخل ملف .env. يرجى إضافته ثم ضغط Publish.";
+  if (!OPENROUTER_KEY) {
+    return "خطأ: لم يتم العثور على VITE_OPENROUTER_API_KEY في ملف .env. يرجى إضافته وإعادة الضغط على Publish.";
   }
 
   const lastUserMsg = [...messages].reverse().find((m) => m.role === "user");
   const userText = extractText(lastUserMsg) || "مرحباً";
 
-  // قائمة بأسماء نماذج Gemini الرسمية للتجربة التلقائية والتعافي السريع
-  const GEMINI_MODELS = [
-    "gemini-2.0-flash",
-    "gemini-1.5-flash-latest",
-    "gemini-1.5-flash-8b",
-    "gemini-1.5-pro"
+  // النماذج المجانية المعتمدة في OpenRouter والتي تتجاوز الحظر الجغرافي
+  const MODELS = [
+    "google/gemini-2.0-flash-exp:free",
+    "meta-llama/llama-3.3-70b-instruct:free",
+    "deepseek/deepseek-r1:free"
   ];
 
-  for (const model of GEMINI_MODELS) {
+  for (const model of MODELS) {
     try {
-      const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${GEMINI_KEY}`;
-      const response = await fetch(url, {
+      const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Authorization": `Bearer ${OPENROUTER_KEY}`,
+          "HTTP-Referer": "https://lovable.dev",
+          "X-Title": "Salman AI",
+          "Content-Type": "application/json",
+        },
         body: JSON.stringify({
-          contents: [
-            {
-              parts: [{ text: `${SYSTEM_PROMPT}\n\nسؤال المستخدم: ${userText}` }]
-            }
-          ]
-        })
+          model: model,
+          messages: [
+            { role: "system", content: SYSTEM_PROMPT },
+            { role: "user", content: userText }
+          ],
+        }),
       });
 
       if (response.ok) {
         const data = await response.json();
-        const reply = data.candidates?.[0]?.content?.parts?.[0]?.text;
+        const reply = data.choices?.[0]?.message?.content;
         if (reply && reply.trim()) {
           return reply.trim();
         }
       }
-    } catch (e) {
-      console.warn(`Model ${model} connection attempt failed, trying fallback model...`, e);
+    } catch (error) {
+      console.warn(`OpenRouter model ${model} failed, trying next...`, error);
     }
   }
 
-  return "خطأ: تعذر الحصول على استجابة من نماذج Google Gemini. يرجى التأكد من صلاحية المفتاح في Google AI Studio.";
+  return "تعذر الاتصال بالنموذج حالياً، يرجى التأكد من صحة مفتاح OpenRouter في ملف .env.";
 }

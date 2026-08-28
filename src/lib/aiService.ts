@@ -15,47 +15,52 @@ function extractText(m: any): string {
 }
 
 export async function askSalmanAI(messages: any[]): Promise<string> {
-  const formattedMessages = [
-    { role: "system", content: SYSTEM_PROMPT },
-    ...messages.map((m) => ({
-      role: m.role === "assistant" ? "assistant" : "user",
-      content: extractText(m),
-    })),
-  ];
+  const lastUserMsg = [...messages].reverse().find((m) => m.role === "user");
+  const userText = extractText(lastUserMsg) || "مرحباً";
 
-  // المحرك الأول: طلب مباشر مع هيدرز محسّنة لتجاوز قيود CORS
-  try {
-    const apiKey = import.meta.env.VITE_GROQ_API_KEY || "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";
-    const res = await fetch("https://api.groq.com/openai/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        "Authorization": `Bearer ${apiKey.trim()}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: "llama-3.1-8b-instant",
-        messages: formattedMessages,
-        temperature: 0.7,
-      }),
-    });
+  // 1. التجربة عبر Groq API بواسطة POST
+  const GROQ_KEY = (import.meta.env.VITE_GROQ_API_KEY || "").trim();
+  if (GROQ_KEY) {
+    try {
+      const res = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${GROQ_KEY}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "llama-3.1-8b-instant",
+          messages: [
+            { role: "system", content: SYSTEM_PROMPT },
+            { role: "user", content: userText }
+          ],
+          temperature: 0.7,
+        }),
+      });
 
-    if (res.ok) {
-      const data = await res.json();
-      const reply = data.choices?.[0]?.message?.content;
-      if (reply && reply.trim()) return reply.trim();
+      if (res.ok) {
+        const data = await res.json();
+        const reply = data.choices?.[0]?.message?.content;
+        if (reply && reply.trim()) return reply.trim();
+      }
+    } catch (e) {
+      console.warn("Groq POST error:", e);
     }
-  } catch (e) {
-    console.warn("Direct Groq API failed, switching to HTTP Proxy stream...", e);
   }
 
-  // المحرك الاحتياطي المضمون: وكيل إرسال يتجاوز المتصفح بالكامل (100% Guaranteed Response)
+  // 2. المحرك الضامن عبر POST (بدون قيود على طول النص)
   try {
-    const lastUserMsg = [...messages].reverse().find((m) => m.role === "user");
-    const userPrompt = extractText(lastUserMsg) || "مرحباً";
-    const payloadPrompt = `${SYSTEM_PROMPT}\n\nسؤال المستخدم: ${userPrompt}`;
-
-    const proxyUrl = `https://text.pollinations.ai/${encodeURIComponent(payloadPrompt)}?model=openai&seed=${Date.now()}`;
-    const res = await fetch(proxyUrl, { method: "GET" });
+    const res = await fetch("https://text.pollinations.ai/", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        messages: [
+          { role: "system", content: SYSTEM_PROMPT },
+          { role: "user", content: userText }
+        ],
+        model: "openai"
+      }),
+    });
 
     if (res.ok) {
       const text = await res.text();
@@ -64,8 +69,8 @@ export async function askSalmanAI(messages: any[]): Promise<string> {
       }
     }
   } catch (e) {
-    console.error("Proxy Engine Error:", e);
+    console.error("Pollinations POST error:", e);
   }
 
-  return "أهلاً بك! تم تحديث الاتصال، يرجى كتابة سؤالك الآن وسأجيبك فوراً.";
+  return "تعذر جلب الإجابة حالياً، يرجى محاولة إعادة إرسال السؤال.";
 }

@@ -321,7 +321,7 @@ function ChatIndexScreen() {
       const userMessage: Message = {
         role: "user",
         content: userText,
-        attachment: currentAttachment ? { ...currentAttachment } : undefined,
+        ...(currentAttachment ? { attachment: { ...currentAttachment } } : {}),
       };
 
       const updatedMessages = [...messages, userMessage];

@@ -329,7 +329,7 @@ const CodeBlockPre = ({ children, className, ...props }: ComponentProps<"pre">) 
       const childProps = children.props as { className?: string };
       if (childProps?.className) {
         const match = /language-(\w+)/.exec(childProps.className);
-        if (match) return match[1].toUpperCase();
+        if (match?.[1]) return match[1].toUpperCase();
       }
     }
     return "CODE";
@@ -402,7 +402,7 @@ export const MessageResponse = memo(
       components={{
         pre: CodeBlockPre,
         ...components,
-      }}
+      } as MessageResponseProps["components"]}
       {...props}
     />
   ),

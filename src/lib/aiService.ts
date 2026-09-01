@@ -42,7 +42,7 @@ function normalize(messages: any[]): { role: "user" | "assistant"; content: stri
 }
 
 async function tryGemini(history: { role: "user" | "assistant"; content: string }[]) {
-  const key = (import.meta.env.VITE_GEMINI_API_KEY || FALLBACK_GEMINI_KEY).trim();
+  const key = (import.meta.env['VITE_GEMINI_API_KEY'] || FALLBACK_GEMINI_KEY).trim();
   if (!key) return null;
 
   for (const model of GEMINI_MODELS) {
@@ -76,7 +76,7 @@ async function tryGemini(history: { role: "user" | "assistant"; content: string 
 }
 
 async function tryOpenRouter(history: { role: "user" | "assistant"; content: string }[]) {
-  const key = (import.meta.env.VITE_OPENROUTER_API_KEY || "").trim();
+  const key = (import.meta.env['VITE_OPENROUTER_API_KEY'] || "").trim();
   if (!key) return null;
 
   for (const model of OPENROUTER_MODELS) {
@@ -106,7 +106,7 @@ async function tryOpenRouter(history: { role: "user" | "assistant"; content: str
 }
 
 async function tryGroq(history: { role: "user" | "assistant"; content: string }[]) {
-  const key = (import.meta.env.VITE_GROQ_API_KEY || "").trim();
+  const key = (import.meta.env['VITE_GROQ_API_KEY'] || "").trim();
   if (!key) return null;
 
   for (const model of GROQ_MODELS) {

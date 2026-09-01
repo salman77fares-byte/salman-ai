@@ -402,7 +402,7 @@ export const MessageResponse = memo(
       components={{
         pre: CodeBlockPre,
         ...components,
-      } as MessageResponseProps["components"]}
+      } as NonNullable<MessageResponseProps["components"]>}
       {...props}
     />
   ),

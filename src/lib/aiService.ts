@@ -1,66 +1,150 @@
 // src/lib/aiService.ts
+// Triple-Tier Fallback System: Google Gemini -> OpenRouter -> Groq
 
-const SYSTEM_PROMPT = "أنت Salman AI، نموذج ذكاء اصطناعي متطور طوره المهندس سلمان فارس. أجب بدقة ووضوح وبطريقة احترافية.";
+const SYSTEM_PROMPT =
+  "أنت Salman AI، نموذج ذكاء اصطناعي متطور طوره المهندس سلمان فارس. أجب بدقة ووضوح وبطريقة احترافية ومباشرة دون حشو.";
 
-function extractText(m: any): string {
-  if (!m) return "";
+const FALLBACK_GEMINI_KEY = "AQ.Ab8RN6KGMJdiMVtgQRgjPMeDey_4R_i6XnHdiWt02fEGA6XS6w";
+
+const GEMINI_MODELS = ["gemini-2.0-flash", "gemini-1.5-flash", "gemini-1.5-pro"];
+const OPENROUTER_MODELS = [
+  "google/gemini-2.0-flash-exp:free",
+  "meta-llama/llama-3.3-70b-instruct:free",
+  "deepseek/deepseek-r1:free",
+];
+const GROQ_MODELS = ["llama-3.1-8b-instant"];
+
+/** استخراج نص متين من أي شكل للرسالة (نص، كائن، مصفوفة أجزاء). */
+export function extractText(m: any): string {
+  if (m === null || m === undefined) return "";
   if (typeof m === "string") return m.trim();
-  if (m.content) {
-    if (typeof m.content === "string") return m.content.trim();
-    if (Array.isArray(m.content)) {
-      return m.content.map((item: any) => (typeof item === "string" ? item : item?.text || "")).filter(Boolean).join("\n").trim();
-    }
+  if (typeof m === "number" || typeof m === "boolean") return String(m);
+  if (Array.isArray(m)) return m.map(extractText).filter(Boolean).join("\n").trim();
+
+  const content = m.content ?? m.parts ?? m.text ?? m.message ?? m.value;
+  if (content !== undefined && content !== m) {
+    const nested = extractText(content);
+    if (nested) return nested;
   }
-  return String(m.text || "").trim();
+  return "";
 }
 
-export async function askSalmanAI(messages: any[]): Promise<string> {
-  const OPENROUTER_KEY = (import.meta.env.VITE_OPENROUTER_API_KEY || "").trim();
+function normalize(messages: any[]): { role: "user" | "assistant"; content: string }[] {
+  const list = Array.isArray(messages) ? messages : [messages];
+  return list
+    .map((m) => ({
+      role: (m?.role === "assistant" || m?.role === "model" ? "assistant" : "user") as
+        | "user"
+        | "assistant",
+      content: extractText(m),
+    }))
+    .filter((m) => m.content.length > 0);
+}
 
-  if (!OPENROUTER_KEY) {
-    return "خطأ: لم يتم العثور على VITE_OPENROUTER_API_KEY في ملف .env. يرجى إضافته وإعادة الضغط على Publish.";
-  }
+async function tryGemini(history: { role: "user" | "assistant"; content: string }[]) {
+  const key = (import.meta.env.VITE_GEMINI_API_KEY || FALLBACK_GEMINI_KEY).trim();
+  if (!key) return null;
 
-  const lastUserMsg = [...messages].reverse().find((m) => m.role === "user");
-  const userText = extractText(lastUserMsg) || "مرحباً";
-
-  // النماذج المجانية المعتمدة في OpenRouter والتي تتجاوز الحظر الجغرافي
-  const MODELS = [
-    "google/gemini-2.0-flash-exp:free",
-    "meta-llama/llama-3.3-70b-instruct:free",
-    "deepseek/deepseek-r1:free"
-  ];
-
-  for (const model of MODELS) {
+  for (const model of GEMINI_MODELS) {
     try {
-      const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+      const res = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${encodeURIComponent(key)}`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            systemInstruction: { parts: [{ text: SYSTEM_PROMPT }] },
+            contents: history.map((m) => ({
+              role: m.role === "assistant" ? "model" : "user",
+              parts: [{ text: m.content }],
+            })),
+          }),
+        },
+      );
+      if (!res.ok) continue;
+      const data: any = await res.json();
+      const reply = (data?.candidates?.[0]?.content?.parts || [])
+        .map((p: any) => p?.text || "")
+        .join("")
+        .trim();
+      if (reply) return reply;
+    } catch {
+      // فشل صامت والانتقال للنموذج/المحرك التالي
+    }
+  }
+  return null;
+}
+
+async function tryOpenRouter(history: { role: "user" | "assistant"; content: string }[]) {
+  const key = (import.meta.env.VITE_OPENROUTER_API_KEY || "").trim();
+  if (!key) return null;
+
+  for (const model of OPENROUTER_MODELS) {
+    try {
+      const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
         method: "POST",
         headers: {
-          "Authorization": `Bearer ${OPENROUTER_KEY}`,
+          Authorization: `Bearer ${key}`,
           "HTTP-Referer": "https://lovable.dev",
           "X-Title": "Salman AI",
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          model: model,
-          messages: [
-            { role: "system", content: SYSTEM_PROMPT },
-            { role: "user", content: userText }
-          ],
+          model,
+          messages: [{ role: "system", content: SYSTEM_PROMPT }, ...history],
         }),
       });
+      if (!res.ok) continue;
+      const data: any = await res.json();
+      const reply = extractText(data?.choices?.[0]?.message);
+      if (reply) return reply;
+    } catch {
+      // فشل صامت
+    }
+  }
+  return null;
+}
 
-      if (response.ok) {
-        const data = await response.json();
-        const reply = data.choices?.[0]?.message?.content;
-        if (reply && reply.trim()) {
-          return reply.trim();
-        }
-      }
-    } catch (error) {
-      console.warn(`OpenRouter model ${model} failed, trying next...`, error);
+async function tryGroq(history: { role: "user" | "assistant"; content: string }[]) {
+  const key = (import.meta.env.VITE_GROQ_API_KEY || "").trim();
+  if (!key) return null;
+
+  for (const model of GROQ_MODELS) {
+    try {
+      const res = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${key}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model,
+          messages: [{ role: "system", content: SYSTEM_PROMPT }, ...history],
+        }),
+      });
+      if (!res.ok) continue;
+      const data: any = await res.json();
+      const reply = extractText(data?.choices?.[0]?.message);
+      if (reply) return reply;
+    } catch {
+      // فشل صامت
+    }
+  }
+  return null;
+}
+
+export async function askSalmanAI(messages: any[]): Promise<string> {
+  const history = normalize(messages);
+  const safeHistory = history.length ? history.slice(-12) : [{ role: "user" as const, content: "مرحباً" }];
+
+  for (const engine of [tryGemini, tryOpenRouter, tryGroq]) {
+    try {
+      const reply = await engine(safeHistory);
+      if (reply) return reply;
+    } catch {
+      // انتقال صامت للمحرك التالي
     }
   }
 
-  return "تعذر الاتصال بالنموذج حالياً، يرجى التأكد من صحة مفتاح OpenRouter في ملف .env.";
+  return "تعذر الاتصال بأي من المحركات حالياً، يرجى المحاولة مرة أخرى بعد قليل.";
 }

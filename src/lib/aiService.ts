@@ -47,7 +47,7 @@ export function extractText(m: unknown): string {
   if (Array.isArray(m)) return m.map(extractText).filter(Boolean).join("\n").trim();
 
   const obj = m as Record<string, unknown>;
-  const content = obj.content ?? obj.parts ?? obj.text ?? obj.message ?? obj.value;
+  const content = obj['content'] ?? obj['parts'] ?? obj['text'] ?? obj['message'] ?? obj['value'];
   if (content !== undefined && content !== m) {
     const nested = extractText(content);
     if (nested) return nested;

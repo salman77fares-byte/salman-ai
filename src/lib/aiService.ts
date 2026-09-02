@@ -2,8 +2,53 @@
 // نظام محركات متعاقب: Google Gemini -> OpenRouter -> Groq -> Lovable AI Gateway
 // كل محرك معزول تماماً؛ أي فشل (404/403/CORS/شبكة) ينتقل صامتاً للمحرك التالي.
 
-const SYSTEM_PROMPT =
-  "أنت Salman AI، نموذج ذكاء اصطناعي متطور طوّره المهندس سلمان فارس. أجب بدقة ووضوح وبأسلوب احترافي مباشر دون حشو.";
+import { buildSearchQuery, needsFreshInfo } from "@/lib/fresh-intent";
+
+type SearchResult = { title: string; url: string; snippet: string };
+
+function baseSystemPrompt(): string {
+  const now = new Date();
+  const date = now.toISOString().slice(0, 10);
+  return [
+    "أنت Salman AI، نموذج ذكاء اصطناعي متطور طوّره المهندس سلمان فارس.",
+    "أجب بدقة ووضوح وبأسلوب احترافي مباشر دون حشو.",
+    `التاريخ الحالي (UTC): ${date}.`,
+    "إذا زُوّدت بنتائج بحث حية فاعتمد عليها كمصدر أساسي للحقائق الزمنية ولا تعتمد على بيانات تدريبك القديمة،",
+    "واذكر المصادر في النهاية كقائمة روابط مختصرة. إن تعارضت معلوماتك مع نتائج البحث فالنتائج هي الصحيحة.",
+  ].join(" ");
+}
+
+/** يطلب نتائج بحث حية من نقطة البحث في التطبيق (تعمل من المتصفح والسيرفر). */
+async function fetchLiveContext(query: string): Promise<string> {
+  const base =
+    typeof window !== "undefined"
+      ? ""
+      : (env("APP_ORIGIN") || env("VITE_APP_ORIGIN") || "http://localhost:8080");
+  try {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 14_000);
+    const res = await fetch(`${base}/api/public/search`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ query, limit: 6 }),
+      signal: controller.signal,
+    }).finally(() => clearTimeout(timer));
+    if (!res.ok) return "";
+    const data = (await res.json()) as { results?: SearchResult[]; fetchedAt?: string };
+    const results = (data.results ?? []).filter((r) => r?.title);
+    if (!results.length) return "";
+    const lines = results
+      .map((r, i) => `${i + 1}. ${r.title}\n   ${r.snippet}\n   المصدر: ${r.url}`)
+      .join("\n");
+    return [
+      `نتائج بحث حية من الويب (وقت الجلب: ${data.fetchedAt ?? new Date().toISOString()}) للاستعلام: "${query}"`,
+      lines,
+      "استخدم هذه النتائج كمرجع أساسي وأجب بشكل محدث ومباشر، ثم اذكر المصادر.",
+    ].join("\n");
+  } catch {
+    return "";
+  }
+}
 
 // مفاتيح احتياطية مضمّنة لضمان عمل الخدمة حتى لو لم تُحمّل متغيرات البيئة.
 const FALLBACK_KEYS = {
@@ -83,7 +128,7 @@ async function postJson(url: string, headers: Record<string, string>, body: unkn
   }
 }
 
-async function tryGemini(history: Msg[]): Promise<string | null> {
+async function tryGemini(history: Msg[], systemPrompt: string, grounded: boolean): Promise<string | null> {
   const key = keyFor("gemini");
   if (!key) return null;
 
@@ -93,11 +138,13 @@ async function tryGemini(history: Msg[]): Promise<string | null> {
         `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${encodeURIComponent(key)}`,
         {},
         {
-          systemInstruction: { parts: [{ text: SYSTEM_PROMPT }] },
+          systemInstruction: { parts: [{ text: systemPrompt }] },
           contents: history.map((m) => ({
             role: m.role === "assistant" ? "model" : "user",
             parts: [{ text: m.content }],
           })),
+          // أداة البحث المدمجة في Gemini (Search Grounding) عند الحاجة لمعلومات حية
+          ...(grounded ? { tools: [{ google_search: {} }] } : {}),
         },
       );
       if (!res.ok) continue;
@@ -121,6 +168,7 @@ async function tryOpenAICompatible(
   key: string,
   models: string[],
   history: Msg[],
+  systemPrompt: string,
   extraHeaders: Record<string, string> = {},
 ): Promise<string | null> {
   if (!key) return null;
@@ -129,7 +177,7 @@ async function tryOpenAICompatible(
       const res = await postJson(
         url,
         { Authorization: `Bearer ${key}`, ...extraHeaders },
-        { model, messages: [{ role: "system", content: SYSTEM_PROMPT }, ...history] },
+        { model, messages: [{ role: "system", content: systemPrompt }, ...history] },
       );
       if (!res.ok) continue;
       const data = (await res.json()) as { choices?: { message?: unknown }[] };
@@ -142,32 +190,34 @@ async function tryOpenAICompatible(
   return null;
 }
 
-const tryOpenRouter = (history: Msg[]) =>
+const tryOpenRouter = (history: Msg[], systemPrompt: string) =>
   tryOpenAICompatible(
     "https://openrouter.ai/api/v1/chat/completions",
     keyFor("openrouter"),
     OPENROUTER_MODELS,
     history,
+    systemPrompt,
     { "HTTP-Referer": "https://salman-ai.lovable.app", "X-Title": "Salman AI" },
   );
 
-const tryGroq = (history: Msg[]) =>
+const tryGroq = (history: Msg[], systemPrompt: string) =>
   tryOpenAICompatible(
     "https://api.groq.com/openai/v1/chat/completions",
     keyFor("groq"),
     GROQ_MODELS,
     history,
+    systemPrompt,
   );
 
 /** محرك أخير مضمون عبر بوابة Lovable AI. */
-async function tryGateway(history: Msg[]): Promise<string | null> {
+async function tryGateway(history: Msg[], systemPrompt: string): Promise<string | null> {
   const key = env("LOVABLE_API_KEY");
   if (!key) return null;
   try {
     const res = await postJson(
       "https://ai.gateway.lovable.dev/v1/chat/completions",
       { "Lovable-API-Key": key },
-      { model: GATEWAY_MODEL, messages: [{ role: "system", content: SYSTEM_PROMPT }, ...history] },
+      { model: GATEWAY_MODEL, messages: [{ role: "system", content: systemPrompt }, ...history] },
     );
     if (!res.ok) return null;
     const data = (await res.json()) as { choices?: { message?: unknown }[] };
@@ -183,9 +233,19 @@ export async function askSalmanAI(messages: unknown[]): Promise<string> {
     ? history.slice(-12)
     : [{ role: "user" as const, content: "مرحباً" }];
 
-  for (const engine of [tryGemini, tryOpenRouter, tryGroq, tryGateway]) {
+  // بحث حي تلقائي للأسئلة التي تحتاج معلومات محدّثة زمنياً
+  const lastUser = [...safeHistory].reverse().find((m) => m.role === "user")?.content ?? "";
+  let systemPrompt = baseSystemPrompt();
+  let grounded = false;
+  if (needsFreshInfo(lastUser)) {
+    const context = await fetchLiveContext(buildSearchQuery(lastUser));
+    grounded = true;
+    if (context) systemPrompt = `${systemPrompt}\n\n${context}`;
+  }
+
+  for (const engine of [tryGemini, tryOpenRouter, tryGroq, tryGateway] as const) {
     try {
-      const reply = await engine(safeHistory);
+      const reply = await engine(safeHistory, systemPrompt, grounded);
       if (reply) return reply;
     } catch {
       // انتقال صامت للمحرك التالي

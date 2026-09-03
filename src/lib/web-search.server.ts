@@ -115,6 +115,62 @@ async function duckduckgo(query: string, limit: number): Promise<SearchResult[]>
   return results;
 }
 
+/** DuckDuckGo Lite — second free fallback with a simpler HTML shape. */
+async function duckduckgoLite(query: string, limit: number): Promise<SearchResult[]> {
+  const res = await withTimeout((signal) =>
+    fetch("https://lite.duckduckgo.com/lite/", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/x-www-form-urlencoded",
+        "User-Agent":
+          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122 Safari/537.36",
+      },
+      body: new URLSearchParams({ q: query }).toString(),
+      signal,
+    }),
+  );
+  if (!res.ok) return [];
+  const html = await res.text();
+  const results: SearchResult[] = [];
+  const linkRe = /<a[^>]*class="result-link"[^>]*href="([^"]+)"[^>]*>([\s\S]*?)<\/a>/g;
+  const snippetRe = /class="result-snippet"[^>]*>([\s\S]*?)<\/td>/g;
+  const snippets: string[] = [];
+  let sm: RegExpExecArray | null;
+  while ((sm = snippetRe.exec(html))) snippets.push(decode(sm[1] ?? ""));
+  let lm: RegExpExecArray | null;
+  let i = 0;
+  while ((lm = linkRe.exec(html)) && results.length < limit) {
+    let url = decode(lm[1] ?? "");
+    const redirect = /uddg=([^&]+)/.exec(url);
+    if (redirect?.[1]) url = decodeURIComponent(redirect[1]);
+    const title = decode(lm[2] ?? "");
+    if (title && url) results.push({ title, url, snippet: snippets[i] ?? "" });
+    i += 1;
+  }
+  return results;
+}
+
+/** Google News RSS — free and very fresh, ideal for news/sports queries. */
+async function googleNewsRss(query: string, limit: number): Promise<SearchResult[]> {
+  const url =
+    "https://news.google.com/rss/search?hl=ar&gl=SA&ceid=SA:ar&q=" + encodeURIComponent(query);
+  const res = await withTimeout((signal) =>
+    fetch(url, { headers: { "User-Agent": "Mozilla/5.0" }, signal }),
+  );
+  if (!res.ok) return [];
+  const xml = await res.text();
+  const items = xml.split("<item>").slice(1, limit + 1);
+  return items
+    .map((item) => {
+      const title = decode(/<title>([\s\S]*?)<\/title>/.exec(item)?.[1] ?? "");
+      const link = decode(/<link>([\s\S]*?)<\/link>/.exec(item)?.[1] ?? "");
+      const date = decode(/<pubDate>([\s\S]*?)<\/pubDate>/.exec(item)?.[1] ?? "");
+      const source = decode(/<source[^>]*>([\s\S]*?)<\/source>/.exec(item)?.[1] ?? "");
+      return { title, url: link, snippet: [source, date].filter(Boolean).join(" — ") };
+    })
+    .filter((r) => r.title && r.url);
+}
+
 /** Wikipedia — last-resort factual grounding. */
 async function wikipedia(query: string, limit: number): Promise<SearchResult[]> {
   const url =
@@ -141,7 +197,7 @@ export async function searchWeb(query: string, limit = 6): Promise<SearchResult[
   const trimmed = query.trim().slice(0, 400);
   if (!trimmed) return [];
 
-  for (const provider of [tavily, serper, duckduckgo, wikipedia]) {
+  for (const provider of [tavily, serper, duckduckgo, duckduckgoLite, googleNewsRss, wikipedia]) {
     try {
       const results = await provider(trimmed, limit);
       if (results.length) return results.slice(0, limit);

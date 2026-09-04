@@ -152,9 +152,11 @@ async function tryGemini(history: Msg[], systemPrompt: string, grounded: boolean
             role: m.role === "assistant" ? "model" : "user",
             parts: [{ text: m.content }],
           })),
-          // أداة البحث المدمجة في Gemini (Search Grounding) عند الحاجة لمعلومات حية
-          ...(grounded ? { tools: [{ google_search: {} }] } : {}),
+          // أداة البحث الحي المدمجة في Gemini (Google Search Grounding) مفعّلة دائماً
+          tools: [{ google_search: {} }],
+          generationConfig: { temperature: 0.6, topP: 0.9, maxOutputTokens: 1400 },
         },
+        grounded ? 8_000 : ENGINE_TIMEOUT_MS,
       );
       if (!res.ok) continue;
       const data = (await res.json()) as {

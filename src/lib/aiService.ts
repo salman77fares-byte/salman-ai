@@ -119,7 +119,10 @@ function normalize(messages: unknown[]): Msg[] {
     .filter((m) => m.content.length > 0);
 }
 
-async function postJson(url: string, headers: Record<string, string>, body: unknown, timeoutMs = 25_000) {
+/** مهلة قصيرة لكل محرك: أي تأخر ينقل الطلب فوراً للمحرك التالي. */
+export const ENGINE_TIMEOUT_MS = 4_000;
+
+async function postJson(url: string, headers: Record<string, string>, body: unknown, timeoutMs = ENGINE_TIMEOUT_MS) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {

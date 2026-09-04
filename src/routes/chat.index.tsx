@@ -7,6 +7,7 @@ import remarkGfm from "remark-gfm";
 import { toast } from "sonner";
 
 import { BrandMark } from "@/components/salman/BrandMark";
+import { ModelSettingsDialog } from "@/components/salman/ModelSettingsDialog";
 import { Button } from "@/components/ui/button";
 import { useSession } from "@/hooks/useSession";
 import { askSalmanAI } from "@/lib/aiService";
@@ -29,10 +30,11 @@ interface Message {
 }
 
 const QUICK_SUGGESTIONS = [
-  "أحدث الأخبار الرياضية",
-  "اشرح لي فكرة مشروع",
-  "كتابة كود برمجي",
-  "تلخيص نص مطول",
+  "🚀 فكرة مشروع",
+  "💻 كتابة كود",
+  "⚽ أخبار الرياضة",
+  "🎬 سيناريو فيديو",
+  "💡 حل مشكلة تقنية",
 ];
 
 const SEARCH_STATUSES = [
@@ -267,7 +269,7 @@ function ChatIndexScreen() {
           newMsgs[newMsgs.length - 1] = { role: "assistant", content: textToUpdate };
           return newMsgs;
         });
-        await new Promise((resolve) => setTimeout(resolve, 20));
+        await new Promise((resolve) => setTimeout(resolve, 8));
       }
 
       // حفظ الرسالتين (المستخدم + المساعد) في قاعدة البيانات عند اكتمال الرد
@@ -390,16 +392,19 @@ function ChatIndexScreen() {
   return (
     <div className="relative flex h-full w-full max-w-full overflow-x-hidden flex-col justify-between bg-[#0b101b] text-slate-100" dir="rtl">
       
-      {/* زر محادثة جديدة العائم */}
-      <Button
-        onClick={handleNewChat}
-        variant="outline"
-        size="sm"
-        className="absolute left-4 top-4 z-10 flex items-center gap-1.5 rounded-full border-slate-800 bg-slate-900/60 px-3 py-1.5 text-xs text-slate-200 hover:bg-slate-800"
-      >
-        محادثة جديدة
-        <Plus className="size-4 text-[#2dd4bf]" />
-      </Button>
+      {/* أزرار عائمة: محادثة جديدة + الإعدادات */}
+      <div className="absolute left-4 top-4 z-10 flex items-center gap-2">
+        <Button
+          onClick={handleNewChat}
+          variant="outline"
+          size="sm"
+          className="flex items-center gap-1.5 rounded-full border-slate-800 bg-slate-900/60 px-3 py-1.5 text-xs text-slate-200 hover:bg-slate-800"
+        >
+          محادثة جديدة
+          <Plus className="size-4 text-[#2dd4bf]" />
+        </Button>
+        <ModelSettingsDialog />
+      </div>
 
       {/* منطقة المحتوى والرسائل */}
       <div className="flex flex-1 flex-col justify-start space-y-5 overflow-y-auto overflow-x-hidden px-3 py-4 w-full max-w-full">
@@ -411,7 +416,7 @@ function ChatIndexScreen() {
             </div>
             <h2 className="text-xl font-black tracking-tight text-white">مرحباً بك مع Salman AI</h2>
             <p className="max-w-xs text-xs leading-relaxed text-slate-400">
-              أسألني أي شيء، أرفق صوراً، واستفد من خيارات النقر المطوّل على الرسائل.
+              مرحباً بك! أنا جاهز لمساعدتك في أي وقت...
             </p>
           </div>
         )}
@@ -608,8 +613,10 @@ function ChatIndexScreen() {
               onChange={(e) => setInput(e.target.value)}
               placeholder="اكتب رسالتك لـ Salman AI..."
               rows={1}
+              dir="auto"
               autoComplete="on"
               autoCorrect="on"
+              autoCapitalize="sentences"
               spellCheck={true}
               className="max-h-32 min-h-[44px] w-full resize-none bg-transparent py-3 pl-4 pr-11 text-right text-xs text-white placeholder:text-slate-500 focus:outline-none"
             />

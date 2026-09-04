@@ -10,13 +10,19 @@ function baseSystemPrompt(): string {
   const now = new Date();
   const date = now.toISOString().slice(0, 10);
   return [
-    "أنت Salman AI، نموذج ذكاء اصطناعي متطور طوّره المهندس سلمان فارس.",
-    "أجب بدقة ووضوح وبأسلوب احترافي مباشر دون حشو.",
-    `التاريخ الحالي (UTC): ${date}.`,
+    "أنت Salman AI، نموذج ذكاء اصطناعي متطور ودقيق جداً طوّره المهندس سلمان فارس.",
+    `نحن حالياً في عام ${now.getUTCFullYear()} (التاريخ بالضبط: ${date}). يجب أن تتوافق جميع الإجابات والمعلومات والأحداث الرياضية والعامة مع هذا السياق الزمني بدقة.`,
+    "تجنب التكهن أو إعطاء معلومات قديمة، وقدم إجابات موثوقة ومباشرة وموجزة بدون مقدمات طويلة أو حشو.",
+    "قواعد التنسيق الإلزامية:",
+    "1) يمنع منعاً تاماً استخدام الجداول (Tables) أو صيغة | --- |، واستبدلها دائماً بقوائم منقطة قصيرة أو بطاقات نصية واضحة.",
+    "2) ضع كل الأكواد البرمجية والأوامر النصية والبرومبتات وأي نص طويل يحتاج نسخاً داخل صناديق أكواد بصيغة ``` مع تحديد اللغة.",
+    "3) استخدم إيموجيات معبرة ومناسبة في بداية العناوين والفقرات وبجانب النقاط لجعل القراءة ممتعة.",
+    "4) استخدم **الخط العريض** للعناوين والكلمات المفتاحية، وقسّم الإجابة إلى نقاط قصيرة، وافصل الأفكار الكبيرة بفاصل بصري ---.",
     "إذا زُوّدت بنتائج بحث حية فاعتمد عليها كمصدر أساسي للحقائق الزمنية ولا تعتمد على بيانات تدريبك القديمة،",
     "واذكر المصادر في النهاية كقائمة روابط مختصرة. إن تعارضت معلوماتك مع نتائج البحث فالنتائج هي الصحيحة.",
-  ].join(" ");
+  ].join("\n");
 }
+
 
 /** يطلب نتائج بحث حية من نقطة البحث في التطبيق (تعمل من المتصفح والسيرفر). */
 async function fetchLiveContext(query: string): Promise<string> {
@@ -113,7 +119,10 @@ function normalize(messages: unknown[]): Msg[] {
     .filter((m) => m.content.length > 0);
 }
 
-async function postJson(url: string, headers: Record<string, string>, body: unknown, timeoutMs = 25_000) {
+/** مهلة قصيرة لكل محرك: أي تأخر ينقل الطلب فوراً للمحرك التالي. */
+export const ENGINE_TIMEOUT_MS = 4_000;
+
+async function postJson(url: string, headers: Record<string, string>, body: unknown, timeoutMs = ENGINE_TIMEOUT_MS) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
@@ -143,9 +152,11 @@ async function tryGemini(history: Msg[], systemPrompt: string, grounded: boolean
             role: m.role === "assistant" ? "model" : "user",
             parts: [{ text: m.content }],
           })),
-          // أداة البحث المدمجة في Gemini (Search Grounding) عند الحاجة لمعلومات حية
-          ...(grounded ? { tools: [{ google_search: {} }] } : {}),
+          // أداة البحث الحي المدمجة في Gemini (Google Search Grounding) مفعّلة دائماً
+          tools: [{ google_search: {} }],
+          generationConfig: { temperature: 0.6, topP: 0.9, maxOutputTokens: 1400 },
         },
+        grounded ? 8_000 : ENGINE_TIMEOUT_MS,
       );
       if (!res.ok) continue;
       const data = (await res.json()) as {
@@ -190,7 +201,7 @@ async function tryOpenAICompatible(
   return null;
 }
 
-const tryOpenRouter = (history: Msg[], systemPrompt: string) =>
+const tryOpenRouter = (history: Msg[], systemPrompt: string, _grounded = false) =>
   tryOpenAICompatible(
     "https://openrouter.ai/api/v1/chat/completions",
     keyFor("openrouter"),
@@ -200,7 +211,7 @@ const tryOpenRouter = (history: Msg[], systemPrompt: string) =>
     { "HTTP-Referer": "https://salman-ai.lovable.app", "X-Title": "Salman AI" },
   );
 
-const tryGroq = (history: Msg[], systemPrompt: string) =>
+const tryGroq = (history: Msg[], systemPrompt: string, _grounded = false) =>
   tryOpenAICompatible(
     "https://api.groq.com/openai/v1/chat/completions",
     keyFor("groq"),
@@ -210,7 +221,7 @@ const tryGroq = (history: Msg[], systemPrompt: string) =>
   );
 
 /** محرك أخير مضمون عبر بوابة Lovable AI. */
-async function tryGateway(history: Msg[], systemPrompt: string): Promise<string | null> {
+async function tryGateway(history: Msg[], systemPrompt: string, _grounded = false): Promise<string | null> {
   const key = env("LOVABLE_API_KEY");
   if (!key) return null;
   try {
@@ -218,6 +229,7 @@ async function tryGateway(history: Msg[], systemPrompt: string): Promise<string 
       "https://ai.gateway.lovable.dev/v1/chat/completions",
       { "Lovable-API-Key": key },
       { model: GATEWAY_MODEL, messages: [{ role: "system", content: systemPrompt }, ...history] },
+      20_000,
     );
     if (!res.ok) return null;
     const data = (await res.json()) as { choices?: { message?: unknown }[] };
@@ -227,10 +239,32 @@ async function tryGateway(history: Msg[], systemPrompt: string): Promise<string 
   }
 }
 
+/** المحركات المتاحة للاختيار من الإعدادات. */
+export const ENGINE_OPTIONS = [
+  { id: "gemini", label: "Google Gemini Flash (سريع + بحث حي)" },
+  { id: "groq", label: "Groq GPT-OSS (أسرع استجابة)" },
+  { id: "openrouter", label: "OpenRouter (Llama / DeepSeek)" },
+  { id: "gateway", label: "Salman Cloud (احتياطي مضمون)" },
+] as const;
+
+export type EngineId = (typeof ENGINE_OPTIONS)[number]["id"];
+export const ENGINE_STORAGE_KEY = "salman-ai-engine";
+
+function preferredEngine(): EngineId | null {
+  try {
+    if (typeof localStorage === "undefined") return null;
+    const value = localStorage.getItem(ENGINE_STORAGE_KEY) as EngineId | null;
+    return value && ENGINE_OPTIONS.some((e) => e.id === value) ? value : null;
+  } catch {
+    return null;
+  }
+}
+
 export async function askSalmanAI(messages: unknown[]): Promise<string> {
   const history = normalize(messages);
+  // آخر 4 رسائل فقط لتقليل حجم الطلب وزمن الاستجابة
   const safeHistory = history.length
-    ? history.slice(-12)
+    ? history.slice(-4)
     : [{ role: "user" as const, content: "مرحباً" }];
 
   // بحث حي تلقائي للأسئلة التي تحتاج معلومات محدّثة زمنياً
@@ -243,14 +277,26 @@ export async function askSalmanAI(messages: unknown[]): Promise<string> {
     if (context) systemPrompt = `${systemPrompt}\n\n${context}`;
   }
 
-  for (const engine of [tryGemini, tryOpenRouter, tryGroq, tryGateway] as const) {
+  const engines = {
+    gemini: tryGemini,
+    openrouter: tryOpenRouter,
+    groq: tryGroq,
+    gateway: tryGateway,
+  } as const;
+
+  const order: EngineId[] = ["gemini", "openrouter", "groq", "gateway"];
+  const chosen = preferredEngine();
+  const chain = chosen ? [chosen, ...order.filter((e) => e !== chosen)] : order;
+
+  for (const id of chain) {
     try {
-      const reply = await engine(safeHistory, systemPrompt, grounded);
+      const reply = await engines[id](safeHistory, systemPrompt, grounded);
       if (reply) return reply;
     } catch {
       // انتقال صامت للمحرك التالي
     }
   }
+
 
   return "تعذر الاتصال بأي من المحركات حالياً، يرجى المحاولة مرة أخرى بعد قليل.";
 }

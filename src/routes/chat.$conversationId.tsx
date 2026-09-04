@@ -273,7 +273,7 @@ function ConversationScreen() {
           newMsgs[newMsgs.length - 1] = { role: "assistant", content: textToUpdate };
           return newMsgs;
         });
-        await new Promise((resolve) => setTimeout(resolve, 20));
+        await new Promise((resolve) => setTimeout(resolve, 8));
       }
 
       if (session?.user && conversationId && cleanedResponse) {
@@ -593,8 +593,10 @@ function ConversationScreen() {
               onChange={(e) => setInput(e.target.value)}
               placeholder="اكتب رسالتك لـ Salman AI..."
               rows={1}
+              dir="auto"
               autoComplete="on"
               autoCorrect="on"
+              autoCapitalize="sentences"
               spellCheck={true}
               className="max-h-32 min-h-[44px] w-full resize-none bg-transparent py-3 pl-4 pr-11 text-right text-xs text-white placeholder:text-slate-500 focus:outline-none"
             />

@@ -559,7 +559,7 @@ function ChatIndexScreen() {
           {QUICK_SUGGESTIONS.map((item, i) => (
             <button
               key={i}
-              onClick={() => setInput(item)}
+              onClick={() => setInput(item.replace(/^[^\p{L}]+/u, ""))}
               className="shrink-0 rounded-full border border-slate-800 bg-slate-900/60 px-3 py-1.5 text-xs font-semibold text-slate-300 transition hover:bg-slate-800 hover:text-white"
             >
               {item}

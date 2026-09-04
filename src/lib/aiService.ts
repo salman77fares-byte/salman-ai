@@ -238,10 +238,32 @@ async function tryGateway(history: Msg[], systemPrompt: string): Promise<string 
   }
 }
 
+/** المحركات المتاحة للاختيار من الإعدادات. */
+export const ENGINE_OPTIONS = [
+  { id: "gemini", label: "Google Gemini Flash (سريع + بحث حي)" },
+  { id: "groq", label: "Groq GPT-OSS (أسرع استجابة)" },
+  { id: "openrouter", label: "OpenRouter (Llama / DeepSeek)" },
+  { id: "gateway", label: "Salman Cloud (احتياطي مضمون)" },
+] as const;
+
+export type EngineId = (typeof ENGINE_OPTIONS)[number]["id"];
+export const ENGINE_STORAGE_KEY = "salman-ai-engine";
+
+function preferredEngine(): EngineId | null {
+  try {
+    if (typeof localStorage === "undefined") return null;
+    const value = localStorage.getItem(ENGINE_STORAGE_KEY) as EngineId | null;
+    return value && ENGINE_OPTIONS.some((e) => e.id === value) ? value : null;
+  } catch {
+    return null;
+  }
+}
+
 export async function askSalmanAI(messages: unknown[]): Promise<string> {
   const history = normalize(messages);
+  // آخر 4 رسائل فقط لتقليل حجم الطلب وزمن الاستجابة
   const safeHistory = history.length
-    ? history.slice(-12)
+    ? history.slice(-4)
     : [{ role: "user" as const, content: "مرحباً" }];
 
   // بحث حي تلقائي للأسئلة التي تحتاج معلومات محدّثة زمنياً
@@ -254,14 +276,26 @@ export async function askSalmanAI(messages: unknown[]): Promise<string> {
     if (context) systemPrompt = `${systemPrompt}\n\n${context}`;
   }
 
-  for (const engine of [tryGemini, tryOpenRouter, tryGroq, tryGateway] as const) {
+  const engines = {
+    gemini: tryGemini,
+    openrouter: tryOpenRouter,
+    groq: tryGroq,
+    gateway: tryGateway,
+  } as const;
+
+  const order: EngineId[] = ["gemini", "openrouter", "groq", "gateway"];
+  const chosen = preferredEngine();
+  const chain = chosen ? [chosen, ...order.filter((e) => e !== chosen)] : order;
+
+  for (const id of chain) {
     try {
-      const reply = await engine(safeHistory, systemPrompt, grounded);
+      const reply = await engines[id](safeHistory, systemPrompt, grounded);
       if (reply) return reply;
     } catch {
       // انتقال صامت للمحرك التالي
     }
   }
+
 
   return "تعذر الاتصال بأي من المحركات حالياً، يرجى المحاولة مرة أخرى بعد قليل.";
 }

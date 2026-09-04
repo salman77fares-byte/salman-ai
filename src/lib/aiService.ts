@@ -201,7 +201,7 @@ async function tryOpenAICompatible(
   return null;
 }
 
-const tryOpenRouter = (history: Msg[], systemPrompt: string) =>
+const tryOpenRouter = (history: Msg[], systemPrompt: string, _grounded = false) =>
   tryOpenAICompatible(
     "https://openrouter.ai/api/v1/chat/completions",
     keyFor("openrouter"),
@@ -211,7 +211,7 @@ const tryOpenRouter = (history: Msg[], systemPrompt: string) =>
     { "HTTP-Referer": "https://salman-ai.lovable.app", "X-Title": "Salman AI" },
   );
 
-const tryGroq = (history: Msg[], systemPrompt: string) =>
+const tryGroq = (history: Msg[], systemPrompt: string, _grounded = false) =>
   tryOpenAICompatible(
     "https://api.groq.com/openai/v1/chat/completions",
     keyFor("groq"),
@@ -221,7 +221,7 @@ const tryGroq = (history: Msg[], systemPrompt: string) =>
   );
 
 /** محرك أخير مضمون عبر بوابة Lovable AI. */
-async function tryGateway(history: Msg[], systemPrompt: string): Promise<string | null> {
+async function tryGateway(history: Msg[], systemPrompt: string, _grounded = false): Promise<string | null> {
   const key = env("LOVABLE_API_KEY");
   if (!key) return null;
   try {
@@ -229,6 +229,7 @@ async function tryGateway(history: Msg[], systemPrompt: string): Promise<string 
       "https://ai.gateway.lovable.dev/v1/chat/completions",
       { "Lovable-API-Key": key },
       { model: GATEWAY_MODEL, messages: [{ role: "system", content: systemPrompt }, ...history] },
+      20_000,
     );
     if (!res.ok) return null;
     const data = (await res.json()) as { choices?: { message?: unknown }[] };

@@ -146,7 +146,7 @@ export function AppSidebar({
                             <MoreVertical className="size-4" />
                           </button>
                         </DropdownMenuTrigger>
-                        <DropdownMenuContent align="start" className="w-44" dir="rtl">
+                        <DropdownMenuContent align="start" className="w-44">
                           <DropdownMenuItem
                             onClick={() => onTogglePin(conversation.id, !conversation.pinned)}
                             className="gap-2 text-xs font-bold"

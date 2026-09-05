@@ -4,12 +4,31 @@ import {
   LogIn,
   LogOut,
   MessageSquare,
+  MoreVertical,
+  Pencil,
+  Pin,
+  PinOff,
   Settings,
   Trash2,
 } from "lucide-react";
+import { useState } from "react";
 
 import { BrandMark } from "./BrandMark";
 import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
 import { cn } from "@/lib/utils";
 import type { Conversation } from "@/lib/chat.functions";
@@ -17,6 +36,7 @@ import type { Conversation } from "@/lib/chat.functions";
 type Group = { label: string; items: Conversation[] };
 
 function groupConversations(conversations: Conversation[]): Group[] {
+  const pinned: Conversation[] = [];
   const today: Conversation[] = [];
   const yesterday: Conversation[] = [];
   const week: Conversation[] = [];
@@ -24,6 +44,10 @@ function groupConversations(conversations: Conversation[]): Group[] {
   const weekAgo = subDays(new Date(), 7);
 
   for (const conversation of conversations) {
+    if (conversation.pinned) {
+      pinned.push(conversation);
+      continue;
+    }
     const date = parseISO(conversation.updated_at);
     if (isToday(date)) today.push(conversation);
     else if (isYesterday(date)) yesterday.push(conversation);
@@ -32,6 +56,7 @@ function groupConversations(conversations: Conversation[]): Group[] {
   }
 
   return [
+    { label: "📌 المحادثات المثبتة", items: pinned },
     { label: "اليوم", items: today },
     { label: "أمس", items: yesterday },
     { label: "آخر ٧ أيام", items: week },
@@ -45,6 +70,8 @@ export function AppSidebar({
   isGuest,
   userEmail,
   onDeleteConversation,
+  onTogglePin,
+  onRenameConversation,
   onOpenSettings,
   onSignOut,
   onClose,
@@ -54,12 +81,22 @@ export function AppSidebar({
   isGuest: boolean;
   userEmail?: string | null | undefined;
   onDeleteConversation: (id: string) => void;
+  onTogglePin: (id: string, pinned: boolean) => void;
+  onRenameConversation: (id: string, title: string) => void;
   onClearAll?: () => void;
   onOpenSettings: () => void;
   onSignOut: () => void;
   onClose?: (() => void) | undefined;
 }) {
   const groups = groupConversations(conversations);
+  const [renaming, setRenaming] = useState<Conversation | null>(null);
+  const [draftTitle, setDraftTitle] = useState("");
+
+  const submitRename = () => {
+    const title = draftTitle.trim();
+    if (renaming && title) onRenameConversation(renaming.id, title);
+    setRenaming(null);
+  };
 
   return (
     <div className="flex h-full w-full flex-col bg-sidebar text-sidebar-foreground">
@@ -98,30 +135,64 @@ export function AppSidebar({
                         active ? "bg-sidebar-accent" : "hover:bg-sidebar-accent/60",
                       )}
                     >
-                      <button
-                        type="button"
-                        aria-label="حذف المحادثة"
-                        onClick={(e) => {
-                          e.preventDefault();
-                          e.stopPropagation();
-                          onDeleteConversation(conversation.id);
-                        }}
-                        className="shrink-0 rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
-                      >
-                        <Trash2 className="size-4" />
-                      </button>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <button
+                            type="button"
+                            aria-label="خيارات المحادثة"
+                            onClick={(e) => e.stopPropagation()}
+                            className="shrink-0 rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-sidebar-accent hover:text-foreground"
+                          >
+                            <MoreVertical className="size-4" />
+                          </button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="start" className="w-44" dir="rtl">
+                          <DropdownMenuItem
+                            onClick={() => onTogglePin(conversation.id, !conversation.pinned)}
+                            className="gap-2 text-xs font-bold"
+                          >
+                            {conversation.pinned ? (
+                              <PinOff className="size-4" />
+                            ) : (
+                              <Pin className="size-4" />
+                            )}
+                            {conversation.pinned ? "إلغاء التثبيت" : "تثبيت المحادثة"}
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            onClick={() => {
+                              setDraftTitle(conversation.title);
+                              setRenaming(conversation);
+                            }}
+                            className="gap-2 text-xs font-bold"
+                          >
+                            <Pencil className="size-4" />
+                            تعديل الاسم
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            onClick={() => onDeleteConversation(conversation.id)}
+                            className="gap-2 text-xs font-bold text-destructive focus:text-destructive"
+                          >
+                            <Trash2 className="size-4" />
+                            حذف المحادثة
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
                       <Link
                         to="/chat/$conversationId"
                         params={{ conversationId: conversation.id }}
                         onClick={onClose}
                         className="flex min-w-0 flex-1 items-center gap-2 px-2 py-2 text-sm"
                       >
-                        <MessageSquare
-                          className={cn(
-                            "size-4 shrink-0",
-                            active ? "text-primary" : "text-muted-foreground",
-                          )}
-                        />
+                        {conversation.pinned ? (
+                          <Pin className="size-4 shrink-0 text-primary" />
+                        ) : (
+                          <MessageSquare
+                            className={cn(
+                              "size-4 shrink-0",
+                              active ? "text-primary" : "text-muted-foreground",
+                            )}
+                          />
+                        )}
                         <span className="truncate">{conversation.title}</span>
                       </Link>
                     </li>
@@ -159,6 +230,31 @@ export function AppSidebar({
           </Button>
         )}
       </div>
+
+      <Dialog open={renaming !== null} onOpenChange={(open) => !open && setRenaming(null)}>
+        <DialogContent className="max-w-sm rounded-3xl" dir="rtl">
+          <DialogHeader>
+            <DialogTitle className="text-right text-base">✏️ تعديل اسم المحادثة</DialogTitle>
+          </DialogHeader>
+          <Input
+            value={draftTitle}
+            onChange={(event) => setDraftTitle(event.currentTarget.value)}
+            onKeyDown={(event) => {
+              if (event.key === "Enter") submitRename();
+            }}
+            autoFocus
+            className="rounded-xl text-sm"
+          />
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setRenaming(null)} className="text-xs font-bold">
+              إلغاء
+            </Button>
+            <Button onClick={submitRename} className="text-xs font-extrabold">
+              حفظ
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

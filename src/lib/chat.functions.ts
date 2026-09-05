@@ -7,6 +7,7 @@ export type Conversation = {
   title: string;
   created_at: string;
   updated_at: string;
+  pinned: boolean;
 };
 
 export type StoredMessage = {
@@ -21,7 +22,8 @@ export const listConversations = createServerFn({ method: "GET" })
   .handler(async ({ context }): Promise<Conversation[]> => {
     const { data, error } = await context.supabase
       .from("conversations")
-      .select("id, title, created_at, updated_at")
+      .select("id, title, created_at, updated_at, pinned")
+      .order("pinned", { ascending: false })
       .order("updated_at", { ascending: false });
     if (error) throw new Error(error.message);
     return data ?? [];
@@ -33,7 +35,7 @@ export const createConversation = createServerFn({ method: "POST" })
     const { data, error } = await context.supabase
       .from("conversations")
       .insert({ user_id: context.userId })
-      .select("id, title, created_at, updated_at")
+      .select("id, title, created_at, updated_at, pinned")
       .single();
     if (error) throw new Error(error.message);
     return data;
@@ -131,6 +133,20 @@ export const renameConversation = createServerFn({ method: "POST" })
     const { error } = await context.supabase
       .from("conversations")
       .update({ title: data.title })
+      .eq("id", data.conversationId);
+    if (error) throw new Error(error.message);
+    return { ok: true };
+  });
+
+export const setConversationPinned = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: unknown) =>
+    z.object({ conversationId: z.string().uuid(), pinned: z.boolean() }).parse(input),
+  )
+  .handler(async ({ data, context }) => {
+    const { error } = await context.supabase
+      .from("conversations")
+      .update({ pinned: data.pinned })
       .eq("id", data.conversationId);
     if (error) throw new Error(error.message);
     return { ok: true };

@@ -1,11 +1,12 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { Loader2, Send, Plus, Paperclip, X, Image as ImageIcon, Copy, Edit2, RotateCcw, Check, Square } from "lucide-react";
+import { Loader2, Send, Plus, Paperclip, X, Image as ImageIcon, Copy, Edit2, RotateCcw, Check, Square, Settings as SettingsIcon } from "lucide-react";
 import { useEffect, useState, useRef } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { toast } from "sonner";
 
+import { useOpenSettings } from "@/lib/settings-modal";
 import { BrandMark } from "@/components/salman/BrandMark";
 import { Button } from "@/components/ui/button";
 import { useSession } from "@/hooks/useSession";
@@ -96,6 +97,7 @@ const CodeBlock = ({ children }: { children: React.ReactNode }) => {
 };
 
 function ChatIndexScreen() {
+  const openSettings = useOpenSettings();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { session, loading } = useSession();

@@ -1,13 +1,13 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { Loader2, Send, Plus, Paperclip, X, Image as ImageIcon, Copy, Edit2, RotateCcw, Check, Square } from "lucide-react";
+import { Loader2, Send, Plus, Paperclip, X, Image as ImageIcon, Copy, Edit2, RotateCcw, Check, Square, Settings as SettingsIcon } from "lucide-react";
 import { useEffect, useState, useRef } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { toast } from "sonner";
 
+import { useOpenSettings } from "@/lib/settings-modal";
 import { BrandMark } from "@/components/salman/BrandMark";
-import { ModelSettingsDialog } from "@/components/salman/ModelSettingsDialog";
 import { Button } from "@/components/ui/button";
 import { useSession } from "@/hooks/useSession";
 import { askSalmanAI } from "@/lib/aiService";
@@ -97,6 +97,7 @@ const CodeBlock = ({ children }: { children: React.ReactNode }) => {
 };
 
 function ChatIndexScreen() {
+  const openSettings = useOpenSettings();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { session, loading } = useSession();
@@ -403,7 +404,15 @@ function ChatIndexScreen() {
           محادثة جديدة
           <Plus className="size-4 text-[#2dd4bf]" />
         </Button>
-        <ModelSettingsDialog />
+        <Button
+          onClick={openSettings}
+          variant="outline"
+          size="icon"
+          title="الإعدادات"
+          className="size-8 rounded-full border-slate-800 bg-slate-900/60 text-slate-300 hover:bg-slate-800 hover:text-white"
+        >
+          <SettingsIcon className="size-4" />
+        </Button>
       </div>
 
       {/* منطقة المحتوى والرسائل */}

@@ -7,7 +7,6 @@ import remarkGfm from "remark-gfm";
 import { toast } from "sonner";
 
 import { BrandMark } from "@/components/salman/BrandMark";
-import { ModelSettingsDialog } from "@/components/salman/ModelSettingsDialog";
 import { Button } from "@/components/ui/button";
 import { useSession } from "@/hooks/useSession";
 import { askSalmanAI } from "@/lib/aiService";
@@ -403,7 +402,15 @@ function ChatIndexScreen() {
           محادثة جديدة
           <Plus className="size-4 text-[#2dd4bf]" />
         </Button>
-        <ModelSettingsDialog />
+        <Button
+          onClick={openSettings}
+          variant="outline"
+          size="icon"
+          title="الإعدادات"
+          className="size-8 rounded-full border-slate-800 bg-slate-900/60 text-slate-300 hover:bg-slate-800 hover:text-white"
+        >
+          <SettingsIcon className="size-4" />
+        </Button>
       </div>
 
       {/* منطقة المحتوى والرسائل */}

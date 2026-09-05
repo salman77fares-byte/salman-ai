@@ -7,7 +7,7 @@ import {
   useParams,
 } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
-import { ExternalLink, LogIn, LogOut, Menu, Trash2 } from "lucide-react";
+import { ExternalLink, LogIn, LogOut, Menu, Settings, Trash2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 
@@ -30,8 +30,12 @@ import {
   createConversation,
   deleteConversation,
   listConversations,
+  renameConversation,
+  setConversationPinned,
   type Conversation,
 } from "@/lib/chat.functions";
+import { ENGINE_OPTIONS, ENGINE_STORAGE_KEY, type EngineId } from "@/lib/aiService";
+import { SettingsProvider } from "@/lib/settings-modal";
 import { GuestChatProvider, NewChatProvider, useGuestChat } from "@/lib/guest-chat";
 import { SALMAN_PROJECTS } from "@/lib/projects";
 import { useTheme } from "@/lib/theme";
@@ -70,6 +74,7 @@ function ChatLayout() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [fontScale, setFontScale] = useState("medium");
   const [replyLang, setReplyLang] = useState("auto");
+  const [engine, setEngine] = useState<EngineId>("gemini");
   const { theme, toggleTheme } = useTheme();
   const { session, user, isGuest } = useSession();
   const { resetGuestChat } = useGuestChat();
@@ -79,6 +84,10 @@ function ChatLayout() {
     if (stored) setFontScale(stored);
     const lang = localStorage.getItem("salman-reply-lang");
     if (lang) setReplyLang(lang);
+    const savedEngine = localStorage.getItem(ENGINE_STORAGE_KEY) as EngineId | null;
+    if (savedEngine && ENGINE_OPTIONS.some((option) => option.id === savedEngine)) {
+      setEngine(savedEngine);
+    }
   }, []);
 
   useEffect(() => {
@@ -99,6 +108,8 @@ function ChatLayout() {
   const createFn = useServerFn(createConversation);
   const deleteFn = useServerFn(deleteConversation);
   const clearFn = useServerFn(clearAllConversations);
+  const pinFn = useServerFn(setConversationPinned);
+  const renameFn = useServerFn(renameConversation);
 
   const { data: conversations = [] } = useQuery<Conversation[]>({
     queryKey: ["conversations"],
@@ -141,6 +152,26 @@ function ChatLayout() {
     onError: () => toast.error("تعذّر حذف المحادثة."),
   });
 
+  const togglePin = useMutation({
+    mutationFn: ({ conversationId, pinned }: { conversationId: string; pinned: boolean }) =>
+      pinFn({ data: { conversationId, pinned } }),
+    onSuccess: async (_result, variables) => {
+      await invalidate();
+      toast.success(variables.pinned ? "تم تثبيت المحادثة" : "تم إلغاء التثبيت");
+    },
+    onError: () => toast.error("تعذّر تحديث التثبيت."),
+  });
+
+  const rename = useMutation({
+    mutationFn: ({ conversationId, title }: { conversationId: string; title: string }) =>
+      renameFn({ data: { conversationId, title } }),
+    onSuccess: async () => {
+      await invalidate();
+      toast.success("تم تعديل الاسم");
+    },
+    onError: () => toast.error("تعذّر تعديل الاسم."),
+  });
+
   const clearAll = useMutation({
     mutationFn: () => clearFn(),
     onSuccess: async () => {
@@ -165,6 +196,8 @@ function ChatLayout() {
       isGuest={isGuest}
       userEmail={user?.email ?? null}
       onDeleteConversation={(id) => removeChat.mutate(id)}
+      onTogglePin={(id, pinned) => togglePin.mutate({ conversationId: id, pinned })}
+      onRenameConversation={(id, title) => rename.mutate({ conversationId: id, title })}
       onOpenSettings={() => {
         setSettingsOpen(true);
         onClose?.();
@@ -205,6 +238,16 @@ function ChatLayout() {
               <BrandMark size={40} />
               <span className="truncate text-lg font-extrabold sm:text-xl">Salman AI</span>
             </div>
+            <div className="flex shrink-0 items-center gap-1.5">
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => setSettingsOpen(true)}
+              aria-label="الإعدادات"
+              className="shrink-0"
+            >
+              <Settings className="size-5" />
+            </Button>
             {isGuest ? (
               <Button
                 asChild
@@ -227,6 +270,7 @@ function ChatLayout() {
                 تسجيل الخروج
               </Button>
             )}
+            </div>
           </div>
           {!isGuest && user?.email ? (
             <p className="mt-1.5 truncate text-[11px] text-muted-foreground" dir="ltr">
@@ -236,9 +280,11 @@ function ChatLayout() {
         </header>
 
         <main className="min-h-0 flex-1">
-          <NewChatProvider onNewChat={startNewChat}>
-            <Outlet />
-          </NewChatProvider>
+          <SettingsProvider onOpenSettings={() => setSettingsOpen(true)}>
+            <NewChatProvider onNewChat={startNewChat}>
+              <Outlet />
+            </NewChatProvider>
+          </SettingsProvider>
         </main>
       </div>
 
@@ -269,6 +315,29 @@ function ChatLayout() {
             <div className="flex items-center justify-between rounded-2xl bg-secondary px-4 py-3">
               <span className="text-sm font-bold">الوضع الليلي</span>
               <Switch checked={theme === "dark"} onCheckedChange={toggleTheme} />
+            </div>
+            <div className="flex items-center justify-between gap-2 rounded-2xl bg-secondary px-4 py-3">
+              <span className="text-sm font-bold">🤖 نموذج الرد</span>
+              <select
+                value={engine}
+                onChange={(event) => {
+                  const value = event.currentTarget.value as EngineId;
+                  setEngine(value);
+                  try {
+                    localStorage.setItem(ENGINE_STORAGE_KEY, value);
+                    toast.success("تم حفظ نموذج الرد المفضّل");
+                  } catch {
+                    /* تجاهل */
+                  }
+                }}
+                className="rounded-xl border border-border bg-background px-2 py-1 text-xs font-bold"
+              >
+                {ENGINE_OPTIONS.map((option) => (
+                  <option key={option.id} value={option.id}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
             </div>
             <div className="flex items-center justify-between gap-2 rounded-2xl bg-secondary px-4 py-3">
               <span className="text-sm font-bold">لغة الردود</span>

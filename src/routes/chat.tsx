@@ -7,13 +7,19 @@ import {
   useParams,
 } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
-import { ExternalLink, LogIn, LogOut, Menu, Settings, Trash2 } from "lucide-react";
+import { Check, ChevronDown, ExternalLink, Menu, Plus, Trash2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 
 import { AppSidebar } from "@/components/salman/AppSidebar";
 import { BrandMark } from "@/components/salman/BrandMark";
 import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import {
   Dialog,
   DialogContent,
@@ -71,6 +77,7 @@ function ChatLayout() {
   const queryClient = useQueryClient();
   const params = useParams({ strict: false }) as { conversationId?: string };
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [desktopSidebarOpen, setDesktopSidebarOpen] = useState(true);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [fontScale, setFontScale] = useState("medium");
   const [replyLang, setReplyLang] = useState("auto");

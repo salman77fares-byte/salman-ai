@@ -12,7 +12,6 @@ import { useEffect, useState } from "react";
 import { toast } from "sonner";
 
 import { AppSidebar } from "@/components/salman/AppSidebar";
-import { BrandMark } from "@/components/salman/BrandMark";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,

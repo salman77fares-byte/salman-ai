@@ -153,12 +153,35 @@ function normalize(messages: unknown[]): Msg[] {
   return list
     .map((m) => {
       const role = (m as { role?: string } | null)?.role;
+      const images = extractImages(m);
       return {
         role: (role === "assistant" || role === "model" ? "assistant" : "user") as Msg["role"],
         content: extractText(m),
+        ...(images.length ? { images } : {}),
       };
     })
-    .filter((m) => m.content.length > 0);
+    .filter((m) => m.content.length > 0 || (m.images?.length ?? 0) > 0);
+}
+
+function hasImages(history: Msg[]): boolean {
+  return history.some((m) => (m.images?.length ?? 0) > 0);
+}
+
+/** رسائل بصيغة OpenAI مع دعم الصور المرفقة. */
+function toOpenAIMessages(history: Msg[]) {
+  return history.map((m) => {
+    if (!m.images?.length) return { role: m.role, content: m.content };
+    return {
+      role: m.role,
+      content: [
+        { type: "text", text: m.content || "حلّل هذه الصورة واشرح محتواها بدقة." },
+        ...m.images.map((img) => ({
+          type: "image_url",
+          image_url: { url: `data:${img.mimeType};base64,${img.data}` },
+        })),
+      ],
+    };
+  });
 }
 
 /** مهلة قصيرة لكل محرك: أي تأخر ينقل الطلب فوراً للمحرك التالي. */

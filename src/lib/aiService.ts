@@ -71,7 +71,49 @@ const OPENROUTER_MODELS = [
 const GROQ_MODELS = ["openai/gpt-oss-120b", "openai/gpt-oss-20b"];
 const GATEWAY_MODEL = "openai/gpt-5.6-sol";
 
-type Msg = { role: "user" | "assistant"; content: string };
+type ImagePart = { mimeType: string; data: string };
+type Msg = { role: "user" | "assistant"; content: string; images?: ImagePart[] };
+
+/** يستخرج الصور المرفقة (base64) من أي شكل للرسالة. */
+function extractImages(m: unknown): ImagePart[] {
+  if (!m || typeof m !== "object") return [];
+  const obj = m as Record<string, unknown>;
+  const out: ImagePart[] = [];
+
+  const push = (url: string, fallbackMime?: string) => {
+    const match = /^data:([^;]+);base64,(.+)$/.exec(url);
+    if (match?.[1] && match[2]) out.push({ mimeType: match[1], data: match[2] });
+    else if (url && !url.startsWith("http")) {
+      out.push({ mimeType: fallbackMime || "image/jpeg", data: url });
+    }
+  };
+
+  if (typeof obj["imageBase64"] === "string") {
+    push(String(obj["imageBase64"]), String(obj["imageMimeType"] ?? "image/jpeg"));
+  } else if (typeof obj["image"] === "string") {
+    push(String(obj["image"]));
+  }
+
+  const content = obj["content"];
+  if (Array.isArray(content)) {
+    for (const part of content) {
+      const p = part as Record<string, unknown> | null;
+      if (p?.["type"] === "image_url") {
+        const url = (p["image_url"] as { url?: string } | undefined)?.url;
+        if (typeof url === "string") push(url);
+      }
+    }
+  }
+
+  // إزالة التكرار
+  const seen = new Set<string>();
+  return out.filter((img) => {
+    const key = img.data.slice(0, 64);
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
 
 function env(name: string): string {
   const fromProcess =

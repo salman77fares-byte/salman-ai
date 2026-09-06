@@ -7,13 +7,18 @@ import {
   useParams,
 } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
-import { ExternalLink, LogIn, LogOut, Menu, Settings, Trash2 } from "lucide-react";
+import { Check, ChevronDown, ExternalLink, Menu, Plus, Trash2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 
 import { AppSidebar } from "@/components/salman/AppSidebar";
-import { BrandMark } from "@/components/salman/BrandMark";
 import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import {
   Dialog,
   DialogContent,
@@ -71,6 +76,7 @@ function ChatLayout() {
   const queryClient = useQueryClient();
   const params = useParams({ strict: false }) as { conversationId?: string };
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [desktopSidebarOpen, setDesktopSidebarOpen] = useState(true);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [fontScale, setFontScale] = useState("medium");
   const [replyLang, setReplyLang] = useState("auto");
@@ -207,79 +213,94 @@ function ChatLayout() {
     />
   );
 
+  const currentEngineLabel =
+    ENGINE_OPTIONS.find((option) => option.id === engine)?.label.split(" (")[0] ?? "النموذج";
+
+  const changeEngine = (value: EngineId) => {
+    setEngine(value);
+    try {
+      localStorage.setItem(ENGINE_STORAGE_KEY, value);
+      toast.success("تم حفظ نموذج الرد المفضّل");
+    } catch {
+      /* تجاهل */
+    }
+  };
+
   return (
     <div className="flex h-screen w-full overflow-hidden bg-background">
-      <aside className="hidden w-72 shrink-0 border-e border-sidebar-border md:block">
-        {sidebar()}
-      </aside>
+      {desktopSidebarOpen ? (
+        <aside className="hidden w-72 shrink-0 border-e border-sidebar-border md:block">
+          {sidebar()}
+        </aside>
+      ) : null}
 
       <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
-        <SheetContent
-          side="right"
-          className="w-[68%] max-w-[260px] p-0 [&>button]:hidden"
-        >
+        <SheetContent side="right" className="w-[68%] max-w-[260px] p-0 [&>button]:hidden">
           {sidebar(() => setMobileOpen(false))}
         </SheetContent>
       </Sheet>
 
-      <div className="flex min-w-0 flex-1 flex-col">
-        <header className="safe-top shrink-0 border-b border-border bg-background/95 px-3 py-3 backdrop-blur sm:px-5">
-          <div className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-2">
+      <div className="relative flex min-w-0 flex-1 flex-col">
+        <div className="safe-top pointer-events-none absolute inset-x-0 top-0 z-20 flex items-center justify-between gap-2 px-2 py-2 sm:px-4">
+          <div className="pointer-events-auto flex items-center gap-1">
             <Button
               variant="ghost"
               size="icon"
-              onClick={() => setMobileOpen(true)}
-              aria-label="فتح القائمة"
-              className="md:hidden"
+              onClick={() => {
+                if (window.matchMedia("(min-width: 768px)").matches) {
+                  setDesktopSidebarOpen((open) => !open);
+                } else {
+                  setMobileOpen(true);
+                }
+              }}
+              aria-label="القائمة الجانبية"
+              className="rounded-full text-foreground/80 hover:bg-secondary/70"
             >
               <Menu className="size-5" />
             </Button>
-            <div className="flex min-w-0 items-center gap-2.5">
-              <BrandMark size={40} />
-              <span className="truncate text-lg font-extrabold sm:text-xl">Salman AI</span>
-            </div>
-            <div className="flex shrink-0 items-center gap-1.5">
+
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="gap-1 rounded-full px-3 text-xs font-extrabold text-foreground/80 hover:bg-secondary/70"
+                >
+                  {currentEngineLabel}
+                  <ChevronDown className="size-3.5 opacity-70" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start" className="w-64 rounded-2xl">
+                {ENGINE_OPTIONS.map((option) => (
+                  <DropdownMenuItem
+                    key={option.id}
+                    onSelect={() => changeEngine(option.id)}
+                    className="gap-2 text-xs font-bold"
+                  >
+                    <Check
+                      className={`size-3.5 shrink-0 ${engine === option.id ? "text-primary opacity-100" : "opacity-0"}`}
+                    />
+                    {option.label}
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
+
+          <div className="pointer-events-auto flex items-center">
             <Button
               variant="ghost"
               size="icon"
-              onClick={() => setSettingsOpen(true)}
-              aria-label="الإعدادات"
-              className="shrink-0"
+              onClick={startNewChat}
+              aria-label="محادثة جديدة"
+              className="rounded-full text-foreground/80 hover:bg-secondary/70"
             >
-              <Settings className="size-5" />
+              <Plus className="size-5" />
             </Button>
-            {isGuest ? (
-              <Button
-                asChild
-                size="sm"
-                className="shrink-0 gap-1.5 rounded-xl brand-gradient-bg text-xs font-extrabold text-primary-foreground hover:opacity-90"
-              >
-                <Link to="/auth">
-                  <LogIn className="size-3.5" />
-                  تسجيل الدخول
-                </Link>
-              </Button>
-            ) : (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => void signOut()}
-                className="shrink-0 gap-1.5 rounded-xl text-xs font-bold"
-              >
-                <LogOut className="size-3.5" />
-                تسجيل الخروج
-              </Button>
-            )}
-            </div>
           </div>
-          {!isGuest && user?.email ? (
-            <p className="mt-1.5 truncate text-[11px] text-muted-foreground" dir="ltr">
-              {user.email}
-            </p>
-          ) : null}
-        </header>
+        </div>
 
-        <main className="min-h-0 flex-1">
+        <main className="min-h-0 flex-1 pt-14">
           <SettingsProvider onOpenSettings={() => setSettingsOpen(true)}>
             <NewChatProvider onNewChat={startNewChat}>
               <Outlet />

@@ -89,7 +89,7 @@ const CodeBlock = ({ children }: { children: React.ReactNode }) => {
 };
 
 function ChatIndexScreen() {
-  const openSettings = useOpenSettings();
+  
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { session, loading } = useSession();
@@ -136,16 +136,20 @@ function ChatIndexScreen() {
     return () => clearInterval(interval);
   }, [isSending, activeStatuses]);
 
-  const handleNewChat = () => {
-    setMessages([]);
-    setInput("");
-    setSelectedFile(null);
-    setActiveActionIndex(null);
-    setCurrentConversationId(null);
-    stopGenerationRef.current = true;
-    setIsSending(false);
-    toast.success("تم بدء محادثة جديدة");
-  };
+  // زر "محادثة جديدة" العائم في الشريط العلوي يُطلق هذا الحدث
+  useEffect(() => {
+    const reset = () => {
+      setMessages([]);
+      setInput("");
+      setSelectedFile(null);
+      setActiveActionIndex(null);
+      setCurrentConversationId(null);
+      stopGenerationRef.current = true;
+      setIsSending(false);
+    };
+    window.addEventListener("salman-new-chat", reset);
+    return () => window.removeEventListener("salman-new-chat", reset);
+  }, []);
 
   const handleTouchStart = (index: number) => {
     pressTimerRef.current = setTimeout(() => {

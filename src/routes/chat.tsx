@@ -139,6 +139,7 @@ function ChatLayout() {
   });
 
   const startNewChat = () => {
+    window.dispatchEvent(new Event("salman-new-chat"));
     if (isGuest) {
       resetGuestChat();
       setMobileOpen(false);

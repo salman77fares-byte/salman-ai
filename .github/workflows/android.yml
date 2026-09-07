@@ -8,8 +8,6 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
 
     steps:
     - name: Checkout Code
@@ -23,16 +21,17 @@ jobs:
     - name: Install Dependencies
       run: npm install --legacy-peer-deps
 
-    - name: Build Web Assets & Ensure Entry File
+    - name: Build Web Assets
       run: |
-        npm run build -- --base=./ || npx vite build --base=./ || true
-        
+        npm run build || npx vite build || true
+
+    - name: Prepare Dist Directory
+      run: |
         mkdir -p dist
+        if [ -d ".output/public" ]; then cp -r .output/public/* dist/; fi
         if [ -d "build" ]; then cp -r build/* dist/; fi
         if [ -d "out" ]; then cp -r out/* dist/; fi
-        if [ -d ".output/public" ]; then cp -r .output/public/* dist/; fi
         
-        # التأكد المطلق من وجود index.html داخل dist قبل مزامنة Capacitor
         if [ ! -f "dist/index.html" ]; then
           INDEX_PATH=$(find . -name "index.html" ! -path "*/node_modules/*" ! -path "*/android/*" ! -path "./dist/*" | head -n 1)
           if [ -n "$INDEX_PATH" ]; then
@@ -42,10 +41,6 @@ jobs:
           fi
         fi
 
-        # تحويل المسارات المطلقة إلى مسارات نسبية لفتح التطبيق بدون شاشة سوداء
-        sed -i 's|src="/|src="./|g' dist/index.html 2>/dev/null || true
-        sed -i 's|href="/|href="./|g' dist/index.html 2>/dev/null || true
-
     - name: Configure Capacitor Local Settings
       run: |
         cat << 'EOF' > capacitor.config.json
@@ -54,12 +49,10 @@ jobs:
           "appName": "Salman AI",
           "webDir": "dist",
           "server": {
-            "androidScheme": "https",
-            "cleartext": true
+            "androidScheme": "https"
           },
           "android": {
-            "backgroundColor": "#0B0B0B",
-            "allowMixedContent": true
+            "backgroundColor": "#0B0B0B"
           }
         }
         EOF
@@ -70,41 +63,19 @@ jobs:
         npx cap add android
         npx cap sync android
 
-    - name: Process & Apply Full-Bleed App Icon
+    - name: Restore Application Icons
       run: |
-        python3 -m pip install --quiet Pillow
-        python3 - << 'EOF'
-        import os, glob
-        from PIL import Image
-
-        logo_path = "public/logo.png"
-        if os.path.exists(logo_path):
-            img = Image.open(logo_path).convert("RGBA")
-            bbox = img.getbbox()
-            if bbox:
-                img = img.crop(bbox)
-            
-            res_dir = "android/app/src/main/res"
-            for anydpi in glob.glob(f"{res_dir}/mipmap-anydpi*"):
-                import shutil
-                shutil.rmtree(anydpi, ignore_errors=True)
-            
-            sizes = {
-                "mipmap-mdpi": 48,
-                "mipmap-hdpi": 72,
-                "mipmap-xhdpi": 96,
-                "mipmap-xxhdpi": 144,
-                "mipmap-xxxhdpi": 192
-            }
-            
-            for folder, size in sizes.items():
-                target_dir = os.path.join(res_dir, folder)
-                if os.path.exists(target_dir):
-                    resized = img.resize((size, size), Image.Resampling.LANCZOS)
-                    resized.save(os.path.join(target_dir, "ic_launcher.png"))
-                    resized.save(os.path.join(target_dir, "ic_launcher_round.png"))
-                    resized.save(os.path.join(target_dir, "ic_launcher_foreground.png"))
-        EOF
+        rm -rf android/app/src/main/res/mipmap-anydpi-v26
+        ICON_SRC=$(find public src -name "*icon*.png" -o -name "*logo*.png" | head -n 1)
+        if [ -z "$ICON_SRC" ]; then ICON_SRC="public/favicon.ico"; fi
+        
+        for dir in android/app/src/main/res/mipmap-*; do
+          if [ -d "$dir" ]; then
+            cp -f "$ICON_SRC" "$dir/ic_launcher.png" 2>/dev/null || true
+            cp -f "$ICON_SRC" "$dir/ic_launcher_round.png" 2>/dev/null || true
+            cp -f "$ICON_SRC" "$dir/ic_launcher_foreground.png" 2>/dev/null || true
+          fi
+        done
 
     - name: Set up JDK 21
       uses: actions/setup-java@v4
@@ -118,10 +89,8 @@ jobs:
         chmod +x gradlew
         ./gradlew assembleDebug --no-daemon
 
-    - name: Create GitHub Release and Upload APK
-      uses: softprops/action-gh-release@v2
-      if: success()
+    - name: Upload APK
+      uses: actions/upload-artifact@v4
       with:
-        tag_name: v1.0.${{ github.run_number }}
-        name: Salman AI Release v1.0.${{ github.run_number }}
-        files: android/app/build/outputs/apk/debug/app-debug.apk
+        name: salman-ai-apk
+        path: android/app/build/outputs/apk/debug/app-debug.apk

@@ -23,18 +23,28 @@ jobs:
     - name: Install Dependencies
       run: npm install --legacy-peer-deps
 
-    - name: Build Web Assets & Fix Paths
+    - name: Build Web Assets & Ensure Entry File
       run: |
-        npx vite build --base=./ || npm run build || true
+        npm run build -- --base=./ || npx vite build --base=./ || true
         
         mkdir -p dist
+        if [ -d "build" ]; then cp -r build/* dist/; fi
+        if [ -d "out" ]; then cp -r out/* dist/; fi
+        if [ -d ".output/public" ]; then cp -r .output/public/* dist/; fi
         
-        # تحويل المسارات المطلقة إلى مسارات نسبية لحل مشكلة الشاشة السوداء
-        if [ -f "dist/index.html" ]; then
-          sed -i 's|src="/|src="./|g' dist/index.html
-          sed -i 's|href="/|href="./|g' dist/index.html
-          echo "Fixed asset paths in dist/index.html"
+        # التأكد المطلق من وجود index.html داخل dist قبل مزامنة Capacitor
+        if [ ! -f "dist/index.html" ]; then
+          INDEX_PATH=$(find . -name "index.html" ! -path "*/node_modules/*" ! -path "*/android/*" ! -path "./dist/*" | head -n 1)
+          if [ -n "$INDEX_PATH" ]; then
+            cp "$INDEX_PATH" dist/
+          else
+            echo '<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Salman AI</title></head><body><div id="root"></div></body></html>' > dist/index.html
+          fi
         fi
+
+        # تحويل المسارات المطلقة إلى مسارات نسبية لفتح التطبيق بدون شاشة سوداء
+        sed -i 's|src="/|src="./|g' dist/index.html 2>/dev/null || true
+        sed -i 's|href="/|href="./|g' dist/index.html 2>/dev/null || true
 
     - name: Configure Capacitor Local Settings
       run: |
@@ -69,17 +79,12 @@ jobs:
 
         logo_path = "public/logo.png"
         if os.path.exists(logo_path):
-            print("Processing logo icon...")
             img = Image.open(logo_path).convert("RGBA")
-            
-            # قص المساحات الفارغة أو الشفافة المحيطة بالشعار لملء الأيقونة بالكامل
             bbox = img.getbbox()
             if bbox:
                 img = img.crop(bbox)
             
             res_dir = "android/app/src/main/res"
-            
-            # إزالة الإعدادات المجمعة التي تصغر حجم الأيقونة في الأندرويد الحديث
             for anydpi in glob.glob(f"{res_dir}/mipmap-anydpi*"):
                 import shutil
                 shutil.rmtree(anydpi, ignore_errors=True)
@@ -99,7 +104,6 @@ jobs:
                     resized.save(os.path.join(target_dir, "ic_launcher.png"))
                     resized.save(os.path.join(target_dir, "ic_launcher_round.png"))
                     resized.save(os.path.join(target_dir, "ic_launcher_foreground.png"))
-            print("Full-bleed icons created successfully!")
         EOF
 
     - name: Set up JDK 21

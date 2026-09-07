@@ -68,6 +68,11 @@ const OPENROUTER_MODELS = [
   "meta-llama/llama-3.3-70b-instruct:free",
   "deepseek/deepseek-chat-v3.1:free",
 ];
+// نماذج مجانية تدعم قراءة الصور (Vision) على OpenRouter
+const OPENROUTER_VISION_MODELS = [
+  "google/gemini-2.0-flash-exp:free",
+  "meta-llama/llama-3.2-11b-vision-instruct:free",
+];
 const GROQ_MODELS = ["openai/gpt-oss-120b", "openai/gpt-oss-20b"];
 const GATEWAY_MODEL = "openai/gpt-5.6-sol";
 
@@ -205,6 +210,7 @@ async function postJson(url: string, headers: Record<string, string>, body: unkn
 async function tryGemini(history: Msg[], systemPrompt: string, grounded: boolean): Promise<string | null> {
   const key = keyFor("gemini");
   if (!key) return null;
+  const vision = hasImages(history);
 
   for (const model of GEMINI_MODELS) {
     try {
@@ -215,13 +221,18 @@ async function tryGemini(history: Msg[], systemPrompt: string, grounded: boolean
           systemInstruction: { parts: [{ text: systemPrompt }] },
           contents: history.map((m) => ({
             role: m.role === "assistant" ? "model" : "user",
-            parts: [{ text: m.content }],
+            parts: [
+              { text: m.content || (m.images?.length ? "حلّل هذه الصورة واشرح محتواها بدقة." : "") },
+              ...(m.images ?? []).map((img) => ({
+                inline_data: { mime_type: img.mimeType, data: img.data },
+              })),
+            ],
           })),
-          // أداة البحث الحي المدمجة في Gemini (Google Search Grounding) مفعّلة دائماً
-          tools: [{ google_search: {} }],
+          // أداة البحث الحي المدمجة في Gemini (Google Search Grounding) — تُعطّل مع الصور
+          ...(vision ? {} : { tools: [{ google_search: {} }] }),
           generationConfig: { temperature: 0.6, topP: 0.9, maxOutputTokens: 1400 },
         },
-        grounded ? 8_000 : ENGINE_TIMEOUT_MS,
+        vision ? 30_000 : grounded ? 8_000 : ENGINE_TIMEOUT_MS,
       );
       if (!res.ok) continue;
       const data = (await res.json()) as {
@@ -248,12 +259,17 @@ async function tryOpenAICompatible(
   extraHeaders: Record<string, string> = {},
 ): Promise<string | null> {
   if (!key) return null;
+  const vision = hasImages(history);
   for (const model of models) {
     try {
       const res = await postJson(
         url,
         { Authorization: `Bearer ${key}`, ...extraHeaders },
-        { model, messages: [{ role: "system", content: systemPrompt }, ...history] },
+        {
+          model,
+          messages: [{ role: "system", content: systemPrompt }, ...toOpenAIMessages(history)],
+        },
+        vision ? 30_000 : ENGINE_TIMEOUT_MS,
       );
       if (!res.ok) continue;
       const data = (await res.json()) as { choices?: { message?: unknown }[] };
@@ -270,7 +286,7 @@ const tryOpenRouter = (history: Msg[], systemPrompt: string, _grounded = false) 
   tryOpenAICompatible(
     "https://openrouter.ai/api/v1/chat/completions",
     keyFor("openrouter"),
-    OPENROUTER_MODELS,
+    hasImages(history) ? OPENROUTER_VISION_MODELS : OPENROUTER_MODELS,
     history,
     systemPrompt,
     { "HTTP-Referer": "https://salman-ai.lovable.app", "X-Title": "Salman AI" },
@@ -293,8 +309,11 @@ async function tryGateway(history: Msg[], systemPrompt: string, _grounded = fals
     const res = await postJson(
       "https://ai.gateway.lovable.dev/v1/chat/completions",
       { "Lovable-API-Key": key },
-      { model: GATEWAY_MODEL, messages: [{ role: "system", content: systemPrompt }, ...history] },
-      20_000,
+      {
+        model: GATEWAY_MODEL,
+        messages: [{ role: "system", content: systemPrompt }, ...toOpenAIMessages(history)],
+      },
+      hasImages(history) ? 40_000 : 20_000,
     );
     if (!res.ok) return null;
     const data = (await res.json()) as { choices?: { message?: unknown }[] };
@@ -332,14 +351,19 @@ export async function askSalmanAI(messages: unknown[]): Promise<string> {
     ? history.slice(-4)
     : [{ role: "user" as const, content: "مرحباً" }];
 
-  // بحث حي تلقائي للأسئلة التي تحتاج معلومات محدّثة زمنياً
+  const vision = hasImages(safeHistory);
+
+  // بحث حي تلقائي للأسئلة التي تحتاج معلومات محدّثة زمنياً (يُتجاهل مع الصور)
   const lastUser = [...safeHistory].reverse().find((m) => m.role === "user")?.content ?? "";
   let systemPrompt = baseSystemPrompt();
   let grounded = false;
-  if (needsFreshInfo(lastUser)) {
+  if (!vision && needsFreshInfo(lastUser)) {
     const context = await fetchLiveContext(buildSearchQuery(lastUser));
     grounded = true;
     if (context) systemPrompt = `${systemPrompt}\n\n${context}`;
+  }
+  if (vision) {
+    systemPrompt = `${systemPrompt}\n\nالمستخدم أرفق صورة: اقرأ محتواها بدقة، واستخرج أي نص مكتوب فيها كما هو، ثم أجب عن سؤاله بناءً على ما تراه فعلياً في الصورة.`;
   }
 
   const engines = {
@@ -349,9 +373,13 @@ export async function askSalmanAI(messages: unknown[]): Promise<string> {
     gateway: tryGateway,
   } as const;
 
-  const order: EngineId[] = ["gemini", "openrouter", "groq", "gateway"];
+  // مع الصور: نستخدم فقط المحركات التي تدعم الرؤية
+  const order: EngineId[] = vision
+    ? ["gemini", "openrouter", "gateway"]
+    : ["gemini", "openrouter", "groq", "gateway"];
   const chosen = preferredEngine();
-  const chain = chosen ? [chosen, ...order.filter((e) => e !== chosen)] : order;
+  const chain =
+    chosen && order.includes(chosen) ? [chosen, ...order.filter((e) => e !== chosen)] : order;
 
   for (const id of chain) {
     try {
@@ -362,6 +390,7 @@ export async function askSalmanAI(messages: unknown[]): Promise<string> {
     }
   }
 
-
-  return "تعذر الاتصال بأي من المحركات حالياً، يرجى المحاولة مرة أخرى بعد قليل.";
+  return vision
+    ? "تعذّر تحليل الصورة حالياً، جرّب صورة أصغر حجماً أو أعد المحاولة بعد قليل."
+    : "تعذر الاتصال بأي من المحركات حالياً، يرجى المحاولة مرة أخرى بعد قليل.";
 }

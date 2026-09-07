@@ -562,96 +562,93 @@ function ChatIndexScreen() {
         <div ref={messagesEndRef} />
       </div>
 
-      {/* الشريط السفلي للإدخال والاقتراحات */}
-      <div className="shrink-0 space-y-2.5 border-t border-slate-800/80 bg-[#0b101b] p-3 w-full max-w-full">
-        <div className="no-scrollbar flex items-center gap-2 overflow-x-auto pb-1">
-          {QUICK_SUGGESTIONS.map((item, i) => (
-            <button
-              key={i}
-              onClick={() => setInput(item.replace(/^[^\p{L}]+/u, ""))}
-              className="shrink-0 rounded-full border border-slate-800 bg-slate-900/60 px-3 py-1.5 text-xs font-semibold text-slate-300 transition hover:bg-slate-800 hover:text-white"
-            >
-              {item}
-            </button>
-          ))}
-        </div>
-
-        {selectedFile && (
-          <div className="flex items-center justify-between rounded-xl border border-slate-800 bg-slate-900 px-3 py-2 text-xs">
-            <div className="flex items-center gap-2 truncate">
-              {selectedFile.type.startsWith("image/") ? (
-                <ImageIcon className="size-4 shrink-0 text-[#2dd4bf]" />
-              ) : (
-                <Paperclip className="size-4 shrink-0 text-[#2dd4bf]" />
-              )}
-              <span className="max-w-[200px] truncate font-bold text-white">{selectedFile.name}</span>
+      {/* مربع الإرسال العائم */}
+      <div className="shrink-0 w-full max-w-full px-3 pb-4 pt-2">
+        <div className="mx-auto w-full max-w-3xl rounded-3xl border border-slate-700/50 bg-slate-900/70 p-2 shadow-[0_8px_30px_rgba(0,0,0,0.45)] backdrop-blur-xl">
+          {selectedFile && (
+            <div className="mb-2 flex flex-wrap gap-2 px-1">
+              <div className="relative">
+                {selectedFile.type.startsWith("image/") ? (
+                  <img
+                    src={selectedFile.url}
+                    alt={selectedFile.name}
+                    className="size-16 rounded-2xl border border-slate-700 object-cover"
+                  />
+                ) : (
+                  <div className="flex size-16 flex-col items-center justify-center gap-1 rounded-2xl border border-slate-700 bg-slate-800/80 px-1">
+                    <Paperclip className="size-4 text-[#2dd4bf]" />
+                    <span className="w-full truncate text-center text-[9px] text-slate-300">
+                      {selectedFile.name}
+                    </span>
+                  </div>
+                )}
+                <button
+                  type="button"
+                  aria-label="حذف المرفق"
+                  onClick={() => setSelectedFile(null)}
+                  className="absolute -left-1.5 -top-1.5 flex size-5 items-center justify-center rounded-full border border-slate-700 bg-slate-950 text-slate-300 shadow hover:text-white"
+                >
+                  <X className="size-3" />
+                </button>
+              </div>
             </div>
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              className="size-6 rounded-full text-slate-400 hover:text-white"
-              onClick={() => setSelectedFile(null)}
-            >
-              <X className="size-3.5" />
-            </Button>
-          </div>
-        )}
-
-        <div className="flex items-center gap-2 w-full">
-          <div className="relative flex flex-1 items-center rounded-2xl border border-slate-800 bg-slate-900/90 transition focus-within:border-[#2dd4bf]">
-            <input
-              type="file"
-              ref={fileInputRef}
-              onChange={handleFileChange}
-              className="hidden"
-              accept="image/*,.pdf,.doc,.docx,.txt,.json,.js,.ts,.tsx,.py,.md,.csv"
-            />
-            <button
-              type="button"
-              onClick={() => fileInputRef.current?.click()}
-              className="absolute right-2 rounded-xl p-2 text-slate-400 transition hover:bg-slate-800 hover:text-white"
-              title="إرفاق صورة أو ملف"
-            >
-              <Plus className="size-5" />
-            </button>
-
-            <textarea
-              ref={textareaRef}
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              placeholder="اكتب رسالتك لـ Salman AI..."
-              rows={1}
-              dir="auto"
-              autoComplete="on"
-              autoCorrect="on"
-              autoCapitalize="sentences"
-              spellCheck={true}
-              className="max-h-32 min-h-[44px] w-full resize-none bg-transparent py-3 pl-4 pr-11 text-right text-xs text-white placeholder:text-slate-500 focus:outline-none"
-            />
-          </div>
-
-          {isSending ? (
-            <Button
-              type="button"
-              onClick={handleStop}
-              size="icon"
-              className="h-11 w-11 shrink-0 rounded-2xl border border-slate-700 bg-slate-800 text-slate-300 hover:bg-slate-700 hover:text-white transition-all"
-              title="إيقاف الرد"
-            >
-              <Square className="size-4 fill-current" />
-            </Button>
-          ) : (
-            <Button
-              type="button"
-              onClick={() => handleSend()}
-              disabled={!input.trim() && !selectedFile}
-              size="icon"
-              className="h-11 w-11 shrink-0 rounded-2xl bg-[#2dd4bf] text-slate-950 hover:bg-[#26b8a5] transition-all"
-            >
-              <Send className="-rotate-90 size-4" />
-            </Button>
           )}
+
+          <div className="flex items-end gap-2 w-full">
+            <div className="relative flex flex-1 items-center">
+              <input
+                type="file"
+                ref={fileInputRef}
+                onChange={handleFileChange}
+                className="hidden"
+                accept="image/*,.pdf,.doc,.docx,.txt,.json,.js,.ts,.tsx,.py,.md,.csv"
+              />
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                className="absolute right-1 rounded-full p-2 text-slate-400 transition hover:bg-slate-800 hover:text-white"
+                title="إرفاق صورة أو ملف"
+              >
+                <Plus className="size-5" />
+              </button>
+
+              <textarea
+                ref={textareaRef}
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                placeholder="اكتب رسالتك لـ Salman AI..."
+                rows={1}
+                dir="auto"
+                autoComplete="on"
+                autoCorrect="on"
+                autoCapitalize="sentences"
+                spellCheck={true}
+                className="max-h-32 min-h-[44px] w-full resize-none bg-transparent py-3 pl-3 pr-11 text-right text-xs text-white placeholder:text-slate-500 focus:outline-none"
+              />
+            </div>
+
+            {isSending ? (
+              <Button
+                type="button"
+                onClick={handleStop}
+                size="icon"
+                className="size-10 shrink-0 rounded-full border border-slate-700 bg-slate-800 text-slate-300 transition-all hover:bg-slate-700 hover:text-white"
+                title="إيقاف الرد"
+              >
+                <Square className="size-4 fill-current" />
+              </Button>
+            ) : (
+              <Button
+                type="button"
+                onClick={() => handleSend()}
+                disabled={!input.trim() && !selectedFile}
+                size="icon"
+                className="size-10 shrink-0 rounded-full bg-[#2dd4bf] text-slate-950 transition-all hover:bg-[#26b8a5]"
+              >
+                <Send className="-rotate-90 size-4" />
+              </Button>
+            )}
+          </div>
         </div>
       </div>
     </div>

@@ -289,13 +289,13 @@ function ChatLayout() {
 
           <div className="pointer-events-auto flex items-center">
             <Button
-              variant="ghost"
-              size="icon"
+              variant="outline"
+              size="sm"
               onClick={startNewChat}
-              aria-label="محادثة جديدة"
-              className="rounded-full text-foreground/80 hover:bg-secondary/70"
+              className="h-9 gap-1.5 rounded-full border-border/70 bg-background/70 px-3.5 text-xs font-extrabold backdrop-blur hover:bg-secondary/70"
             >
-              <Plus className="size-5" />
+              <Plus className="size-4 text-primary" />
+              محادثة جديدة
             </Button>
           </div>
         </div>

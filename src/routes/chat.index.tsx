@@ -1,12 +1,11 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { Loader2, Send, Plus, Paperclip, X, Image as ImageIcon, Copy, Edit2, RotateCcw, Check, Square, Settings as SettingsIcon } from "lucide-react";
+import { Loader2, Send, Plus, Paperclip, X, Copy, Edit2, RotateCcw, Check, Square } from "lucide-react";
 import { useEffect, useState, useRef } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { toast } from "sonner";
 
-import { useOpenSettings } from "@/lib/settings-modal";
 import { BrandMark } from "@/components/salman/BrandMark";
 import { Button } from "@/components/ui/button";
 import { useSession } from "@/hooks/useSession";
@@ -29,13 +28,6 @@ interface Message {
   };
 }
 
-const QUICK_SUGGESTIONS = [
-  "🚀 فكرة مشروع",
-  "💻 كتابة كود",
-  "⚽ أخبار الرياضة",
-  "🎬 سيناريو فيديو",
-  "💡 حل مشكلة تقنية",
-];
 
 const SEARCH_STATUSES = [
   "جاري البحث في المصادر المحدثة...",
@@ -393,27 +385,6 @@ function ChatIndexScreen() {
   return (
     <div className="relative flex h-full w-full max-w-full overflow-x-hidden flex-col justify-between bg-[#0b101b] text-slate-100" dir="rtl">
       
-      {/* أزرار عائمة: محادثة جديدة + الإعدادات */}
-      <div className="absolute left-4 top-4 z-10 flex items-center gap-2">
-        <Button
-          onClick={handleNewChat}
-          variant="outline"
-          size="sm"
-          className="flex items-center gap-1.5 rounded-full border-slate-800 bg-slate-900/60 px-3 py-1.5 text-xs text-slate-200 hover:bg-slate-800"
-        >
-          محادثة جديدة
-          <Plus className="size-4 text-[#2dd4bf]" />
-        </Button>
-        <Button
-          onClick={openSettings}
-          variant="outline"
-          size="icon"
-          title="الإعدادات"
-          className="size-8 rounded-full border-slate-800 bg-slate-900/60 text-slate-300 hover:bg-slate-800 hover:text-white"
-        >
-          <SettingsIcon className="size-4" />
-        </Button>
-      </div>
 
       {/* منطقة المحتوى والرسائل */}
       <div className="flex flex-1 flex-col justify-start space-y-5 overflow-y-auto overflow-x-hidden px-3 py-4 w-full max-w-full">

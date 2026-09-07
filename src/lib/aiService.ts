@@ -205,6 +205,7 @@ async function postJson(url: string, headers: Record<string, string>, body: unkn
 async function tryGemini(history: Msg[], systemPrompt: string, grounded: boolean): Promise<string | null> {
   const key = keyFor("gemini");
   if (!key) return null;
+  const vision = hasImages(history);
 
   for (const model of GEMINI_MODELS) {
     try {
@@ -215,13 +216,18 @@ async function tryGemini(history: Msg[], systemPrompt: string, grounded: boolean
           systemInstruction: { parts: [{ text: systemPrompt }] },
           contents: history.map((m) => ({
             role: m.role === "assistant" ? "model" : "user",
-            parts: [{ text: m.content }],
+            parts: [
+              { text: m.content || (m.images?.length ? "حلّل هذه الصورة واشرح محتواها بدقة." : "") },
+              ...(m.images ?? []).map((img) => ({
+                inline_data: { mime_type: img.mimeType, data: img.data },
+              })),
+            ],
           })),
-          // أداة البحث الحي المدمجة في Gemini (Google Search Grounding) مفعّلة دائماً
-          tools: [{ google_search: {} }],
+          // أداة البحث الحي المدمجة في Gemini (Google Search Grounding) — تُعطّل مع الصور
+          ...(vision ? {} : { tools: [{ google_search: {} }] }),
           generationConfig: { temperature: 0.6, topP: 0.9, maxOutputTokens: 1400 },
         },
-        grounded ? 8_000 : ENGINE_TIMEOUT_MS,
+        vision ? 30_000 : grounded ? 8_000 : ENGINE_TIMEOUT_MS,
       );
       if (!res.ok) continue;
       const data = (await res.json()) as {

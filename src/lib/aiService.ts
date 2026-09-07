@@ -351,14 +351,19 @@ export async function askSalmanAI(messages: unknown[]): Promise<string> {
     ? history.slice(-4)
     : [{ role: "user" as const, content: "مرحباً" }];
 
-  // بحث حي تلقائي للأسئلة التي تحتاج معلومات محدّثة زمنياً
+  const vision = hasImages(safeHistory);
+
+  // بحث حي تلقائي للأسئلة التي تحتاج معلومات محدّثة زمنياً (يُتجاهل مع الصور)
   const lastUser = [...safeHistory].reverse().find((m) => m.role === "user")?.content ?? "";
   let systemPrompt = baseSystemPrompt();
   let grounded = false;
-  if (needsFreshInfo(lastUser)) {
+  if (!vision && needsFreshInfo(lastUser)) {
     const context = await fetchLiveContext(buildSearchQuery(lastUser));
     grounded = true;
     if (context) systemPrompt = `${systemPrompt}\n\n${context}`;
+  }
+  if (vision) {
+    systemPrompt = `${systemPrompt}\n\nالمستخدم أرفق صورة: اقرأ محتواها بدقة، واستخرج أي نص مكتوب فيها كما هو، ثم أجب عن سؤاله بناءً على ما تراه فعلياً في الصورة.`;
   }
 
   const engines = {
@@ -368,9 +373,13 @@ export async function askSalmanAI(messages: unknown[]): Promise<string> {
     gateway: tryGateway,
   } as const;
 
-  const order: EngineId[] = ["gemini", "openrouter", "groq", "gateway"];
+  // مع الصور: نستخدم فقط المحركات التي تدعم الرؤية
+  const order: EngineId[] = vision
+    ? ["gemini", "openrouter", "gateway"]
+    : ["gemini", "openrouter", "groq", "gateway"];
   const chosen = preferredEngine();
-  const chain = chosen ? [chosen, ...order.filter((e) => e !== chosen)] : order;
+  const chain =
+    chosen && order.includes(chosen) ? [chosen, ...order.filter((e) => e !== chosen)] : order;
 
   for (const id of chain) {
     try {
@@ -381,6 +390,7 @@ export async function askSalmanAI(messages: unknown[]): Promise<string> {
     }
   }
 
-
-  return "تعذر الاتصال بأي من المحركات حالياً، يرجى المحاولة مرة أخرى بعد قليل.";
+  return vision
+    ? "تعذّر تحليل الصورة حالياً، جرّب صورة أصغر حجماً أو أعد المحاولة بعد قليل."
+    : "تعذر الاتصال بأي من المحركات حالياً، يرجى المحاولة مرة أخرى بعد قليل.";
 }

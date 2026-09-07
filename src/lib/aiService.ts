@@ -304,8 +304,11 @@ async function tryGateway(history: Msg[], systemPrompt: string, _grounded = fals
     const res = await postJson(
       "https://ai.gateway.lovable.dev/v1/chat/completions",
       { "Lovable-API-Key": key },
-      { model: GATEWAY_MODEL, messages: [{ role: "system", content: systemPrompt }, ...history] },
-      20_000,
+      {
+        model: GATEWAY_MODEL,
+        messages: [{ role: "system", content: systemPrompt }, ...toOpenAIMessages(history)],
+      },
+      hasImages(history) ? 40_000 : 20_000,
     );
     if (!res.ok) return null;
     const data = (await res.json()) as { choices?: { message?: unknown }[] };

@@ -23,12 +23,12 @@ jobs:
     - name: Install Dependencies
       run: npm install --legacy-peer-deps
 
-    - name: Build Web Assets & Prepare Dist
+    - name: Build Web Assets & Fix Black Screen Issues
       run: |
-        # 1. تشغيل البناء عبر npm أو vite
+        # 1. تشغيل بناء المشروع
         npm run build || npx vite build || true
 
-        # 2. تجهيز مجلد dist ونقل الملفات المجمعة
+        # 2. تجميع وتصدير كافة مخرجات المجلدات
         mkdir -p dist
         if [ -d ".output/public" ]; then cp -r .output/public/* dist/; fi
         if [ -d "dist/client" ]; then cp -r dist/client/* dist/; fi
@@ -36,18 +36,17 @@ jobs:
         if [ -d "build" ] && [ "build" != "dist" ]; then cp -r build/* dist/; fi
         if [ -d "out" ]; then cp -r out/* dist/; fi
 
-        # 3. التأكد من وجود index.html داخل dist
+        # 3. التأكد من وجود index.html
         if [ ! -f "dist/index.html" ]; then
           FOUND_INDEX=$(find . -name "index.html" ! -path "*/node_modules/*" ! -path "*/android/*" ! -path "./dist/*" | head -n 1)
           if [ -n "$FOUND_INDEX" ]; then
-            echo "Copying $FOUND_INDEX to dist/index.html"
             cp "$FOUND_INDEX" dist/index.html
           else
             echo '<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Salman AI</title></head><body><div id="root"></div></body></html>' > dist/index.html
           fi
         fi
 
-        # 4. معالجة وتصحيح المسارات وربط ملفات الجافاسكريبت المجمعة
+        # 4. معالجة وتصحيح المسارات لمنع الشاشة السوداء
         python3 - << 'EOF'
         import os, glob, re
 
@@ -56,29 +55,25 @@ jobs:
             with open(dist_index, "r", encoding="utf-8") as f:
                 content = f.read()
 
-            # تحويل المسارات المطلقة إلى مسارات نسبية لتفادي الشاشة السوداء في كاباسيتور
+            # تحويل المسارات المطلقة لنسبية
             content = re.sub(r'src=["\']/(?!/)', 'src="./', content)
             content = re.sub(r'href=["\']/(?!/)', 'href="./', content)
 
-            # ربط أكواد الجافاسكريبت المجمعة إن كان الملف يحتوي على سكريبتات تطوير محلية
-            if "/src/" in content or "src/main" in content or "<script" not in content:
-                js_files = glob.glob("dist/**/*.js", recursive=True) + glob.glob("dist/**/*.mjs", recursive=True)
-                valid_js = [f for f in js_files if not f.endswith(".json")]
-                if valid_js:
-                    main_js = sorted(valid_js, key=lambda x: os.path.getsize(x), reverse=True)[0]
-                    rel_js = os.path.relpath(main_js, "dist").replace("\\", "/")
-                    print(f"Injecting compiled JS bundle: {rel_js}")
-                    if "<script" in content:
-                        content = re.sub(r'<script[^>]*src=["\'].*?src/.*?!*["\'][^>]*></script>', f'<script type="module" src="./{rel_js}"></script>', content)
-                    else:
-                        content = content.replace("</body>", f'<script type="module" src="./{rel_js}"></script></body>')
+            # معالجة استدعاءات الجافاسكريبت
+            js_files = glob.glob("dist/**/*.js", recursive=True) + glob.glob("dist/**/*.mjs", recursive=True)
+            valid_js = [f for f in js_files if not f.endswith(".json")]
+            if valid_js:
+                main_js = sorted(valid_js, key=lambda x: os.path.getsize(x), reverse=True)[0]
+                rel_js = os.path.relpath(main_js, "dist").replace("\\", "/")
+                if "<script" not in content or "/src/" in content:
+                    content = content.replace("</body>", f'<script type="module" src="./{rel_js}"></script></body>')
 
             with open(dist_index, "w", encoding="utf-8") as f:
                 f.write(content)
-            print("Successfully processed dist/index.html for Capacitor!")
+            print("Prepared dist/index.html successfully!")
         EOF
 
-    - name: Configure Capacitor Local Settings
+    - name: Configure Capacitor Engine & Webview Settings
       run: |
         cat << 'EOF' > capacitor.config.json
         {
@@ -91,34 +86,44 @@ jobs:
           },
           "android": {
             "backgroundColor": "#0B0B0B",
-            "allowMixedContent": true
+            "allowMixedContent": true,
+            "webContentsDebuggingEnabled": true
           }
         }
         EOF
 
-    - name: Sync Capacitor
+    - name: Sync Capacitor Native Project
       run: |
         rm -rf android
         npx cap add android
         npx cap sync android
 
-    - name: Process & Apply Full-Bleed App Icon
+    - name: Remove Adaptive Icons & Force Full-Bleed Logo Icon
       run: |
         python3 -m pip install --quiet Pillow
         python3 - << 'EOF'
-        import os, glob
+        import os, glob, shutil
         from PIL import Image
 
         logo_path = "public/logo.png"
+        if not os.path.exists(logo_path):
+            found = glob.glob("**/logo.png", recursive=True)
+            if found:
+                logo_path = found[0]
+
         if os.path.exists(logo_path):
+            print(f"Processing logo image: {logo_path}")
             img = Image.open(logo_path).convert("RGBA")
+            
+            # قص الحواف الشفافة لجعل الشعار كبيراً وممتداً بالكامل
             bbox = img.getbbox()
             if bbox:
                 img = img.crop(bbox)
             
             res_dir = "android/app/src/main/res"
+            
+            # حذف مجلدات الأيقونات التكيفية التي تجعل الأيقونة صغيرة بداخل أندرويد الحديث
             for anydpi in glob.glob(f"{res_dir}/mipmap-anydpi*"):
-                import shutil
                 shutil.rmtree(anydpi, ignore_errors=True)
             
             sizes = {
@@ -136,6 +141,7 @@ jobs:
                     resized.save(os.path.join(target_dir, "ic_launcher.png"))
                     resized.save(os.path.join(target_dir, "ic_launcher_round.png"))
                     resized.save(os.path.join(target_dir, "ic_launcher_foreground.png"))
+            print("Full-bleed icon generated successfully across all Android densities!")
         EOF
 
     - name: Set up JDK 21

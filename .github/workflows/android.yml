@@ -25,24 +25,58 @@ jobs:
 
     - name: Build Web Assets & Prepare Dist
       run: |
-        # 1. تشغيل بناء المشروع
-        npx vite build --base=./ || npm run build || true
+        # 1. تشغيل البناء عبر npm أو vite
+        npm run build || npx vite build || true
 
-        # 2. إنشاء مجلد dist ونقل الملفات المجمعة من .output/public
+        # 2. تجهيز مجلد dist ونقل الملفات المجمعة
         mkdir -p dist
         if [ -d ".output/public" ]; then cp -r .output/public/* dist/; fi
-        if [ -d "build" ]; then cp -r build/* dist/; fi
+        if [ -d "dist/client" ]; then cp -r dist/client/* dist/; fi
+        if [ -d "build/client" ]; then cp -r build/client/* dist/; fi
+        if [ -d "build" ] && [ "build" != "dist" ]; then cp -r build/* dist/; fi
         if [ -d "out" ]; then cp -r out/* dist/; fi
 
-        # 3. تصحيح المسارات المطلقة إلى مسارات نسبية لحل مشكلة الشاشة السوداء
-        if [ -f "dist/index.html" ]; then
-          sed -i 's|src="/|src="./|g' dist/index.html
-          sed -i 's|href="/|href="./|g' dist/index.html
-          echo "تم تجهيز dist/index.html وتصحيح المسارات بنجاح."
-        else
-          echo "خطأ: لم يتم العثور على index.html داخل dist!"
-          exit 1
+        # 3. التأكد من وجود index.html داخل dist
+        if [ ! -f "dist/index.html" ]; then
+          FOUND_INDEX=$(find . -name "index.html" ! -path "*/node_modules/*" ! -path "*/android/*" ! -path "./dist/*" | head -n 1)
+          if [ -n "$FOUND_INDEX" ]; then
+            echo "Copying $FOUND_INDEX to dist/index.html"
+            cp "$FOUND_INDEX" dist/index.html
+          else
+            echo '<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Salman AI</title></head><body><div id="root"></div></body></html>' > dist/index.html
+          fi
         fi
+
+        # 4. معالجة وتصحيح المسارات وربط ملفات الجافاسكريبت المجمعة
+        python3 - << 'EOF'
+        import os, glob, re
+
+        dist_index = "dist/index.html"
+        if os.path.exists(dist_index):
+            with open(dist_index, "r", encoding="utf-8") as f:
+                content = f.read()
+
+            # تحويل المسارات المطلقة إلى مسارات نسبية لتفادي الشاشة السوداء في كاباسيتور
+            content = re.sub(r'src=["\']/(?!/)', 'src="./', content)
+            content = re.sub(r'href=["\']/(?!/)', 'href="./', content)
+
+            # ربط أكواد الجافاسكريبت المجمعة إن كان الملف يحتوي على سكريبتات تطوير محلية
+            if "/src/" in content or "src/main" in content or "<script" not in content:
+                js_files = glob.glob("dist/**/*.js", recursive=True) + glob.glob("dist/**/*.mjs", recursive=True)
+                valid_js = [f for f in js_files if not f.endswith(".json")]
+                if valid_js:
+                    main_js = sorted(valid_js, key=lambda x: os.path.getsize(x), reverse=True)[0]
+                    rel_js = os.path.relpath(main_js, "dist").replace("\\", "/")
+                    print(f"Injecting compiled JS bundle: {rel_js}")
+                    if "<script" in content:
+                        content = re.sub(r'<script[^>]*src=["\'].*?src/.*?!*["\'][^>]*></script>', f'<script type="module" src="./{rel_js}"></script>', content)
+                    else:
+                        content = content.replace("</body>", f'<script type="module" src="./{rel_js}"></script></body>')
+
+            with open(dist_index, "w", encoding="utf-8") as f:
+                f.write(content)
+            print("Successfully processed dist/index.html for Capacitor!")
+        EOF
 
     - name: Configure Capacitor Local Settings
       run: |

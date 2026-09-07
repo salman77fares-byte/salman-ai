@@ -254,12 +254,17 @@ async function tryOpenAICompatible(
   extraHeaders: Record<string, string> = {},
 ): Promise<string | null> {
   if (!key) return null;
+  const vision = hasImages(history);
   for (const model of models) {
     try {
       const res = await postJson(
         url,
         { Authorization: `Bearer ${key}`, ...extraHeaders },
-        { model, messages: [{ role: "system", content: systemPrompt }, ...history] },
+        {
+          model,
+          messages: [{ role: "system", content: systemPrompt }, ...toOpenAIMessages(history)],
+        },
+        vision ? 30_000 : ENGINE_TIMEOUT_MS,
       );
       if (!res.ok) continue;
       const data = (await res.json()) as { choices?: { message?: unknown }[] };
@@ -276,7 +281,7 @@ const tryOpenRouter = (history: Msg[], systemPrompt: string, _grounded = false) 
   tryOpenAICompatible(
     "https://openrouter.ai/api/v1/chat/completions",
     keyFor("openrouter"),
-    OPENROUTER_MODELS,
+    hasImages(history) ? OPENROUTER_VISION_MODELS : OPENROUTER_MODELS,
     history,
     systemPrompt,
     { "HTTP-Referer": "https://salman-ai.lovable.app", "X-Title": "Salman AI" },

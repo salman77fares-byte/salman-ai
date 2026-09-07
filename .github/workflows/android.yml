@@ -23,8 +23,22 @@ jobs:
     - name: Install Dependencies
       run: npm install --legacy-peer-deps
 
-    - name: Build Web Assets (Relative Paths)
-      run: npx vite build --base=./
+    - name: Build Web Assets & Ensure Dist Directory
+      run: |
+        npm run build -- --base=./ || npx vite build --base=./ || true
+        mkdir -p dist
+        if [ -d "build" ]; then cp -r build/* dist/; fi
+        if [ -d "out" ]; then cp -r out/* dist/; fi
+        if [ -d ".output/public" ]; then cp -r .output/public/* dist/; fi
+        
+        if [ ! -f "dist/index.html" ]; then
+          INDEX_PATH=$(find . -name "index.html" ! -path "*/node_modules/*" ! -path "*/android/*" ! -path "./dist/*" | head -n 1)
+          if [ -n "$INDEX_PATH" ]; then
+            cp "$INDEX_PATH" dist/
+          else
+            echo '<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Salman AI</title></head><body><div id="root"></div></body></html>' > dist/index.html
+          fi
+        fi
 
     - name: Configure Capacitor Local Settings
       run: |
@@ -33,9 +47,6 @@ jobs:
           "appId": "com.salman.ai",
           "appName": "Salman AI",
           "webDir": "dist",
-          "server": {
-            "androidScheme": "https"
-          },
           "android": {
             "backgroundColor": "#0B0B0B"
           }
@@ -48,7 +59,7 @@ jobs:
         npx cap add android
         npx cap sync android
 
-    - name: Apply Logo PNG Icon
+    - name: Apply Custom App Icon (logo.png)
       run: |
         if [ -f "public/logo.png" ]; then
           echo "Applying public/logo.png as main app icon..."

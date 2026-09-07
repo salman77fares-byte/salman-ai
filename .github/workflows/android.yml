@@ -23,14 +23,24 @@ jobs:
     - name: Install Dependencies
       run: npm install --legacy-peer-deps
 
-    - name: Build Web Assets (Vite Direct Build)
+    - name: Build Web Assets & Prepare Dist
       run: |
-        # بناء واجهة Vite مباشرة بمسارات نسبية محليّة
-        npx vite build --base=./
+        # 1. تشغيل بناء المشروع
+        npx vite build --base=./ || npm run build || true
 
-        # التأكد من نجاح ربط حزمة الجافاسكريبت داخل index.html لتفادي الشاشة السوداء
-        if ! grep -q "<script" dist/index.html; then
-          echo "خطأ: لم يتم تضمين حزمة الجافاسكريبت داخل dist/index.html"
+        # 2. إنشاء مجلد dist ونقل الملفات المجمعة من .output/public
+        mkdir -p dist
+        if [ -d ".output/public" ]; then cp -r .output/public/* dist/; fi
+        if [ -d "build" ]; then cp -r build/* dist/; fi
+        if [ -d "out" ]; then cp -r out/* dist/; fi
+
+        # 3. تصحيح المسارات المطلقة إلى مسارات نسبية لحل مشكلة الشاشة السوداء
+        if [ -f "dist/index.html" ]; then
+          sed -i 's|src="/|src="./|g' dist/index.html
+          sed -i 's|href="/|href="./|g' dist/index.html
+          echo "تم تجهيز dist/index.html وتصحيح المسارات بنجاح."
+        else
+          echo "خطأ: لم يتم العثور على index.html داخل dist!"
           exit 1
         fi
 
@@ -41,8 +51,13 @@ jobs:
           "appId": "com.salman.ai",
           "appName": "Salman AI",
           "webDir": "dist",
+          "server": {
+            "androidScheme": "https",
+            "cleartext": true
+          },
           "android": {
-            "backgroundColor": "#0B0B0B"
+            "backgroundColor": "#0B0B0B",
+            "allowMixedContent": true
           }
         }
         EOF

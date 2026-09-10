@@ -25,6 +25,11 @@ jobs:
         flutter-version: '3.22.x'
         channel: 'stable'
 
+    - name: Generate Clean Flutter Android Project
+      run: |
+        rm -rf android
+        flutter create . --platforms=android --org=com.salman.ai --project-name=salman_ai
+
     - name: Fetch Flutter Dependencies
       run: flutter pub get
 

@@ -33,6 +33,15 @@ jobs:
     - name: Build Web Project
       run: npm run build
 
+    - name: Prepare Web Assets for Capacitor
+      run: |
+        if [ -d ".output/public" ]; then
+          cp -r .output/public dist
+        elif [ ! -d "dist" ]; then
+          mkdir dist
+          touch dist/index.html
+        fi
+
     - name: Add Capacitor Android Platform
       run: npx cap add android
 

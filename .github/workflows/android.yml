@@ -1,4 +1,4 @@
-name: Build Salman AI App
+name: Build Native Flutter APK
 
 on:
   push:
@@ -13,84 +13,28 @@ jobs:
     - name: Checkout Code
       uses: actions/checkout@v4
 
-    - name: Set up Node.js
-      uses: actions/setup-node@v4
-      with:
-        node-version: 22
-
-    - name: Install Dependencies
-      run: npm install --legacy-peer-deps
-
-    - name: Build Web Assets
-      run: |
-        npm run build || npx vite build || true
-
-    - name: Prepare Dist Directory
-      run: |
-        mkdir -p dist
-        if [ -d ".output/public" ]; then cp -r .output/public/* dist/; fi
-        if [ -d "build" ]; then cp -r build/* dist/; fi
-        if [ -d "out" ]; then cp -r out/* dist/; fi
-        
-        if [ ! -f "dist/index.html" ]; then
-          INDEX_PATH=$(find . -name "index.html" ! -path "*/node_modules/*" ! -path "*/android/*" ! -path "./dist/*" | head -n 1)
-          if [ -n "$INDEX_PATH" ]; then
-            cp "$INDEX_PATH" dist/
-          else
-            echo '<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Salman AI</title></head><body><div id="root"></div></body></html>' > dist/index.html
-          fi
-        fi
-
-    - name: Configure Capacitor Local Settings
-      run: |
-        cat << 'EOF' > capacitor.config.json
-        {
-          "appId": "com.salman.ai",
-          "appName": "Salman AI",
-          "webDir": "dist",
-          "server": {
-            "androidScheme": "https"
-          },
-          "android": {
-            "backgroundColor": "#0B0B0B"
-          }
-        }
-        EOF
-
-    - name: Sync Capacitor
-      run: |
-        rm -rf android
-        npx cap add android
-        npx cap sync android
-
-    - name: Restore Application Icons
-      run: |
-        rm -rf android/app/src/main/res/mipmap-anydpi-v26
-        ICON_SRC=$(find public src -name "*icon*.png" -o -name "*logo*.png" | head -n 1)
-        if [ -z "$ICON_SRC" ]; then ICON_SRC="public/favicon.ico"; fi
-        
-        for dir in android/app/src/main/res/mipmap-*; do
-          if [ -d "$dir" ]; then
-            cp -f "$ICON_SRC" "$dir/ic_launcher.png" 2>/dev/null || true
-            cp -f "$ICON_SRC" "$dir/ic_launcher_round.png" 2>/dev/null || true
-            cp -f "$ICON_SRC" "$dir/ic_launcher_foreground.png" 2>/dev/null || true
-          fi
-        done
-
-    - name: Set up JDK 21
+    - name: Set up Java JDK
       uses: actions/setup-java@v4
       with:
-        java-version: '21'
         distribution: 'temurin'
+        java-version: '17'
 
-    - name: Build Standalone APK
-      run: |
-        cd android
-        chmod +x gradlew
-        ./gradlew assembleDebug --no-daemon
-
-    - name: Upload APK
-      uses: actions/upload-artifact@v4
+    - name: Set up Flutter SDK
+      uses: subosito/flutter-action@v2
       with:
-        name: salman-ai-apk
-        path: android/app/build/outputs/apk/debug/app-debug.apk
+        flutter-version: '3.22.x'
+        channel: 'stable'
+
+    - name: Fetch Flutter Dependencies
+      run: flutter pub get
+
+    - name: Build Native Release APK
+      run: flutter build apk --release
+
+    - name: Create GitHub Release & Upload APK
+      uses: softprops/action-gh-release@v2
+      if: success()
+      with:
+        tag_name: v2.0.${{ github.run_number }}
+        name: Salman AI Native Flutter v2.0.${{ github.run_number }}
+        files: build/app/outputs/flutter-apk/app-release.apk

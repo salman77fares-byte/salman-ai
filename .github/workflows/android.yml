@@ -1,4 +1,4 @@
-name: Build Native Flutter APK
+name: Build Capacitor Android APK
 
 on:
   push:
@@ -15,33 +15,37 @@ jobs:
     - name: Checkout Code
       uses: actions/checkout@v4
 
+    - name: Set up Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20'
+        cache: 'npm'
+
     - name: Set up Java JDK
       uses: actions/setup-java@v4
       with:
         distribution: 'temurin'
         java-version: '17'
 
-    - name: Set up Flutter SDK
-      uses: subosito/flutter-action@v2
-      with:
-        flutter-version: '3.22.x'
-        channel: 'stable'
+    - name: Install Dependencies
+      run: npm install
 
-    - name: Generate Clean Flutter Android Project
+    - name: Build Web Project
+      run: npm run build
+
+    - name: Sync Capacitor Android
+      run: npx cap sync android
+
+    - name: Build Release APK with Gradle
       run: |
-        rm -rf android
-        flutter create . --platforms=android --org=com.salman.ai --project-name=salman_ai
-
-    - name: Fetch Flutter Dependencies
-      run: flutter pub get
-
-    - name: Build Native Release APK
-      run: flutter build apk --release
+        cd android
+        chmod +x gradlew
+        ./gradlew assembleRelease
 
     - name: Create GitHub Release & Upload APK
       uses: softprops/action-gh-release@v2
       if: success()
       with:
         tag_name: v2.0.${{ github.run_number }}
-        name: Salman AI Native Flutter v2.0.${{ github.run_number }}
-        files: build/app/outputs/flutter-apk/app-release.apk
+        name: Salman AI App v2.0.${{ github.run_number }}
+        files: android/app/build/outputs/apk/release/app-release-unsigned.apk

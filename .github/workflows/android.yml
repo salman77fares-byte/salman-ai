@@ -33,26 +33,43 @@ jobs:
     - name: Build Web Project
       run: npm run build
 
-    - name: Prepare Web Assets for Capacitor
+    - name: Prepare Web Assets & Enable Offline Mode
       run: |
+        mkdir -p dist
         if [ -d ".output/public" ]; then
-          cp -r .output/public dist
-        elif [ ! -d "dist" ]; then
-          mkdir dist
-          touch dist/index.html
+          cp -r .output/public/* dist/ 2>/dev/null || cp -r .output/public dist
         fi
+        node -e "
+          const fs = require('fs');
+          ['capacitor.config.ts', 'capacitor.config.json'].forEach(file => {
+            if (fs.existsSync(file)) {
+              let c = fs.readFileSync(file, 'utf8');
+              c = c.replace(/server\s*:\s*\{[^}]*\},?/g, '');
+              c = c.replace(/\"server\"\s*:\s*\{[^}]*\},?/g, '');
+              fs.writeFileSync(file, c);
+            }
+          });
+        "
 
     - name: Add Capacitor Android Platform
       run: npx cap add android || true
 
-    - name: Generate Custom App Icon
+    - name: Generate Custom Logo Icon
       run: |
-        if [ -f "public/favicon.png" ]; then
+        LOGO_PATH=""
+        for p in "public/logo.png" "logo.png" "src/logo.png" "public/favicon.png"; do
+          if [ -f "$p" ]; then
+            LOGO_PATH="$p"
+            break
+          fi
+        done
+
+        if [ -n "$LOGO_PATH" ]; then
           mkdir -p assets
-          cp public/favicon.png assets/icon.png
-          cp public/favicon.png assets/icon-only.png
-          cp public/favicon.png assets/icon-foreground.png
-          cp public/favicon.png assets/icon-background.png
+          cp "$LOGO_PATH" assets/icon.png
+          cp "$LOGO_PATH" assets/icon-only.png
+          cp "$LOGO_PATH" assets/icon-foreground.png
+          cp "$LOGO_PATH" assets/icon-background.png
           npx --yes @capacitor/assets generate --android || true
         fi
 

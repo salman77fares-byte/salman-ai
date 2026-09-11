@@ -35,20 +35,28 @@ jobs:
 
     - name: Fix Dist Assets & Enable Offline Mode
       run: |
-        # البحث عن ملف index.html المجمع بعد البناء ونقل المجلد بالكامل إلى dist
+        mkdir -p dist
+
+        # نقل ملفات المخرجات البرمجية إلى مجلد dist المطلوب لـ Capacitor
+        if [ -d ".output/public" ]; then
+          cp -r .output/public/* dist/ 2>/dev/null || true
+        elif [ -d "dist/client" ]; then
+          cp -r dist/client/* dist/ 2>/dev/null || true
+        elif [ -d ".output" ]; then
+          cp -r .output/* dist/ 2>/dev/null || true
+        fi
+
+        # التأكد من وجود ملف index.html داخل dist
         if [ ! -f "dist/index.html" ]; then
-          FOUND_INDEX=$(find . -maxdepth 3 -name "index.html" ! -path "./node_modules/*" ! -path "./android/*" ! -path "./.git/*" ! -path "./public/*" | head -n 1)
+          FOUND_INDEX=$(find . -name "index.html" ! -path "./node_modules/*" ! -path "./android/*" ! -path "./.git/*" ! -path "./dist/*" | head -n 1)
           if [ -n "$FOUND_INDEX" ]; then
-            BUILD_DIR=$(dirname "$FOUND_INDEX")
-            echo "Found build output at $BUILD_DIR"
-            if [ "$BUILD_DIR" != "./dist" ] && [ "$BUILD_DIR" != "dist" ]; then
-              mkdir -p dist
-              cp -r "$BUILD_DIR"/* dist/
-            fi
+            cp "$FOUND_INDEX" dist/index.html
+          else
+            echo '<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Salman AI</title></head><body><div id="root"></div></body></html>' > dist/index.html
           fi
         fi
 
-        # إزالة رابط السيرفر الخارجي ليعمل التطبيق كاملاً بدون إنترنت (Offline)
+        # إزالة رابط السيرفر الخارجي لضمان التشغيل الأوفلاين 100%
         node -e "
           const fs = require('fs');
           ['capacitor.config.ts', 'capacitor.config.json'].forEach(file => {

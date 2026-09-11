@@ -42,13 +42,14 @@ jobs:
         if [ -d "dist/client" ]; then
           cp -r dist/client/* dist/ 2>/dev/null || true
         fi
-        if [ ! -f "dist/index.html" ]; then
-          if [ -f "index.html" ]; then
-            cp index.html dist/index.html
-          else
-            echo '<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Salman AI</title></head><body><div id="root"></div></body></html>' > dist/index.html
-          fi
+
+        # البحث عن ملف index.html المجمع الحقيقي لربط ملفات JS و CSS
+        REAL_INDEX=$(find .output dist -name "index.html" 2>/dev/null | head -n 1)
+        if [ -n "$REAL_INDEX" ] && [ "$REAL_INDEX" != "dist/index.html" ]; then
+          cp "$REAL_INDEX" dist/index.html
         fi
+
+        # إزالة رابط السيرفر الخارجي لضمان التشغيل المحلي بدون إنترنت
         node -e "
           const fs = require('fs');
           ['capacitor.config.ts', 'capacitor.config.json'].forEach(file => {

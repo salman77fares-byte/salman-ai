@@ -33,23 +33,22 @@ jobs:
     - name: Build Web Project
       run: npm run build
 
-    - name: Prepare Web Assets & Enable Offline Mode
+    - name: Fix Dist Assets & Enable Offline Mode
       run: |
-        mkdir -p dist
-        if [ -d ".output/public" ]; then
-          cp -r .output/public/* dist/ 2>/dev/null || true
-        fi
-        if [ -d "dist/client" ]; then
-          cp -r dist/client/* dist/ 2>/dev/null || true
+        # البحث عن ملف index.html المجمع بعد البناء ونقل المجلد بالكامل إلى dist
+        if [ ! -f "dist/index.html" ]; then
+          FOUND_INDEX=$(find . -maxdepth 3 -name "index.html" ! -path "./node_modules/*" ! -path "./android/*" ! -path "./.git/*" ! -path "./public/*" | head -n 1)
+          if [ -n "$FOUND_INDEX" ]; then
+            BUILD_DIR=$(dirname "$FOUND_INDEX")
+            echo "Found build output at $BUILD_DIR"
+            if [ "$BUILD_DIR" != "./dist" ] && [ "$BUILD_DIR" != "dist" ]; then
+              mkdir -p dist
+              cp -r "$BUILD_DIR"/* dist/
+            fi
+          fi
         fi
 
-        # البحث عن ملف index.html المجمع الحقيقي لربط ملفات JS و CSS
-        REAL_INDEX=$(find .output dist -name "index.html" 2>/dev/null | head -n 1)
-        if [ -n "$REAL_INDEX" ] && [ "$REAL_INDEX" != "dist/index.html" ]; then
-          cp "$REAL_INDEX" dist/index.html
-        fi
-
-        # إزالة رابط السيرفر الخارجي لضمان التشغيل المحلي بدون إنترنت
+        # إزالة رابط السيرفر الخارجي ليعمل التطبيق كاملاً بدون إنترنت (Offline)
         node -e "
           const fs = require('fs');
           ['capacitor.config.ts', 'capacitor.config.json'].forEach(file => {
@@ -68,7 +67,7 @@ jobs:
     - name: Generate Custom Logo Icon
       run: |
         LOGO_PATH=""
-        for p in "public/logo.png" "logo.png" "src/logo.png" "public/favicon.png"; do
+        for p in "public/logo.png" "logo.png" "src/logo.png" "public/favicon.png" "public/favicon.ico"; do
           if [ -f "$p" ]; then
             LOGO_PATH="$p"
             break

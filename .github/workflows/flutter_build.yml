@@ -1,4 +1,4 @@
-name: Build Complete Offline Flutter APK (Blackscreen Fix)
+name: Build Perfect Flutter Offline APK
 
 on:
   push:
@@ -15,7 +15,7 @@ jobs:
     - name: Checkout Code
       uses: actions/checkout@v4
 
-    - name: Set up Node.js & Build Static Assets
+    - name: Set up Node.js & Build SPA Assets
       uses: actions/setup-node@v4
       with:
         node-version: '22'
@@ -43,29 +43,29 @@ jobs:
         distribution: 'temurin'
         java-version: '17'
 
-    - name: Set up Flutter
+    - name: Set up Flutter Environment
       uses: subosito/flutter-action@v2
       with:
         flutter-version: '3.24.x'
         channel: 'stable'
         cache: true
 
-    - name: Build Native Flutter Shell with Connectivity Banner & Network Fix
+    - name: Build Native Flutter Shell & Assets Engine
       run: |
-        # 1. إنشاء تطبيق Flutter
+        # 1. إنشاء مشروع Flutter
         flutter create --org com.salman --project-name ai flutter_app
         cd flutter_app
 
-        # 2. إضافة المكتبات
+        # 2. إضافة المكتبات المعتمدة (WebView + مراقب الشبكة + الأيقونات)
         flutter pub add webview_flutter
         flutter pub add connectivity_plus
         flutter pub add --dev flutter_launcher_icons
 
-        # 3. تجهيز ملفات Web
+        # 3. نقل ملفات الـ Web لداحل أصول Flutter
         mkdir -p assets/www
         cp -r ../www/* assets/www/
 
-        # 4. معالجة الشعار
+        # 4. فحص وتعيين الشعار الرسمي
         LOGO_PATH=""
         for p in "../public/logo.png" "../logo.png" "../src/logo.png" "../public/favicon.png"; do
           if [ -f "$p" ]; then
@@ -86,7 +86,7 @@ flutter_launcher_icons:
 EOF
         fi
 
-        # 5. تسجيل كافة المجلدات والملفات في pubspec.yaml
+        # 5. تسجيل جميع المسارات والمجلدات الفرعية آلياً داخل pubspec.yaml
         node -e "
           const fs = require('fs');
           let yaml = fs.readFileSync('pubspec.yaml', 'utf8');
@@ -117,7 +117,7 @@ EOF
           fs.writeFileSync('pubspec.yaml', yaml);
         "
 
-        # 6. كتابة كود التطبيق المطور لمعالجة الاتصال والملفات المحلية
+        # 6. كتابة كود تطبيق Flutter الكامل بتصميمه ومميزاته المحددة
         cat << 'EOF' > lib/main.dart
         import 'dart:async';
         import 'dart:io';
@@ -135,33 +135,44 @@ EOF
             ),
           );
 
-          // تشغيل الخادم المحلي
+          // خادم محلي ذكي يحل الشاشة السوداء ويدعم مسارات الـ SPA والوظائف أوفلاين
           try {
             final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 8080);
             server.listen((HttpRequest request) async {
               String path = request.uri.path;
               if (path == '/') path = '/index.html';
-              final assetPath = 'assets/www$path';
+              
+              String assetPath = 'assets/www$path';
+              ByteData? data;
+              
               try {
-                final data = await rootBundle.load(assetPath);
-                final bytes = data.buffer.asUint8List();
-                
-                if (path.endsWith('.html')) request.response.headers.contentType = ContentType.html;
-                else if (path.endsWith('.js') || path.endsWith('.mjs')) request.response.headers.contentType = ContentType('application', 'javascript', charset: 'utf-8');
-                else if (path.endsWith('.css')) request.response.headers.contentType = ContentType('text', 'css', charset: 'utf-8');
-                else if (path.endsWith('.png')) request.response.headers.contentType = ContentType('image', 'png');
-                else if (path.endsWith('.svg')) request.response.headers.contentType = ContentType('image', 'svg+xml');
-                else if (path.endsWith('.json')) request.response.headers.contentType = ContentType.json;
-                
-                request.response.add(bytes);
-              } catch (e) {
+                data = await rootBundle.load(assetPath);
+              } catch (_) {
+                // نظام دعم التوجيه الداخلي (SPA Routing Fallback)
                 try {
-                  final data = await rootBundle.load('assets/www/index.html');
-                  request.response.headers.contentType = ContentType.html;
-                  request.response.add(data.buffer.asUint8List());
-                } catch (_) {
-                  request.response.statusCode = HttpStatus.notFound;
+                  assetPath = 'assets/www/index.html';
+                  data = await rootBundle.load(assetPath);
+                } catch (_) {}
+              }
+
+              if (data != null) {
+                final bytes = data.buffer.asUint8List();
+                if (assetPath.endsWith('.html')) {
+                  request.response.headers.contentType = ContentType('text', 'html', charset: 'utf-8');
+                } else if (assetPath.endsWith('.js') || assetPath.endsWith('.mjs')) {
+                  request.response.headers.contentType = ContentType('application', 'javascript', charset: 'utf-8');
+                } else if (assetPath.endsWith('.css')) {
+                  request.response.headers.contentType = ContentType('text', 'css', charset: 'utf-8');
+                } else if (assetPath.endsWith('.png')) {
+                  request.response.headers.contentType = ContentType('image', 'png');
+                } else if (assetPath.endsWith('.svg')) {
+                  request.response.headers.contentType = ContentType('image', 'svg+xml');
+                } else if (assetPath.endsWith('.json')) {
+                  request.response.headers.contentType = ContentType('application', 'json', charset: 'utf-8');
                 }
+                request.response.add(bytes);
+              } else {
+                request.response.statusCode = HttpStatus.notFound;
               }
               await request.response.close();
             });
@@ -204,11 +215,20 @@ EOF
               ..setBackgroundColor(const Color(0xFF0B0B0B))
               ..loadRequest(Uri.parse('http://127.0.0.1:8080'));
 
+            // فحص مبدئي ومتابعة مستمرة لحالة الاتصال بالإنترنت
+            Connectivity().checkConnectivity().then((results) {
+              _updateConnectionStatus(results);
+            });
+
             _connectivitySubscription = Connectivity().onConnectivityChanged.listen((results) {
-              final isDisconnected = results.contains(ConnectivityResult.none) || results.isEmpty;
-              setState(() {
-                _isOffline = isDisconnected;
-              });
+              _updateConnectionStatus(results);
+            });
+          }
+
+          void _updateConnectionStatus(List<ConnectivityResult> results) {
+            final isDisconnected = results.contains(ConnectivityResult.none) || results.isEmpty;
+            setState(() {
+              _isOffline = isDisconnected;
             });
           }
 
@@ -233,7 +253,7 @@ EOF
                         right: 0,
                         child: AnimatedContainer(
                           duration: const Duration(milliseconds: 300),
-                          padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 12),
+                          padding: const EdgeInsets.symmetric(vertical: 7, horizontal: 12),
                           color: const Color(0xDCB00020),
                           child: const Row(
                             mainAxisAlignment: MainAxisAlignment.center,
@@ -256,26 +276,26 @@ EOF
         }
         EOF
 
-        # 7. تطبيق الأيقونة وتفعيل Cleartext Traffic لإلغاء الشاشة السوداء في أندرويد
+        # 7. إعداد الأيقونة والاسم والأذونات لحل حظر الاتصال المحلي في أندرويد
         flutter pub get
         if [ -n "$LOGO_PATH" ]; then
           dart run flutter_launcher_icons || true
         fi
 
-        # تفعيل السماح بالاتصالات المحلية وتعديل اسم التطبيق
-        sed -i 's/<application/<application android:usesCleartextTraffic="true"/g' android/app/src/main/AndroidManifest.xml
-        sed -i 's/android:label="ai"/android:label="Salman AI"/g' android/app/src/main/AndroidManifest.xml
+        # إضافة أذونات الشبكة والسماح بالاتصال المحلي المباشر
         sed -i '/<application/i \    <uses-permission android:name="android.permission.INTERNET"/>\n    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>' android/app/src/main/AndroidManifest.xml
+        sed -i 's/<application/& android:usesCleartextTraffic="true"/' android/app/src/main/AndroidManifest.xml
+        sed -i 's/android:label="ai"/android:label="Salman AI"/g' android/app/src/main/AndroidManifest.xml
 
-    - name: Build Android Release APK
+    - name: Build Release APK
       run: |
         cd flutter_app
         flutter build apk --release
 
-    - name: Create GitHub Release & Upload APK
+    - name: Upload Release Artifact
       uses: softprops/action-gh-release@v2
       if: success()
       with:
-        tag_name: v3.1.${{ github.run_number }}
-        name: Salman AI Fixed Offline App v3.1.${{ github.run_number }}
+        tag_name: v3.2.${{ github.run_number }}
+        name: Salman AI Perfect Flutter App v3.2.${{ github.run_number }}
         files: flutter_app/build/app/outputs/flutter-apk/app-release.apk

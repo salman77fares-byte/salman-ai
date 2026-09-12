@@ -32,10 +32,18 @@ jobs:
 
     - name: Build Pure Static SPA for Offline Android
       run: |
-        # بناء التطبيق كـ SPA مع مسارات نسبية لضمان عمل الواجهة محلياً
-        npx vite build --base=./ --outDir dist
+        # بناء مشروع React / TanStack
+        npm run build || npx vite build --base=./
 
-        # كتابة إعدادات Capacitor لتعمل من مجلد dist وبدون خادم خارجي
+        # ضمان نقل الملفات الجاهزة إلى مجلد dist ليتعرف عليه Capacitor
+        mkdir -p dist
+        if [ -d ".output/public" ]; then
+          cp -r .output/public/* dist/
+        elif [ -d "build" ]; then
+          cp -r build/* dist/
+        fi
+
+        # إنشاء ملف إعدادات Capacitor المضمون
         node -e "
           const fs = require('fs');
           const config = {

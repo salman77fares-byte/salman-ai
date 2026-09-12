@@ -1,0 +1,115 @@
+name: Build Flutter Android APK
+
+on:
+  push:
+    branches: [ "main", "master" ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+    - name: Checkout Code
+      uses: actions/checkout@v4
+
+    - name: Set up Java JDK
+      uses: actions/setup-java@v4
+      with:
+        distribution: 'temurin'
+        java-version: '17'
+
+    - name: Set up Flutter
+      uses: subosito/flutter-action@v2
+      with:
+        flutter-version: '3.24.x'
+        channel: 'stable'
+        cache: true
+
+    - name: Create Flutter App Shell
+      run: |
+        # 1. إنشاء مشروع Flutter جديد
+        flutter create --org com.salman --project-name salman_ai flutter_app
+        cd flutter_app
+
+        # 2. إضافة مكتبة WebView الرسمية
+        flutter pub add webview_flutter
+
+        # 3. كتابة كود التطبيق الأساسي (Main.dart)
+        cat << 'EOF' > lib/main.dart
+        import 'package:flutter/material.dart';
+        import 'package:flutter/services.dart';
+        import 'package:webview_flutter/webview_flutter.dart';
+
+        void main() {
+          WidgetsFlutterBinding.ensureInitialized();
+          SystemChrome.setSystemUIOverlayStyle(
+            const SystemUiOverlayStyle(
+              statusBarColor: Colors.transparent,
+              statusBarIconBrightness: Brightness.light,
+            ),
+          );
+          runApp(const MyApp());
+        }
+
+        class MyApp extends StatelessWidget {
+          const MyApp({super.key});
+
+          @override
+          Widget build(BuildContext context) {
+            return MaterialApp(
+              debugShowCheckedModeBanner: false,
+              theme: ThemeData.dark(),
+              home: const WebViewScreen(),
+            );
+          }
+        }
+
+        class WebViewScreen extends StatefulWidget {
+          const WebViewScreen({super.key});
+
+          @override
+          State<WebViewScreen> createState() => _WebViewScreenState();
+        }
+
+        class _WebViewScreenState extends State<WebViewScreen> {
+          late final WebViewController _controller;
+
+          @override
+          void initState() {
+            super.initState();
+            _controller = WebViewController()
+              ..setJavaScriptMode(JavaScriptMode.unrestricted)
+              ..setBackgroundColor(const Color(0xFF0B0B0B))
+              ..loadRequest(Uri.parse('https://salman-ai.lovable.app'));
+          }
+
+          @override
+          Widget build(BuildContext context) {
+            return Scaffold(
+              backgroundColor: const Color(0xFF0B0B0B),
+              body: SafeArea(
+                child: WebViewWidget(controller: _controller),
+              ),
+            );
+          }
+        }
+        EOF
+
+        # 4. إضافة إذن الإنترنيت في AndroidManifest
+        sed -i '/<application/i \    <uses-permission android:name="android.permission.INTERNET"/>' android/app/src/main/AndroidManifest.xml
+
+    - name: Build Android APK
+      run: |
+        cd flutter_app
+        flutter build apk --release
+
+    - name: Create GitHub Release & Upload Flutter APK
+      uses: softprops/action-gh-release@v2
+      if: success()
+      with:
+        tag_name: v3.0.${{ github.run_number }}
+        name: Salman AI Flutter App v3.0.${{ github.run_number }}
+        files: flutter_app/build/app/outputs/flutter-apk/app-release.apk

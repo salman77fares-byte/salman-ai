@@ -247,25 +247,28 @@ jobs:
           fs.writeFileSync("lib/main.dart", code);
           '
 
-          flutter pub get
-          if [ -n "$LOGO_PATH" ]; then
-            dart run flutter_launcher_icons || true
-          fi
-
-          # Fix Android Gradle SDK configurations unconditionally
+          # Fix Android Gradle SDK configurations and strip problematic NDK lines
           node -e '
           const fs = require("fs");
-          const files = ["android/app/build.gradle", "android/app/build.gradle.kts"];
-          files.forEach(p => {
+          ["android/app/build.gradle", "android/app/build.gradle.kts"].forEach(p => {
             if (fs.existsSync(p)) {
-              let c = fs.readFileSync(p, "utf8");
+              let lines = fs.readFileSync(p, "utf8").split("\n");
+              lines = lines.filter(line => !line.includes("ndkVersion"));
+              let c = lines.join("\n");
               c = c.replace(/flutter\.compileSdkVersion/g, "34");
               c = c.replace(/flutter\.minSdkVersion/g, "21");
               c = c.replace(/flutter\.targetSdkVersion/g, "34");
+              c = c.replace(/flutterVersionCode(?:\.toInteger\(\))?/g, "1");
+              c = c.replace(/flutterVersionName/g, "\"1.0.0\"");
               fs.writeFileSync(p, c);
             }
           });
           '
+
+          flutter pub get
+          if [ -n "$LOGO_PATH" ]; then
+            dart run flutter_launcher_icons || true
+          fi
 
           sed -i '/<application/i \    <uses-permission android:name="android.permission.INTERNET"/>\n    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>' android/app/src/main/AndroidManifest.xml
           sed -i 's/<application/& android:usesCleartextTraffic="true"/' android/app/src/main/AndroidManifest.xml

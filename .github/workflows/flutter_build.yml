@@ -50,7 +50,6 @@ jobs:
           flutter create --org com.salman --project-name ai flutter_app
           cd flutter_app
           
-          # تثبيت إصدارات متوافقة ومستقرة تماماً لا تتطلب AGP حديث
           flutter pub add webview_flutter:4.8.0 connectivity_plus:6.0.5
           flutter pub add --dev flutter_launcher_icons:0.13.1
 
@@ -87,7 +86,7 @@ jobs:
             dart run flutter_launcher_icons || true
           fi
 
-      - name: 📝 Inject WebView Dart Code
+      - name: 📝 Inject Fixed WebView Dart Code
         run: |
           cd flutter_app
           node -e '
@@ -122,6 +121,7 @@ jobs:
                 }
                 if (data != null) {
                   final bytes = data.buffer.asUint8List();
+                  request.response.statusCode = HttpStatus.ok;
                   if (assetPath.endsWith(".html")) request.response.headers.contentType = ContentType("text", "html", charset: "utf-8");
                   else if (assetPath.endsWith(".js") || assetPath.endsWith(".mjs")) request.response.headers.contentType = ContentType("application", "javascript", charset: "utf-8");
                   else if (assetPath.endsWith(".css")) request.response.headers.contentType = ContentType("text", "css", charset: "utf-8");
@@ -213,16 +213,26 @@ jobs:
           fs.writeFileSync("lib/main.dart", code);
           '
 
-      - name: 🛠️ Setup Permissions & SDK Versions
+      - name: 🛠️ Fix App Name & Configurations
         run: |
           cd flutter_app
           
-          # إضافة الأذونات المطلوبة في ملف الأندرويد
+          # أذونات الإنترنت والشبكة
           sed -i '/<application/i \    <uses-permission android:name="android.permission.INTERNET"/>\n    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>' android/app/src/main/AndroidManifest.xml
           sed -i 's/<application/& android:usesCleartextTraffic="true"/' android/app/src/main/AndroidManifest.xml
-          sed -i 's/android:label="flutter_app"/android:label="Salman AI"/g' android/app/src/main/AndroidManifest.xml
+          
+          # تعديل اسم التطبيق في strings.xml ليكون Salman AI رسمياً
+          node -e '
+          const fs = require("fs");
+          const stringsPath = "android/app/src/main/res/values/strings.xml";
+          if (fs.existsSync(stringsPath)) {
+            let xml = fs.readFileSync(stringsPath, "utf8");
+            xml = xml.replace(/<string name=\"app_name\">[^<]*<\/string>/, "<string name=\"app_name\">Salman AI<\/string>");
+            fs.writeFileSync(stringsPath, xml, "utf8");
+          }
+          '
 
-          # ضبط إصدارات الـ SDK بشكل آمن
+          # ضبط إعدادات الـ SDK
           node -e '
           const fs = require("fs");
           const buildGradlePath = "android/app/build.gradle";
@@ -245,6 +255,6 @@ jobs:
         uses: softprops/action-gh-release@v2
         if: success()
         with:
-          tag_name: v3.8.${{ github.run_number }}
-          name: Salman AI Final App v3.8.${{ github.run_number }}
+          tag_name: v3.9.${{ github.run_number }}
+          name: Salman AI Final App v3.9.${{ github.run_number }}
           files: flutter_app/build/app/outputs/flutter-apk/app-release.apk

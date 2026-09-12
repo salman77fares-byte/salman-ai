@@ -32,18 +32,38 @@ jobs:
 
     - name: Build Pure Static SPA for Offline Android
       run: |
-        # بناء مشروع React / TanStack
+        # 1. تشغيل أمر البناء
         npm run build || npx vite build --base=./
 
-        # ضمان نقل الملفات الجاهزة إلى مجلد dist ليتعرف عليه Capacitor
+        # 2. إنشاء مجلد dist المطلوب
         mkdir -p dist
-        if [ -d ".output/public" ]; then
+
+        # 3. فحص ونقل ملفات البناء من المجلدات المتوقعة
+        if [ -f ".output/public/index.html" ]; then
           cp -r .output/public/* dist/
-        elif [ -d "build" ]; then
+        elif [ -f "dist/client/index.html" ]; then
+          cp -r dist/client/* dist/
+        elif [ -f "build/index.html" ]; then
           cp -r build/* dist/
         fi
 
-        # إنشاء ملف إعدادات Capacitor المضمون
+        # 4. البحث الذكي المباشر عن index.html في حال تم توليده في مكان فرعي آخر
+        if [ ! -f "dist/index.html" ]; then
+          FOUND_INDEX=$(find . -maxdepth 4 -name "index.html" -not -path "*/node_modules/*" -not -path "./dist/*" -not -path "./public/*" | head -n 1)
+          if [ -n "$FOUND_INDEX" ]; then
+            DIR_PATH=$(dirname "$FOUND_INDEX")
+            cp -r "$DIR_PATH"/* dist/
+          fi
+        fi
+
+        # 5. تغطية احتياطية سريعة للتأكد من توفر index.html
+        if [ ! -f "dist/index.html" ] && [ -f "index.html" ]; then
+          cp index.html dist/
+          [ -d "src" ] && cp -r src dist/ 2>/dev/null || true
+          [ -d "public" ] && cp -r public/* dist/ 2>/dev/null || true
+        fi
+
+        # 6. إنشاء ملف إعدادات Capacitor المضمون
         node -e "
           const fs = require('fs');
           const config = {

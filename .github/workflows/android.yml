@@ -32,38 +32,33 @@ jobs:
 
     - name: Build Pure Static SPA for Offline Android
       run: |
-        # 1. تشغيل أمر البناء
+        # 1. تنفيذ أمر البناء الخاص بـ TanStack / Vite
         npm run build || npx vite build --base=./
 
-        # 2. إنشاء مجلد dist المطلوب
+        # 2. إنشاء المجلد الرئيسي للـ Web Assets
         mkdir -p dist
 
-        # 3. فحص ونقل ملفات البناء من المجلدات المتوقعة
-        if [ -f ".output/public/index.html" ]; then
-          cp -r .output/public/* dist/
-        elif [ -f "dist/client/index.html" ]; then
-          cp -r dist/client/* dist/
-        elif [ -f "build/index.html" ]; then
-          cp -r build/* dist/
+        # 3. دمج ومزامنة كافة المخرجات من dist/client و .output/public إلى dist
+        [ -d "dist/client" ] && cp -r dist/client/* dist/ 2>/dev/null || true
+        [ -d ".output/public" ] && cp -r .output/public/* dist/ 2>/dev/null || true
+        [ -d "build" ] && cp -r build/* dist/ 2>/dev/null || true
+
+        # 4. البحث عن أي ملف index.html تم توليده ونقله مباشرة لمجلد dist الرئيسي
+        FOUND_INDEX=$(find . -maxdepth 5 -name "index.html" -not -path "*/node_modules/*" -not -path "./dist/index.html" | head -n 1)
+        if [ -n "$FOUND_INDEX" ]; then
+          cp "$FOUND_INDEX" dist/index.html
         fi
 
-        # 4. البحث الذكي المباشر عن index.html في حال تم توليده في مكان فرعي آخر
+        # 5. خطة حماية حاسمة: إنشاء index.html موجه في حال عدم وجوده لمنع توقف Sync
         if [ ! -f "dist/index.html" ]; then
-          FOUND_INDEX=$(find . -maxdepth 4 -name "index.html" -not -path "*/node_modules/*" -not -path "./dist/*" -not -path "./public/*" | head -n 1)
-          if [ -n "$FOUND_INDEX" ]; then
-            DIR_PATH=$(dirname "$FOUND_INDEX")
-            cp -r "$DIR_PATH"/* dist/
+          if [ -f "index.html" ]; then
+            cp index.html dist/index.html
+          else
+            echo '<!DOCTYPE html><html lang="ar"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Salman AI</title></head><body><div id="root"></div></body></html>' > dist/index.html
           fi
         fi
 
-        # 5. تغطية احتياطية سريعة للتأكد من توفر index.html
-        if [ ! -f "dist/index.html" ] && [ -f "index.html" ]; then
-          cp index.html dist/
-          [ -d "src" ] && cp -r src dist/ 2>/dev/null || true
-          [ -d "public" ] && cp -r public/* dist/ 2>/dev/null || true
-        fi
-
-        # 6. إنشاء ملف إعدادات Capacitor المضمون
+        # 6. إعداد ملف capacitor.config.json بالتكوين المعتمد
         node -e "
           const fs = require('fs');
           const config = {

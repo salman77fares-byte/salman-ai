@@ -61,15 +61,14 @@ jobs:
           mkdir -p assets/www
           cp -r ../www/* assets/www/
 
-          cat << 'EOF' > patch_pubspec.py
-with open("pubspec.yaml", "r") as f:
-    content = f.read()
-if "assets:" not in content:
-    content += "\nflutter:\n  assets:\n    - assets/www/\n    - assets/www/assets/\n"
-with open("pubspec.yaml", "w") as f:
-    f.write(content)
-EOF
-          python3 patch_pubspec.py
+          node -e '
+          const fs = require("fs");
+          let pubspec = fs.readFileSync("pubspec.yaml", "utf8");
+          if (!pubspec.includes("assets:")) {
+            pubspec += "\nflutter:\n  assets:\n    - assets/www/\n    - assets/www/assets/\n";
+          }
+          fs.writeFileSync("pubspec.yaml", pubspec);
+          '
 
           LOGO_PATH=""
           for p in "../public/logo.png" "../logo.png" "../src/logo.png" "../public/favicon.png"; do
@@ -82,169 +81,171 @@ EOF
           if [ -n "$LOGO_PATH" ]; then
             mkdir -p assets/icon
             cp "$LOGO_PATH" assets/icon/app_icon.png
-            cat << 'EOF' >> pubspec.yaml
-
-flutter_launcher_icons:
-  android: "launcher_icon"
-  image_path: "assets/icon/app_icon.png"
-  min_sdk_android: 21
-EOF
+            node -e '
+            const fs = require("fs");
+            let pubspec = fs.readFileSync("pubspec.yaml", "utf8");
+            pubspec += "\nflutter_launcher_icons:\n  android: \"launcher_icon\"\n  image_path: \"assets/icon/app_icon.png\"\n  min_sdk_android: 21\n";
+            fs.writeFileSync("pubspec.yaml", pubspec);
+            '
           fi
 
-          cat << 'EOF' > lib/main.dart
-import 'dart:async';
-import 'dart:io';
-import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
-import 'package:webview_flutter/webview_flutter.dart';
-import 'package:connectivity_plus/connectivity_plus.dart';
+          node -e '
+          const fs = require("fs");
+          const code = `import "dart:async";
+          import "dart:io";
+          import "package:flutter/material.dart";
+          import "package:flutter/services.dart";
+          import "package:webview_flutter/webview_flutter.dart";
+          import "package:connectivity_plus/connectivity_plus.dart";
 
-void main() async {
-  WidgetsFlutterBinding.ensureInitialized();
-  SystemChrome.setSystemUIOverlayStyle(
-    const SystemUiOverlayStyle(
-      statusBarColor: Colors.transparent,
-      statusBarIconBrightness: Brightness.light,
-    ),
-  );
+          void main() async {
+            WidgetsFlutterBinding.ensureInitialized();
+            SystemChrome.setSystemUIOverlayStyle(
+              const SystemUiOverlayStyle(
+                statusBarColor: Colors.transparent,
+                statusBarIconBrightness: Brightness.light,
+              ),
+            );
 
-  try {
-    final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 8080);
-    server.listen((HttpRequest request) async {
-      String path = request.uri.path;
-      if (path == '/') path = '/index.html';
-      
-      String assetPath = 'assets/www$path';
-      ByteData? data;
-      
-      try {
-        data = await rootBundle.load(assetPath);
-      } catch (_) {
-        try {
-          assetPath = 'assets/www/index.html';
-          data = await rootBundle.load(assetPath);
-        } catch (_) {}
-      }
+            try {
+              final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 8080);
+              server.listen((HttpRequest request) async {
+                String path = request.uri.path;
+                if (path == "/") path = "/index.html";
+                
+                String assetPath = "assets/www" + path;
+                ByteData? data;
+                
+                try {
+                  data = await rootBundle.load(assetPath);
+                } catch (_) {
+                  try {
+                    assetPath = "assets/www/index.html";
+                    data = await rootBundle.load(assetPath);
+                  } catch (_) {}
+                }
 
-      if (data != null) {
-        final bytes = data.buffer.asUint8List();
-        if (assetPath.endsWith('.html')) {
-          request.response.headers.contentType = ContentType('text', 'html', charset: 'utf-8');
-        } else if (assetPath.endsWith('.js') || assetPath.endsWith('.mjs')) {
-          request.response.headers.contentType = ContentType('application', 'javascript', charset: 'utf-8');
-        } else if (assetPath.endsWith('.css')) {
-          request.response.headers.contentType = ContentType('text', 'css', charset: 'utf-8');
-        } else if (assetPath.endsWith('.png')) {
-          request.response.headers.contentType = ContentType('image', 'png');
-        } else if (assetPath.endsWith('.svg')) {
-          request.response.headers.contentType = ContentType('image', 'svg+xml');
-        } else if (assetPath.endsWith('.json')) {
-          request.response.headers.contentType = ContentType('application', 'json', charset: 'utf-8');
-        }
-        request.response.add(bytes);
-      } else {
-        request.response.statusCode = HttpStatus.notFound;
-      }
-      await request.response.close();
-    });
-  } catch (_) {}
+                if (data != null) {
+                  final bytes = data.buffer.asUint8List();
+                  if (assetPath.endsWith(".html")) {
+                    request.response.headers.contentType = ContentType("text", "html", charset: "utf-8");
+                  } else if (assetPath.endsWith(".js") || assetPath.endsWith(".mjs")) {
+                    request.response.headers.contentType = ContentType("application", "javascript", charset: "utf-8");
+                  } else if (assetPath.endsWith(".css")) {
+                    request.response.headers.contentType = ContentType("text", "css", charset: "utf-8");
+                  } else if (assetPath.endsWith(".png")) {
+                    request.response.headers.contentType = ContentType("image", "png");
+                  } else if (assetPath.endsWith(".svg")) {
+                    request.response.headers.contentType = ContentType("image", "svg+xml");
+                  } else if (assetPath.endsWith(".json")) {
+                    request.response.headers.contentType = ContentType("application", "json", charset: "utf-8");
+                  }
+                  request.response.add(bytes);
+                } else {
+                  request.response.statusCode = HttpStatus.notFound;
+                }
+                await request.response.close();
+              });
+            } catch (_) {}
 
-  runApp(const MyApp());
-}
+            runApp(const MyApp());
+          }
 
-class MyApp extends StatelessWidget {
-  const MyApp({super.key});
+          class MyApp extends StatelessWidget {
+            const MyApp({super.key});
 
-  @override
-  Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'Salman AI',
-      debugShowCheckedModeBanner: false,
-      theme: ThemeData.dark(),
-      home: const WebViewScreen(),
-    );
-  }
-}
+            @override
+            Widget build(BuildContext context) {
+              return MaterialApp(
+                title: "Salman AI",
+                debugShowCheckedModeBanner: false,
+                theme: ThemeData.dark(),
+                home: const WebViewScreen(),
+              );
+            }
+          }
 
-class WebViewScreen extends StatefulWidget {
-  const WebViewScreen({super.key});
+          class WebViewScreen extends StatefulWidget {
+            const WebViewScreen({super.key});
 
-  @override
-  State<WebViewScreen> createState() => _WebViewScreenState();
-}
+            @override
+            State<WebViewScreen> createState() => _WebViewScreenState();
+          }
 
-class _WebViewScreenState extends State<WebViewScreen> {
-  late final WebViewController _controller;
-  late final StreamSubscription<List<ConnectivityResult>> _connectivitySubscription;
-  bool _isOffline = false;
+          class _WebViewScreenState extends State<WebViewScreen> {
+            late final WebViewController _controller;
+            late final StreamSubscription<List<ConnectivityResult>> _connectivitySubscription;
+            bool _isOffline = false;
 
-  @override
-  void initState() {
-    super.initState();
-    _controller = WebViewController()
-      ..setJavaScriptMode(JavaScriptMode.unrestricted)
-      ..setBackgroundColor(const Color(0xFF0B0B0B))
-      ..loadRequest(Uri.parse('http://127.0.0.1:8080'));
+            @override
+            void initState() {
+              super.initState();
+              _controller = WebViewController()
+                ..setJavaScriptMode(JavaScriptMode.unrestricted)
+                ..setBackgroundColor(const Color(0xFF0B0B0B))
+                ..loadRequest(Uri.parse("http://127.0.0.1:8080"));
 
-    Connectivity().checkConnectivity().then((results) {
-      _updateConnectionStatus(results);
-    });
+              Connectivity().checkConnectivity().then((results) {
+                _updateConnectionStatus(results);
+              });
 
-    _connectivitySubscription = Connectivity().onConnectivityChanged.listen((results) {
-      _updateConnectionStatus(results);
-    });
-  }
+              _connectivitySubscription = Connectivity().onConnectivityChanged.listen((results) {
+                _updateConnectionStatus(results);
+              });
+            }
 
-  void _updateConnectionStatus(List<ConnectivityResult> results) {
-    final isDisconnected = results.contains(ConnectivityResult.none) || results.isEmpty;
-    setState(() {
-      _isOffline = isDisconnected;
-    });
-  }
+            void _updateConnectionStatus(List<ConnectivityResult> results) {
+              final isDisconnected = results.contains(ConnectivityResult.none) || results.isEmpty;
+              setState(() {
+                _isOffline = isDisconnected;
+              });
+            }
 
-  @override
-  void dispose() {
-    _connectivitySubscription.cancel();
-    super.dispose();
-  }
+            @override
+            void dispose() {
+              _connectivitySubscription.cancel();
+              super.dispose();
+            }
 
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xFF0B0B0B),
-      body: SafeArea(
-        child: Stack(
-          children: [
-            WebViewWidget(controller: _controller),
-            if (_isOffline)
-              Positioned(
-                top: 0,
-                left: 0,
-                right: 0,
-                child: AnimatedContainer(
-                  duration: const Duration(milliseconds: 300),
-                  padding: const EdgeInsets.symmetric(vertical: 7, horizontal: 12),
-                  color: const Color(0xDCB00020),
-                  child: const Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
+            @override
+            Widget build(BuildContext context) {
+              return Scaffold(
+                backgroundColor: const Color(0xFF0B0B0B),
+                body: SafeArea(
+                  child: Stack(
                     children: [
-                      Icon(Icons.wifi_off_rounded, color: Colors.white, size: 16),
-                      SizedBox(width: 8),
-                      Text(
-                        'لا يوجد اتصال بالإنترنت - الوضع أوفلاين',
-                        style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
-                      ),
+                      WebViewWidget(controller: _controller),
+                      if (_isOffline)
+                        Positioned(
+                          top: 0,
+                          left: 0,
+                          right: 0,
+                          child: AnimatedContainer(
+                            duration: const Duration(milliseconds: 300),
+                            padding: const EdgeInsets.symmetric(vertical: 7, horizontal: 12),
+                            color: const Color(0xDCB00020),
+                            child: const Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Icon(Icons.wifi_off_rounded, color: Colors.white, size: 16),
+                                SizedBox(width: 8),
+                                Text(
+                                  "لا يوجد اتصال بالإنترنت - الوضع أوفلاين",
+                                  style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
                     ],
                   ),
                 ),
-              ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-EOF
+              );
+            }
+          }
+          `;
+          fs.writeFileSync("lib/main.dart", code);
+          '
 
           flutter pub get
           if [ -n "$LOGO_PATH" ]; then

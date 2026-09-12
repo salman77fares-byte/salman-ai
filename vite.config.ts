@@ -5,9 +5,10 @@ export default defineConfig({
     server: { entry: "server" },
   },
   vite: {
+    base: "./", // يمنع الشاشة السوداء في الأندرويد ويجعل المسارات نسبية
     build: {
-      outDir: ".output/public",
-      emptyOutDir: false,
+      outDir: "dist",
+      emptyOutDir: true,
     },
     plugins: [
       {

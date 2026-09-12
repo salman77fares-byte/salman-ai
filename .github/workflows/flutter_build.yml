@@ -41,7 +41,7 @@ jobs:
       - name: 📱 Set up Flutter Environment
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: '3.24.3'
+          flutter-version: '3.27.1'
           channel: 'stable'
           cache: true
 
@@ -212,23 +212,53 @@ jobs:
           fs.writeFileSync("lib/main.dart", code);
           '
 
-      - name: 🛠️ Clean and Safe Gradle Fixes
+      - name: 🛠️ Deep Universal Gradle Fix (Recursive)
         run: |
           cd flutter_app
           
-          # 1. AndroidManifest Permissions
+          # 1. AndroidManifest Permissions & Settings
           sed -i '/<application/i \    <uses-permission android:name="android.permission.INTERNET"/>\n    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>' android/app/src/main/AndroidManifest.xml
           sed -i 's/<application/& android:usesCleartextTraffic="true"/' android/app/src/main/AndroidManifest.xml
           sed -i 's/android:label="flutter_app"/android:label="Salman AI"/g' android/app/src/main/AndroidManifest.xml
 
-          # 2. Fix build.gradle properties cleanly
-          sed -i '/ndkVersion/d' android/app/build.gradle || true
-          sed -i 's/flutter\.compileSdkVersion/34/g' android/app/build.gradle || true
-          sed -i 's/flutter\.minSdkVersion/21/g' android/app/build.gradle || true
-          sed -i 's/flutter\.targetSdkVersion/34/g' android/app/build.gradle || true
-          
-          # 3. Fix Maven POM issues using clean regex replacement
-          sed -i 's/mavenCentral()/mavenCentral() { metadataSources { mavenPom(); artifact() } }/g' android/build.gradle || true
+          # 2. Node script to recursively scan and fix ALL build.gradle / build.gradle.kts files in android folder
+          node -e '
+          const fs = require("fs");
+          const path = require("path");
+
+          function walkDir(dir) {
+            fs.readdirSync(dir, { withFileTypes: true }).forEach(dirent => {
+              const res = path.join(dir, dirent.name);
+              if (dirent.isDirectory()) {
+                walkDir(res);
+              } else if (res.endsWith(".gradle") || res.endsWith(".gradle.kts")) {
+                let content = fs.readFileSync(res, "utf8");
+                // Remove problematic lines
+                content = content.replace(/ndkVersion\s*=\s*.*/g, "");
+                content = content.replace(/ndkVersion\s+.*/g, "");
+                
+                // Force compile/target SDK numbers directly
+                content = content.replace(/flutter\.compileSdkVersion/g, "34");
+                content = content.replace(/compileSdk\s*=\s*flutter\.compileSdkVersion/g, "compileSdk = 34");
+                content = content.replace(/compileSdkVersion\s+flutter\.compileSdkVersion/g, "compileSdkVersion 34");
+                
+                content = content.replace(/flutter\.targetSdkVersion/g, "34");
+                content = content.replace(/targetSdk\s*=\s*flutter\.targetSdkVersion/g, "targetSdk = 34");
+                
+                content = content.replace(/flutter\.minSdkVersion/g, "21");
+                content = content.replace(/minSdk\s*=\s*flutter\.minSdkVersion/g, "minSdk = 21");
+
+                // Fallbacks if variables are referenced directly
+                content = content.replace(/compileSdkVersion\s*=\s*flutter\.compileSdk\b/g, "compileSdkVersion = 34");
+                content = content.replace(/compileSdk\s*=\s*34/g, "compileSdk = 34");
+
+                fs.writeFileSync(res, content, "utf8");
+              }
+            });
+          }
+          walkDir("android");
+          console.log("Gradle files successfully patched recursively!");
+          '
 
       - name: 🚀 Build Release APK
         run: |
@@ -239,6 +269,6 @@ jobs:
         uses: softprops/action-gh-release@v2
         if: success()
         with:
-          tag_name: v3.5.${{ github.run_number }}
-          name: Salman AI Final App v3.5.${{ github.run_number }}
+          tag_name: v3.6.${{ github.run_number }}
+          name: Salman AI Final App v3.6.${{ github.run_number }}
           files: flutter_app/build/app/outputs/flutter-apk/app-release.apk

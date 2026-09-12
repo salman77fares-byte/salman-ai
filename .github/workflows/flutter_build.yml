@@ -252,20 +252,19 @@ jobs:
             dart run flutter_launcher_icons || true
           fi
 
-          # Fix Android Gradle SDK configurations directly
+          # Fix Android Gradle SDK configurations unconditionally
           node -e '
           const fs = require("fs");
-          const gradPath = "android/app/build.gradle";
-          if (fs.existsSync(gradPath)) {
-            let content = fs.readFileSync(gradPath, "utf8");
-            content = content.replace(/compileSdkVersion\s+flutter\.compileSdkVersion/g, "compileSdkVersion 34");
-            content = content.replace(/compileSdk\s*=\s*flutter\.compileSdkVersion/g, "compileSdk = 34");
-            content = content.replace(/minSdkVersion\s+flutter\.minSdkVersion/g, "minSdkVersion 21");
-            content = content.replace(/minSdk\s*=\s*flutter\.minSdkVersion/g, "minSdk = 21");
-            content = content.replace(/targetSdkVersion\s+flutter\.targetSdkVersion/g, "targetSdkVersion 34");
-            content = content.replace(/targetSdk\s*=\s*flutter\.targetSdkVersion/g, "targetSdk = 34");
-            fs.writeFileSync(gradPath, content);
-          }
+          const files = ["android/app/build.gradle", "android/app/build.gradle.kts"];
+          files.forEach(p => {
+            if (fs.existsSync(p)) {
+              let c = fs.readFileSync(p, "utf8");
+              c = c.replace(/flutter\.compileSdkVersion/g, "34");
+              c = c.replace(/flutter\.minSdkVersion/g, "21");
+              c = c.replace(/flutter\.targetSdkVersion/g, "34");
+              fs.writeFileSync(p, c);
+            }
+          });
           '
 
           sed -i '/<application/i \    <uses-permission android:name="android.permission.INTERNET"/>\n    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>' android/app/src/main/AndroidManifest.xml

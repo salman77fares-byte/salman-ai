@@ -252,6 +252,22 @@ jobs:
             dart run flutter_launcher_icons || true
           fi
 
+          # Fix Android Gradle SDK configurations directly
+          node -e '
+          const fs = require("fs");
+          const gradPath = "android/app/build.gradle";
+          if (fs.existsSync(gradPath)) {
+            let content = fs.readFileSync(gradPath, "utf8");
+            content = content.replace(/compileSdkVersion\s+flutter\.compileSdkVersion/g, "compileSdkVersion 34");
+            content = content.replace(/compileSdk\s*=\s*flutter\.compileSdkVersion/g, "compileSdk = 34");
+            content = content.replace(/minSdkVersion\s+flutter\.minSdkVersion/g, "minSdkVersion 21");
+            content = content.replace(/minSdk\s*=\s*flutter\.minSdkVersion/g, "minSdk = 21");
+            content = content.replace(/targetSdkVersion\s+flutter\.targetSdkVersion/g, "targetSdkVersion 34");
+            content = content.replace(/targetSdk\s*=\s*flutter\.targetSdkVersion/g, "targetSdk = 34");
+            fs.writeFileSync(gradPath, content);
+          }
+          '
+
           sed -i '/<application/i \    <uses-permission android:name="android.permission.INTERNET"/>\n    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>' android/app/src/main/AndroidManifest.xml
           sed -i 's/<application/& android:usesCleartextTraffic="true"/' android/app/src/main/AndroidManifest.xml
           sed -i 's/android:label="ai"/android:label="Salman AI"/g' android/app/src/main/AndroidManifest.xml

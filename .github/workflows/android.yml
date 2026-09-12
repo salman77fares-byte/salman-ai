@@ -33,49 +33,28 @@ jobs:
     - name: Build Web Project
       run: npm run build
 
-    - name: Configure Offline Assets & Fix Build Paths
+    - name: Configure Clean Dist & Enable Local Offline Mode
       run: |
+        # 1. تنظيف وإعداد مجلد dist
+        rm -rf dist
         mkdir -p dist
 
-        # 1. نقل ملفات المخرجات البرمجية بأمان بدون أخطاء مسارات
+        # 2. نسخ مخرجات البناء الأصلية بالكامل من .output/public إلى dist دون التعديل على الكود
         if [ -d ".output/public" ]; then
-          cp -r .output/public/. dist/ 2>/dev/null || true
-        fi
-        if [ -d ".output/client" ]; then
-          cp -r .output/client/. dist/ 2>/dev/null || true
-        fi
-        if [ -d "build" ]; then
-          cp -r build/. dist/ 2>/dev/null || true
+          cp -r .output/public/. dist/
+        elif [ -d ".output" ]; then
+          cp -r .output/. dist/
         fi
 
-        # 2. البحث عن أي ملف index.html تم إنشاؤه أثناء البناء
-        INDEX_FOUND=$(find . -name "index.html" ! -path "./node_modules/*" ! -path "./android/*" ! -path "./.git/*" ! -path "./dist/*" | head -n 1)
-        if [ -n "$INDEX_FOUND" ]; then
-          cp "$INDEX_FOUND" dist/index.html
-        elif [ -f "index.html" ]; then
-          cp index.html dist/index.html
-        fi
-
-        # 3. التأكد من وجود index.html داخل dist لتفادي فشل Capacitor
-        if [ ! -f "dist/index.html" ]; then
-          echo '<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Salman AI</title></head><body><div id="root"></div></body></html>' > dist/index.html
-        fi
-
-        # 4. تحويل المسارات إلى نسبية لتجنب الشاشة السوداء وإلغاء رابط السيرفر الخارجي للعمل أوفلاين
+        # 3. إزالة خيار السيرفر الخارجي وتعيين webDir إلى dist ليعمل التطبيق محلياً 100%
         node -e "
           const fs = require('fs');
-
-          if (fs.existsSync('dist/index.html')) {
-            let html = fs.readFileSync('dist/index.html', 'utf8');
-            html = html.replace(/href=\"\//g, 'href=\"./').replace(/src=\"\//g, 'src=\"./');
-            fs.writeFileSync('dist/index.html', html);
-          }
-
           if (fs.existsSync('capacitor.config.json')) {
-            let config = JSON.parse(fs.readFileSync('capacitor.config.json', 'utf8'));
+            const config = JSON.parse(fs.readFileSync('capacitor.config.json', 'utf8'));
             delete config.server;
             config.webDir = 'dist';
             fs.writeFileSync('capacitor.config.json', JSON.stringify(config, null, 2));
+            console.log('Successfully updated capacitor.config.json for local offline mode');
           }
         "
 

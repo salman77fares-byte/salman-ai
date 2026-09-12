@@ -213,7 +213,7 @@ jobs:
           fs.writeFileSync("lib/main.dart", code);
           '
 
-      - name: 🛠️ Fix App Name & Configurations
+      - name: 🛠️ Force Correct App Name & Configurations
         run: |
           cd flutter_app
           
@@ -221,15 +221,15 @@ jobs:
           sed -i '/<application/i \    <uses-permission android:name="android.permission.INTERNET"/>\n    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>' android/app/src/main/AndroidManifest.xml
           sed -i 's/<application/& android:usesCleartextTraffic="true"/' android/app/src/main/AndroidManifest.xml
           
-          # تعديل اسم التطبيق في strings.xml ليكون Salman AI رسمياً
+          # إجبار أندرويد على قراءة اسم التطبيق من strings.xml
+          sed -i 's/android:label="[^"]*"/android:label="@string\/app_name"/g' android/app/src/main/AndroidManifest.xml
+
+          # تعيين الاسم حصرياً في strings.xml
           node -e '
           const fs = require("fs");
           const stringsPath = "android/app/src/main/res/values/strings.xml";
-          if (fs.existsSync(stringsPath)) {
-            let xml = fs.readFileSync(stringsPath, "utf8");
-            xml = xml.replace(/<string name=\"app_name\">[^<]*<\/string>/, "<string name=\"app_name\">Salman AI<\/string>");
-            fs.writeFileSync(stringsPath, xml, "utf8");
-          }
+          let xml = "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n<resources>\n    <string name=\"app_name\">Salman AI</string>\n</resources>";
+          fs.writeFileSync(stringsPath, xml, "utf8");
           '
 
           # ضبط إعدادات الـ SDK
@@ -255,6 +255,6 @@ jobs:
         uses: softprops/action-gh-release@v2
         if: success()
         with:
-          tag_name: v3.9.${{ github.run_number }}
-          name: Salman AI Final App v3.9.${{ github.run_number }}
+          tag_name: v4.0.${{ github.run_number }}
+          name: Salman AI Final App v4.0.${{ github.run_number }}
           files: flutter_app/build/app/outputs/flutter-apk/app-release.apk

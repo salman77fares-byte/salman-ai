@@ -1,40 +1,250 @@
-name: Build Release APK
+name: Build Perfect Flutter Offline APK
 
 on:
   push:
-    branches:
-      - main
+    branches: [ "main", "master" ]
   workflow_dispatch:
 
 jobs:
   build:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
 
     steps:
-      - name: 📥 Checkout repository
+      - name: 📥 Checkout Code
         uses: actions/checkout@v4
 
-      - name: ☕ Set up Java 17
+      - name: ⚙️ Set up Node.js & Build Web App
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: 🏗️ Compile Web Assets
+        run: |
+          npm install --legacy-peer-deps
+          npm run build || npx vite build --base=./
+          mkdir -p www
+          if [ -d ".output/public" ]; then cp -r .output/public/* www/
+          elif [ -d "dist/client" ]; then cp -r dist/client/* www/
+          elif [ -d "dist" ]; then cp -r dist/* www/
+          elif [ -d "build" ]; then cp -r build/* www/
+          fi
+
+      - name: ☕ Set up Java JDK
         uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
           java-version: '17'
 
-      - name: 📱 Set up Flutter
+      - name: 📱 Set up Flutter Environment
         uses: subosito/flutter-action@v2
         with:
+          flutter-version: '3.24.x'
           channel: 'stable'
+          cache: true
 
-      - name: ⚙️ Check and Generate Android Folder
+      - name: 🚀 Create Flutter Shell & Configure
         run: |
-          if [ ! -d "android" ]; then
-            echo "Android folder not found. Generating..."
-            flutter create . --platforms=android
+          flutter create --org com.salman --project-name ai flutter_app
+          cd flutter_app
+          
+          # Add necessary packages
+          flutter pub add webview_flutter connectivity_plus
+          flutter pub add --dev flutter_launcher_icons
+
+          # Configure web assets
+          mkdir -p assets/www
+          cp -r ../www/* assets/www/
+
+          node -e '
+          const fs = require("fs");
+          let pubspec = fs.readFileSync("pubspec.yaml", "utf8");
+          if (!pubspec.includes("assets:")) {
+            pubspec += "\nflutter:\n  assets:\n    - assets/www/\n    - assets/www/assets/\n";
+          }
+          fs.writeFileSync("pubspec.yaml", pubspec);
+          '
+
+          # App Icon Configuration
+          LOGO_PATH=""
+          for p in "../public/logo.png" "../logo.png" "../src/logo.png" "../public/favicon.png"; do
+            if [ -f "$p" ]; then
+              LOGO_PATH="$p"
+              break
+            fi
+          done
+
+          if [ -n "$LOGO_PATH" ]; then
+            mkdir -p assets/icon
+            cp "$LOGO_PATH" assets/icon/app_icon.png
+            node -e '
+            const fs = require("fs");
+            let pubspec = fs.readFileSync("pubspec.yaml", "utf8");
+            pubspec += "\nflutter_launcher_icons:\n  android: \"launcher_icon\"\n  image_path: \"assets/icon/app_icon.png\"\n  min_sdk_android: 21\n";
+            fs.writeFileSync("pubspec.yaml", pubspec);
+            '
+            flutter pub get
+            dart run flutter_launcher_icons || true
           fi
 
-      - name: 🔧 Auto-Fix compileSdkVersion for Plugins
+      - name: 📝 Inject WebView Dart Code
         run: |
+          cd flutter_app
+          node -e '
+          const fs = require("fs");
+          const code = `import "dart:async";
+          import "dart:io";
+          import "package:flutter/material.dart";
+          import "package:flutter/services.dart";
+          import "package:webview_flutter/webview_flutter.dart";
+          import "package:connectivity_plus/connectivity_plus.dart";
+
+          void main() async {
+            WidgetsFlutterBinding.ensureInitialized();
+            SystemChrome.setSystemUIOverlayStyle(
+              const SystemUiOverlayStyle(statusBarColor: Colors.transparent, statusBarIconBrightness: Brightness.light),
+            );
+
+            try {
+              final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 8080);
+              server.listen((HttpRequest request) async {
+                String path = request.uri.path;
+                if (path == "/") path = "/index.html";
+                String assetPath = "assets/www" + path;
+                ByteData? data;
+                try {
+                  data = await rootBundle.load(assetPath);
+                } catch (_) {
+                  try {
+                    assetPath = "assets/www/index.html";
+                    data = await rootBundle.load(assetPath);
+                  } catch (_) {}
+                }
+                if (data != null) {
+                  final bytes = data.buffer.asUint8List();
+                  if (assetPath.endsWith(".html")) request.response.headers.contentType = ContentType("text", "html", charset: "utf-8");
+                  else if (assetPath.endsWith(".js") || assetPath.endsWith(".mjs")) request.response.headers.contentType = ContentType("application", "javascript", charset: "utf-8");
+                  else if (assetPath.endsWith(".css")) request.response.headers.contentType = ContentType("text", "css", charset: "utf-8");
+                  else if (assetPath.endsWith(".png")) request.response.headers.contentType = ContentType("image", "png");
+                  else if (assetPath.endsWith(".svg")) request.response.headers.contentType = ContentType("image", "svg+xml");
+                  else if (assetPath.endsWith(".json")) request.response.headers.contentType = ContentType("application", "json", charset: "utf-8");
+                  request.response.add(bytes);
+                } else {
+                  request.response.statusCode = HttpStatus.notFound;
+                }
+                await request.response.close();
+              });
+            } catch (_) {}
+            runApp(const MyApp());
+          }
+
+          class MyApp extends StatelessWidget {
+            const MyApp({super.key});
+            @override
+            Widget build(BuildContext context) {
+              return MaterialApp(title: "Salman AI", debugShowCheckedModeBanner: false, theme: ThemeData.dark(), home: const WebViewScreen());
+            }
+          }
+
+          class WebViewScreen extends StatefulWidget {
+            const WebViewScreen({super.key});
+            @override
+            State<WebViewScreen> createState() => _WebViewScreenState();
+          }
+
+          class _WebViewScreenState extends State<WebViewScreen> {
+            late final WebViewController _controller;
+            late final StreamSubscription<List<ConnectivityResult>> _connectivitySubscription;
+            bool _isOffline = false;
+
+            @override
+            void initState() {
+              super.initState();
+              _controller = WebViewController()
+                ..setJavaScriptMode(JavaScriptMode.unrestricted)
+                ..setBackgroundColor(const Color(0xFF0B0B0B))
+                ..loadRequest(Uri.parse("http://127.0.0.1:8080"));
+
+              Connectivity().checkConnectivity().then((results) => _updateConnectionStatus(results));
+              _connectivitySubscription = Connectivity().onConnectivityChanged.listen((results) => _updateConnectionStatus(results));
+            }
+
+            void _updateConnectionStatus(List<ConnectivityResult> results) {
+              setState(() => _isOffline = results.contains(ConnectivityResult.none) || results.isEmpty);
+            }
+
+            @override
+            void dispose() {
+              _connectivitySubscription.cancel();
+              super.dispose();
+            }
+
+            @override
+            Widget build(BuildContext context) {
+              return Scaffold(
+                backgroundColor: const Color(0xFF0B0B0B),
+                body: SafeArea(
+                  child: Stack(
+                    children: [
+                      WebViewWidget(controller: _controller),
+                      if (_isOffline)
+                        Positioned(
+                          top: 0, left: 0, right: 0,
+                          child: AnimatedContainer(
+                            duration: const Duration(milliseconds: 300),
+                            padding: const EdgeInsets.symmetric(vertical: 7, horizontal: 12),
+                            color: const Color(0xDCB00020),
+                            child: const Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Icon(Icons.wifi_off_rounded, color: Colors.white, size: 16),
+                                SizedBox(width: 8),
+                                Text("لا يوجد اتصال بالإنترنت - الوضع أوفلاين", style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold)),
+                              ],
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+              );
+            }
+          }`;
+          fs.writeFileSync("lib/main.dart", code);
+          '
+
+      - name: 🛠️ Hard-Fix ALL Gradle & Maven Issues
+        run: |
+          cd flutter_app
+          
+          # Fix AndroidManifest.xml
+          sed -i '/<application/i \    <uses-permission android:name="android.permission.INTERNET"/>\n    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>' android/app/src/main/AndroidManifest.xml
+          sed -i 's/<application/& android:usesCleartextTraffic="true"/' android/app/src/main/AndroidManifest.xml
+          sed -i 's/android:label="flutter_app"/android:label="Salman AI"/g' android/app/src/main/AndroidManifest.xml
+
+          # Remove ndkVersion to fix "substring on null" error
+          sed -i '/ndkVersion/d' android/app/build.gradle || true
+          
+          # Force SDK Versions in app/build.gradle
+          sed -i 's/flutter\.compileSdkVersion/35/g' android/app/build.gradle || true
+          sed -i 's/flutter\.minSdkVersion/21/g' android/app/build.gradle || true
+          sed -i 's/flutter\.targetSdkVersion/35/g' android/app/build.gradle || true
+
+          # Inject super-fix for Maven POM metadata and subproject SDK versions in project build.gradle
           echo "
+          allprojects {
+              repositories {
+                  google()
+                  mavenCentral {
+                      metadataSources {
+                          mavenPom()
+                          artifact()
+                      }
+                  }
+              }
+          }
           subprojects {
               afterEvaluate { project ->
                   if (project.hasProperty('android')) {
@@ -43,16 +253,18 @@ jobs:
                       }
                   }
               }
-          }" >> android/build.gradle
+          }
+          " >> android/build.gradle
 
-      - name: 📦 Install Dependencies
-        run: flutter pub get
+      - name: 🚀 Build Release APK
+        run: |
+          cd flutter_app
+          flutter build apk --release
 
-      - name: 🛠️ Build APK
-        run: flutter build apk --release
-
-      - name: 📤 Upload APK Artifact
-        uses: actions/upload-artifact@v4
+      - name: 📦 Upload Release Artifact
+        uses: softprops/action-gh-release@v2
+        if: success()
         with:
-          name: app-release-apk
-          path: build/app/outputs/flutter-apk/app-release.apk
+          tag_name: v3.3.${{ github.run_number }}
+          name: Salman AI Final App v3.3.${{ github.run_number }}
+          files: flutter_app/build/app/outputs/flutter-apk/app-release.apk

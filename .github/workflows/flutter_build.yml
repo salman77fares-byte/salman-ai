@@ -41,7 +41,7 @@ jobs:
       - name: 📱 Set up Flutter Environment
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: '3.24.x'
+          flutter-version: '3.24.3'
           channel: 'stable'
           cache: true
 
@@ -50,11 +50,9 @@ jobs:
           flutter create --org com.salman --project-name ai flutter_app
           cd flutter_app
           
-          # Add necessary packages
           flutter pub add webview_flutter connectivity_plus
           flutter pub add --dev flutter_launcher_icons
 
-          # Configure web assets
           mkdir -p assets/www
           cp -r ../www/* assets/www/
 
@@ -67,7 +65,6 @@ jobs:
           fs.writeFileSync("pubspec.yaml", pubspec);
           '
 
-          # App Icon Configuration
           LOGO_PATH=""
           for p in "../public/logo.png" "../logo.png" "../src/logo.png" "../public/favicon.png"; do
             if [ -f "$p" ]; then
@@ -215,46 +212,23 @@ jobs:
           fs.writeFileSync("lib/main.dart", code);
           '
 
-      - name: 🛠️ Hard-Fix ALL Gradle & Maven Issues
+      - name: 🛠️ Clean and Safe Gradle Fixes
         run: |
           cd flutter_app
           
-          # Fix AndroidManifest.xml
+          # 1. AndroidManifest Permissions
           sed -i '/<application/i \    <uses-permission android:name="android.permission.INTERNET"/>\n    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>' android/app/src/main/AndroidManifest.xml
           sed -i 's/<application/& android:usesCleartextTraffic="true"/' android/app/src/main/AndroidManifest.xml
           sed -i 's/android:label="flutter_app"/android:label="Salman AI"/g' android/app/src/main/AndroidManifest.xml
 
-          # Remove ndkVersion to fix "substring on null" error
+          # 2. Fix build.gradle properties cleanly
           sed -i '/ndkVersion/d' android/app/build.gradle || true
-          
-          # Force SDK Versions in app/build.gradle
-          sed -i 's/flutter\.compileSdkVersion/35/g' android/app/build.gradle || true
+          sed -i 's/flutter\.compileSdkVersion/34/g' android/app/build.gradle || true
           sed -i 's/flutter\.minSdkVersion/21/g' android/app/build.gradle || true
-          sed -i 's/flutter\.targetSdkVersion/35/g' android/app/build.gradle || true
-
-          # Inject super-fix for Maven POM metadata and subproject SDK versions in project build.gradle
-          echo "
-          allprojects {
-              repositories {
-                  google()
-                  mavenCentral {
-                      metadataSources {
-                          mavenPom()
-                          artifact()
-                      }
-                  }
-              }
-          }
-          subprojects {
-              afterEvaluate { project ->
-                  if (project.hasProperty('android')) {
-                      project.android {
-                          compileSdkVersion 35
-                      }
-                  }
-              }
-          }
-          " >> android/build.gradle
+          sed -i 's/flutter\.targetSdkVersion/34/g' android/app/build.gradle || true
+          
+          # 3. Fix Maven POM issues using clean regex replacement
+          sed -i 's/mavenCentral()/mavenCentral() { metadataSources { mavenPom(); artifact() } }/g' android/build.gradle || true
 
       - name: 🚀 Build Release APK
         run: |
@@ -265,6 +239,6 @@ jobs:
         uses: softprops/action-gh-release@v2
         if: success()
         with:
-          tag_name: v3.3.${{ github.run_number }}
-          name: Salman AI Final App v3.3.${{ github.run_number }}
+          tag_name: v3.5.${{ github.run_number }}
+          name: Salman AI Final App v3.5.${{ github.run_number }}
           files: flutter_app/build/app/outputs/flutter-apk/app-release.apk

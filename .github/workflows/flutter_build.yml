@@ -50,22 +50,45 @@ jobs:
         channel: 'stable'
         cache: true
 
-    - name: Build Native Flutter Shell & Assets Engine
+    - name: Build Native Flutter Shell
       run: |
-        # 1. إنشاء مشروع Flutter
         flutter create --org com.salman --project-name ai flutter_app
         cd flutter_app
 
-        # 2. إضافة المكتبات المعتمدة (WebView + مراقب الشبكة + الأيقونات)
-        flutter pub add webview_flutter
-        flutter pub add connectivity_plus
+        flutter pub add webview_flutter connectivity_plus
         flutter pub add --dev flutter_launcher_icons
 
-        # 3. نقل ملفات الـ Web لداحل أصول Flutter
         mkdir -p assets/www
         cp -r ../www/* assets/www/
 
-        # 4. فحص وتعيين الشعار الرسمي
+        cat << 'EOF' > pubspec.yaml
+name: ai
+description: "Salman AI Mobile Application"
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: ^3.5.0
+
+dependencies:
+  flutter:
+    sdk: flutter
+  webview_flutter: ^4.10.0
+  connectivity_plus: ^6.0.5
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^4.0.0
+  flutter_launcher_icons: ^0.13.1
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/www/
+    - assets/www/assets/
+EOF
+
         LOGO_PATH=""
         for p in "../public/logo.png" "../logo.png" "../src/logo.png" "../public/favicon.png"; do
           if [ -f "$p" ]; then
@@ -86,203 +109,166 @@ flutter_launcher_icons:
 EOF
         fi
 
-        # 5. تسجيل جميع المسارات والمجلدات الفرعية آلياً داخل pubspec.yaml
-        node -e "
-          const fs = require('fs');
-          let yaml = fs.readFileSync('pubspec.yaml', 'utf8');
-          if (!yaml.includes('assets:')) {
-            yaml += '\n  assets:\n';
-          }
-          yaml += '    - assets/www/\n';
-          
-          const getDirs = (dir) => {
-            let results = [];
-            const list = fs.readdirSync(dir);
-            list.forEach(file => {
-              const filePath = dir + '/' + file;
-              const stat = fs.statSync(filePath);
-              if (stat && stat.isDirectory()) {
-                results.push(filePath + '/');
-                results = results.concat(getDirs(filePath));
-              }
-            });
-            return results;
-          };
-          
-          if (fs.existsSync('assets/www')) {
-            getDirs('assets/www').forEach(d => {
-              yaml += '    - ' + d + '\n';
-            });
-          }
-          fs.writeFileSync('pubspec.yaml', yaml);
-        "
-
-        # 6. كتابة كود تطبيق Flutter الكامل بتصميمه ومميزاته المحددة
         cat << 'EOF' > lib/main.dart
-        import 'dart:async';
-        import 'dart:io';
-        import 'package:flutter/material.dart';
-        import 'package:flutter/services.dart';
-        import 'package:webview_flutter/webview_flutter.dart';
-        import 'package:connectivity_plus/connectivity_plus.dart';
+import 'dart:async';
+import 'dart:io';
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:webview_flutter/webview_flutter.dart';
+import 'package:connectivity_plus/connectivity_plus.dart';
 
-        void main() async {
-          WidgetsFlutterBinding.ensureInitialized();
-          SystemChrome.setSystemUIOverlayStyle(
-            const SystemUiOverlayStyle(
-              statusBarColor: Colors.transparent,
-              statusBarIconBrightness: Brightness.light,
-            ),
-          );
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  SystemChrome.setSystemUIOverlayStyle(
+    const SystemUiOverlayStyle(
+      statusBarColor: Colors.transparent,
+      statusBarIconBrightness: Brightness.light,
+    ),
+  );
 
-          // خادم محلي ذكي يحل الشاشة السوداء ويدعم مسارات الـ SPA والوظائف أوفلاين
-          try {
-            final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 8080);
-            server.listen((HttpRequest request) async {
-              String path = request.uri.path;
-              if (path == '/') path = '/index.html';
-              
-              String assetPath = 'assets/www$path';
-              ByteData? data;
-              
-              try {
-                data = await rootBundle.load(assetPath);
-              } catch (_) {
-                // نظام دعم التوجيه الداخلي (SPA Routing Fallback)
-                try {
-                  assetPath = 'assets/www/index.html';
-                  data = await rootBundle.load(assetPath);
-                } catch (_) {}
-              }
+  try {
+    final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 8080);
+    server.listen((HttpRequest request) async {
+      String path = request.uri.path;
+      if (path == '/') path = '/index.html';
+      
+      String assetPath = 'assets/www$path';
+      ByteData? data;
+      
+      try {
+        data = await rootBundle.load(assetPath);
+      } catch (_) {
+        try {
+          assetPath = 'assets/www/index.html';
+          data = await rootBundle.load(assetPath);
+        } catch (_) {}
+      }
 
-              if (data != null) {
-                final bytes = data.buffer.asUint8List();
-                if (assetPath.endsWith('.html')) {
-                  request.response.headers.contentType = ContentType('text', 'html', charset: 'utf-8');
-                } else if (assetPath.endsWith('.js') || assetPath.endsWith('.mjs')) {
-                  request.response.headers.contentType = ContentType('application', 'javascript', charset: 'utf-8');
-                } else if (assetPath.endsWith('.css')) {
-                  request.response.headers.contentType = ContentType('text', 'css', charset: 'utf-8');
-                } else if (assetPath.endsWith('.png')) {
-                  request.response.headers.contentType = ContentType('image', 'png');
-                } else if (assetPath.endsWith('.svg')) {
-                  request.response.headers.contentType = ContentType('image', 'svg+xml');
-                } else if (assetPath.endsWith('.json')) {
-                  request.response.headers.contentType = ContentType('application', 'json', charset: 'utf-8');
-                }
-                request.response.add(bytes);
-              } else {
-                request.response.statusCode = HttpStatus.notFound;
-              }
-              await request.response.close();
-            });
-          } catch (_) {}
-
-          runApp(const MyApp());
+      if (data != null) {
+        final bytes = data.buffer.asUint8List();
+        if (assetPath.endsWith('.html')) {
+          request.response.headers.contentType = ContentType('text', 'html', charset: 'utf-8');
+        } else if (assetPath.endsWith('.js') || assetPath.endsWith('.mjs')) {
+          request.response.headers.contentType = ContentType('application', 'javascript', charset: 'utf-8');
+        } else if (assetPath.endsWith('.css')) {
+          request.response.headers.contentType = ContentType('text', 'css', charset: 'utf-8');
+        } else if (assetPath.endsWith('.png')) {
+          request.response.headers.contentType = ContentType('image', 'png');
+        } else if (assetPath.endsWith('.svg')) {
+          request.response.headers.contentType = ContentType('image', 'svg+xml');
+        } else if (assetPath.endsWith('.json')) {
+          request.response.headers.contentType = ContentType('application', 'json', charset: 'utf-8');
         }
+        request.response.add(bytes);
+      } else {
+        request.response.statusCode = HttpStatus.notFound;
+      }
+      await request.response.close();
+    });
+  } catch (_) {}
 
-        class MyApp extends StatelessWidget {
-          const MyApp({super.key});
+  runApp(const MyApp());
+}
 
-          @override
-          Widget build(BuildContext context) {
-            return MaterialApp(
-              title: 'Salman AI',
-              debugShowCheckedModeBanner: false,
-              theme: ThemeData.dark(),
-              home: const WebViewScreen(),
-            );
-          }
-        }
+class MyApp extends StatelessWidget {
+  const MyApp({super.key});
 
-        class WebViewScreen extends StatefulWidget {
-          const WebViewScreen({super.key});
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      title: 'Salman AI',
+      debugShowCheckedModeBanner: false,
+      theme: ThemeData.dark(),
+      home: const WebViewScreen(),
+    );
+  }
+}
 
-          @override
-          State<WebViewScreen> createState() => _WebViewScreenState();
-        }
+class WebViewScreen extends StatefulWidget {
+  const WebViewScreen({super.key});
 
-        class _WebViewScreenState extends State<WebViewScreen> {
-          late final WebViewController _controller;
-          late final StreamSubscription<List<ConnectivityResult>> _connectivitySubscription;
-          bool _isOffline = false;
+  @override
+  State<WebViewScreen> createState() => _WebViewScreenState();
+}
 
-          @override
-          void initState() {
-            super.initState();
-            _controller = WebViewController()
-              ..setJavaScriptMode(JavaScriptMode.unrestricted)
-              ..setBackgroundColor(const Color(0xFF0B0B0B))
-              ..loadRequest(Uri.parse('http://127.0.0.1:8080'));
+class _WebViewScreenState extends State<WebViewScreen> {
+  late final WebViewController _controller;
+  late final StreamSubscription<List<ConnectivityResult>> _connectivitySubscription;
+  bool _isOffline = false;
 
-            // فحص مبدئي ومتابعة مستمرة لحالة الاتصال بالإنترنت
-            Connectivity().checkConnectivity().then((results) {
-              _updateConnectionStatus(results);
-            });
+  @override
+  void initState() {
+    super.initState();
+    _controller = WebViewController()
+      ..setJavaScriptMode(JavaScriptMode.unrestricted)
+      ..setBackgroundColor(const Color(0xFF0B0B0B))
+      ..loadRequest(Uri.parse('http://127.0.0.1:8080'));
 
-            _connectivitySubscription = Connectivity().onConnectivityChanged.listen((results) {
-              _updateConnectionStatus(results);
-            });
-          }
+    Connectivity().checkConnectivity().then((results) {
+      _updateConnectionStatus(results);
+    });
 
-          void _updateConnectionStatus(List<ConnectivityResult> results) {
-            final isDisconnected = results.contains(ConnectivityResult.none) || results.isEmpty;
-            setState(() {
-              _isOffline = isDisconnected;
-            });
-          }
+    _connectivitySubscription = Connectivity().onConnectivityChanged.listen((results) {
+      _updateConnectionStatus(results);
+    });
+  }
 
-          @override
-          void dispose() {
-            _connectivitySubscription.cancel();
-            super.dispose();
-          }
+  void _updateConnectionStatus(List<ConnectivityResult> results) {
+    final isDisconnected = results.contains(ConnectivityResult.none) || results.isEmpty;
+    setState(() {
+      _isOffline = isDisconnected;
+    });
+  }
 
-          @override
-          Widget build(BuildContext context) {
-            return Scaffold(
-              backgroundColor: const Color(0xFF0B0B0B),
-              body: SafeArea(
-                child: Stack(
-                  children: [
-                    WebViewWidget(controller: _controller),
-                    if (_isOffline)
-                      Positioned(
-                        top: 0,
-                        left: 0,
-                        right: 0,
-                        child: AnimatedContainer(
-                          duration: const Duration(milliseconds: 300),
-                          padding: const EdgeInsets.symmetric(vertical: 7, horizontal: 12),
-                          color: const Color(0xDCB00020),
-                          child: const Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Icon(Icons.wifi_off_rounded, color: Colors.white, size: 16),
-                              SizedBox(width: 8),
-                              Text(
-                                'لا يوجد اتصال بالإنترنت - الوضع أوفلاين',
-                                style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
-                              ),
-                            ],
-                          ),
-                        ),
+  @override
+  void dispose() {
+    _connectivitySubscription.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: const Color(0xFF0B0B0B),
+      body: SafeArea(
+        child: Stack(
+          children: [
+            WebViewWidget(controller: _controller),
+            if (_isOffline)
+              Positioned(
+                top: 0,
+                left: 0,
+                right: 0,
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 300),
+                  padding: const EdgeInsets.symmetric(vertical: 7, horizontal: 12),
+                  color: const Color(0xDCB00020),
+                  child: const Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.wifi_off_rounded, color: Colors.white, size: 16),
+                      SizedBox(width: 8),
+                      Text(
+                        'لا يوجد اتصال بالإنترنت - الوضع أوفلاين',
+                        style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
                       ),
-                  ],
+                    ],
+                  ),
                 ),
               ),
-            );
-          }
-        }
-        EOF
+          ],
+        ),
+      ),
+    );
+  }
+}
+EOF
 
-        # 7. إعداد الأيقونة والاسم والأذونات لحل حظر الاتصال المحلي في أندرويد
         flutter pub get
         if [ -n "$LOGO_PATH" ]; then
           dart run flutter_launcher_icons || true
         fi
 
-        # إضافة أذونات الشبكة والسماح بالاتصال المحلي المباشر
         sed -i '/<application/i \    <uses-permission android:name="android.permission.INTERNET"/>\n    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>' android/app/src/main/AndroidManifest.xml
         sed -i 's/<application/& android:usesCleartextTraffic="true"/' android/app/src/main/AndroidManifest.xml
         sed -i 's/android:label="ai"/android:label="Salman AI"/g' android/app/src/main/AndroidManifest.xml

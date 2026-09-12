@@ -15,22 +15,28 @@ jobs:
     - name: Checkout Code
       uses: actions/checkout@v4
 
-    - name: Set up Node.js & Build Web Assets
+    - name: Set up Node.js & Build Static Assets
       uses: actions/setup-node@v4
       with:
         node-version: '22'
         cache: 'npm'
 
-    - name: Install Node Dependencies & Build SPA
+    - name: Build Web Application
       run: |
         npm install --legacy-peer-deps
         npm run build || npx vite build --base=./
 
-        # تجميع كافة ملفات الـ Web داخل مجلد موحد www
+        # تجميع مخرجات البناء داخل مجلد موحد www
         mkdir -p www
-        [ -d ".output/public" ] && cp -r .output/public/* www/ 2>/dev/null || true
-        [ -d "dist/client" ] && cp -r dist/client/* www/ 2>/dev/null || true
-        [ -d "dist" ] && cp -r dist/* www/ 2>/dev/null || true
+        if [ -d ".output/public" ]; then
+          cp -r .output/public/* www/
+        elif [ -d "dist/client" ]; then
+          cp -r dist/client/* www/
+        elif [ -d "dist" ]; then
+          cp -r dist/* www/
+        elif [ -d "build" ]; then
+          cp -r build/* www/
+        fi
 
     - name: Set up Java JDK
       uses: actions/setup-java@v4
@@ -45,26 +51,50 @@ jobs:
         channel: 'stable'
         cache: true
 
-    - name: Build Flutter App Shell
+    - name: Build Complete Native Flutter Shell
       run: |
-        # 1. إنشاء مشروع Flutter
-        flutter create --org com.salman --project-name salman_ai flutter_app
+        # 1. إنشاء تطبيق Flutter بالاسم والمعرف المطلوبين
+        flutter create --org com.salman --project-name ai flutter_app
         cd flutter_app
 
-        # 2. إضافة مكتبة WebView
+        # 2. إضافة المكتبات المطلوبة (WebView + توليد الأيقونات)
         flutter pub add webview_flutter
+        flutter pub add --dev flutter_launcher_icons
 
-        # 3. نقل ملفات الـ Web المبنية إلى داخل أصول Flutter ليعمل أوفلاين
+        # 3. تجهيز ملفات الـ Web داخل أصول Flutter
         mkdir -p assets/www
         cp -r ../www/* assets/www/
 
-        # 4. تحديث pubspec.yaml لتسجيل كافة مجلدات الأصول
+        # 4. معالجة الشعار وتعيينه كـ App Icon
+        LOGO_PATH=""
+        for p in "../public/logo.png" "../logo.png" "../src/logo.png" "../public/favicon.png"; do
+          if [ -f "$p" ]; then
+            LOGO_PATH="$p"
+            break
+          fi
+        done
+
+        if [ -n "$LOGO_PATH" ]; then
+          mkdir -p assets/icon
+          cp "$LOGO_PATH" assets/icon/app_icon.png
+          cat << 'EOF' >> pubspec.yaml
+
+flutter_launcher_icons:
+  android: "launcher_icon"
+  image_path: "assets/icon/app_icon.png"
+  min_sdk_android: 21
+EOF
+        fi
+
+        # 5. تسجيل أصول ملفات Web والمجلدات الفرعية في pubspec.yaml
         node -e "
           const fs = require('fs');
           let yaml = fs.readFileSync('pubspec.yaml', 'utf8');
-          yaml += '\n  assets:\n    - assets/www/\n';
+          if (!yaml.includes('assets:')) {
+            yaml += '\n  assets:\n';
+          }
+          yaml += '    - assets/www/\n';
           
-          // إضافة كافة المجلدات الفرعية تلقائياً
           const getDirs = (dir) => {
             let results = [];
             const list = fs.readdirSync(dir);
@@ -87,13 +117,14 @@ jobs:
           fs.writeFileSync('pubspec.yaml', yaml);
         "
 
-        # 5. كتابة كود Flutter المكتمل (خلفية سوداء + أوفلاين + شريط شفاف)
+        # 6. كتابة محرك Flutter الخادم أوفلاين (Local HTTP Server + WebView)
         cat << 'EOF' > lib/main.dart
+        import 'dart:io';
         import 'package:flutter/material.dart';
         import 'package:flutter/services.dart';
         import 'package:webview_flutter/webview_flutter.dart';
 
-        void main() {
+        void main() async {
           WidgetsFlutterBinding.ensureInitialized();
           SystemChrome.setSystemUIOverlayStyle(
             const SystemUiOverlayStyle(
@@ -101,6 +132,37 @@ jobs:
               statusBarIconBrightness: Brightness.light,
             ),
           );
+
+          // تشغيل خادم محلي لمنع الشاشة السوداء ودعم ES Modules كلياً أوفلاين
+          final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 8080);
+          server.listen((HttpRequest request) async {
+            String path = request.uri.path;
+            if (path == '/') path = '/index.html';
+            final assetPath = 'assets/www$path';
+            try {
+              final data = await rootBundle.load(assetPath);
+              final bytes = data.buffer.asUint8List();
+              
+              if (path.endsWith('.html')) request.response.headers.contentType = ContentType.html;
+              else if (path.endsWith('.js')) request.response.headers.contentType = ContentType('application', 'javascript');
+              else if (path.endsWith('.css')) request.response.headers.contentType = ContentType('text', 'css');
+              else if (path.endsWith('.png')) request.response.headers.contentType = ContentType('image', 'png');
+              else if (path.endsWith('.svg')) request.response.headers.contentType = ContentType('image', 'svg+xml');
+              else if (path.endsWith('.json')) request.response.headers.contentType = ContentType.json;
+              
+              request.response.add(bytes);
+            } catch (e) {
+              try {
+                final data = await rootBundle.load('assets/www/index.html');
+                request.response.headers.contentType = ContentType.html;
+                request.response.add(data.buffer.asUint8List());
+              } catch (_) {
+                request.response.statusCode = HttpStatus.notFound;
+              }
+            }
+            await request.response.close();
+          });
+
           runApp(const MyApp());
         }
 
@@ -110,6 +172,7 @@ jobs:
           @override
           Widget build(BuildContext context) {
             return MaterialApp(
+              title: 'Salman AI',
               debugShowCheckedModeBanner: false,
               theme: ThemeData.dark(),
               home: const WebViewScreen(),
@@ -133,7 +196,7 @@ jobs:
             _controller = WebViewController()
               ..setJavaScriptMode(JavaScriptMode.unrestricted)
               ..setBackgroundColor(const Color(0xFF0B0B0B))
-              ..loadFlutterAsset('assets/www/index.html');
+              ..loadRequest(Uri.parse('http://127.0.0.1:8080'));
           }
 
           @override
@@ -148,7 +211,14 @@ jobs:
         }
         EOF
 
-        # 6. إضافة إذن الإنترنيت والأذونات الأساسية
+        # 7. تطبيق الشعار وضبط إرشادات التسمية والأذونات
+        flutter pub get
+        if [ -n "$LOGO_PATH" ]; then
+          dart run flutter_launcher_icons || true
+        fi
+
+        # ضبط اسم التطبيق الظاهر للمستخدم إلى Salman AI
+        sed -i 's/android:label="ai"/android:label="Salman AI"/g' android/app/src/main/AndroidManifest.xml
         sed -i '/<application/i \    <uses-permission android:name="android.permission.INTERNET"/>' android/app/src/main/AndroidManifest.xml
 
     - name: Build Android Release APK
@@ -161,5 +231,5 @@ jobs:
       if: success()
       with:
         tag_name: v3.0.${{ github.run_number }}
-        name: Salman AI Offline App v3.0.${{ github.run_number }}
+        name: Salman AI Offline Flutter App v3.0.${{ github.run_number }}
         files: flutter_app/build/app/outputs/flutter-apk/app-release.apk

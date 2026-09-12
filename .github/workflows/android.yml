@@ -30,57 +30,23 @@ jobs:
     - name: Install Dependencies
       run: npm install --legacy-peer-deps
 
-    - name: Build Web Project
-      run: npm run build
-
-    - name: Locate Output Directory & Enable Offline Mode
+    - name: Build Pure Static SPA for Offline Android
       run: |
-        mkdir -p dist
+        # بناء التطبيق كـ SPA مع مسارات نسبية لضمان عمل الواجهة محلياً
+        npx vite build --base=./ --outDir dist
 
-        # 1. البحث الآلي عن مجلد البناء الحقيقي الذي يحتوي على index.html
-        BUILD_OUT=""
-        if [ -f ".output/public/index.html" ]; then
-          BUILD_OUT=".output/public"
-        elif [ -f ".output/client/index.html" ]; then
-          BUILD_OUT=".output/client"
-        elif [ -f ".output/index.html" ]; then
-          BUILD_OUT=".output"
-        elif [ -f "dist/client/index.html" ]; then
-          BUILD_OUT="dist/client"
-        else
-          FOUND_INDEX=$(find . -name "index.html" ! -path "./node_modules/*" ! -path "./android/*" ! -path "./.git/*" ! -path "./dist/index.html" ! -path "./public/*" ! -path "./src/*" | head -n 1)
-          if [ -n "$FOUND_INDEX" ]; then
-            BUILD_OUT=$(dirname "$FOUND_INDEX")
-          fi
-        fi
-
-        echo "Detected Build Directory: $BUILD_OUT"
-
-        # 2. نقل جميع ملفات البناء إلى مجلد dist
-        if [ -n "$BUILD_OUT" ] && [ "$BUILD_OUT" != "dist" ]; then
-          cp -r "$BUILD_OUT"/* dist/ 2>/dev/null || true
-          cp -r "$BUILD_OUT"/.* dist/ 2>/dev/null || true
-        fi
-
-        # 3. التأكد من وجود index.html داخل dist
-        if [ ! -f "dist/index.html" ]; then
-          if [ -f "index.html" ]; then
-            cp index.html dist/index.html
-          else
-            echo '<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Salman AI</title></head><body><div id="root"></div></body></html>' > dist/index.html
-          fi
-        fi
-
-        # 4. تفريغ خيار السيرفر الخارجي وتحديد webDir لتفعيل الأوفلاين
+        # كتابة إعدادات Capacitor لتعمل من مجلد dist وبدون خادم خارجي
         node -e "
           const fs = require('fs');
-          if (fs.existsSync('capacitor.config.json')) {
-            const config = JSON.parse(fs.readFileSync('capacitor.config.json', 'utf8'));
-            delete config.server;
-            config.webDir = 'dist';
-            fs.writeFileSync('capacitor.config.json', JSON.stringify(config, null, 2));
-            console.log('Updated capacitor.config.json successfully');
-          }
+          const config = {
+            appId: 'com.salman.ai',
+            appName: 'Salman AI',
+            webDir: 'dist',
+            android: {
+              backgroundColor: '#0B0B0B'
+            }
+          };
+          fs.writeFileSync('capacitor.config.json', JSON.stringify(config, null, 2));
         "
 
     - name: Add Capacitor Android Platform

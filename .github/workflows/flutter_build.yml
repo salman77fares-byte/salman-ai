@@ -56,20 +56,39 @@ jobs:
           mkdir -p assets/www
           cp -r ../www/* assets/www/
 
-          # إصلاح حقيبة الـ assets وضمان تضمين ملفات الويب بدقة
+          # مسح شامل لجميع المجلدات الفرعية وتسجيلها تلقائياً في pubspec.yaml
           node -e '
           const fs = require("fs");
-          let pubspec = fs.readFileSync("pubspec.yaml", "utf8");
-          if (pubspec.includes("flutter:")) {
-            if (pubspec.includes("assets:")) {
-              pubspec = pubspec.replace(/#\s*assets:/, "assets:");
-              if (!pubspec.includes("assets/www/")) {
-                pubspec = pubspec.replace(/assets:/, "assets:\n    - assets/www/\n    - assets/www/assets/\n");
+          const path = require("path");
+
+          function getAllDirectories(dirPath, arrayOfDirs) {
+            const files = fs.readdirSync(dirPath);
+            arrayOfDirs = arrayOfDirs || [];
+            files.forEach((file) => {
+              if (fs.statSync(path.join(dirPath, file)).isDirectory()) {
+                const subDir = path.join(dirPath, file);
+                arrayOfDirs.push(subDir.replace(/\\/g, "/"));
+                getAllDirectories(subDir, arrayOfDirs);
               }
-            } else {
-              pubspec += "\nflutter:\n  assets:\n    - assets/www/\n    - assets/www/assets/\n";
-            }
+            });
+            return arrayOfDirs;
           }
+
+          let dirList = ["assets/www/"];
+          if (fs.existsSync("assets/www")) {
+            const subDirs = getAllDirectories("assets/www");
+            subDirs.forEach(d => dirList.push(d + "/"));
+          }
+
+          let pubspec = fs.readFileSync("pubspec.yaml", "utf8");
+          let assetsBlock = "\nflutter:\n  assets:\n" + dirList.map(d => "    - " + d).join("\n") + "\n";
+
+          if (pubspec.includes("flutter:")) {
+            pubspec = pubspec.replace(/flutter:[\s\S]*/, assetsBlock);
+          } else {
+            pubspec += assetsBlock;
+          }
+
           fs.writeFileSync("pubspec.yaml", pubspec);
           '
 
@@ -106,6 +125,8 @@ jobs:
           import "package:webview_flutter/webview_flutter.dart";
           import "package:connectivity_plus/connectivity_plus.dart";
 
+          int serverPort = 8080;
+
           void main() async {
             WidgetsFlutterBinding.ensureInitialized();
             SystemChrome.setSystemUIOverlayStyle(
@@ -114,25 +135,32 @@ jobs:
 
             try {
               final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 8080);
+              serverPort = server.port;
               server.listen((HttpRequest request) async {
-                String path = request.uri.path;
+                String path = Uri.decodeComponent(request.uri.path);
                 if (path == "/" || path.isEmpty) path = "/index.html";
-                String assetPath = "assets/www" + path;
+                
+                String cleanPath = path.startsWith("/") ? path.substring(1) : path;
+                String assetPath = "assets/www/" + cleanPath;
+
                 ByteData? data;
                 try {
                   data = await rootBundle.load(assetPath);
                 } catch (_) {
-                  bool isAssetFile = path.endsWith(".js") || path.endsWith(".mjs") || path.endsWith(".css") || path.endsWith(".png") || path.endsWith(".jpg") || path.endsWith(".svg") || path.endsWith(".json") || path.endsWith(".ico") || path.endsWith(".woff") || path.endsWith(".woff2");
-                  if (!isAssetFile) {
+                  bool hasExtension = cleanPath.contains(".") && !cleanPath.endsWith(".html");
+                  if (!hasExtension) {
                     try {
                       assetPath = "assets/www/index.html";
                       data = await rootBundle.load(assetPath);
                     } catch (_) {}
                   }
                 }
+
                 if (data != null) {
                   final bytes = data.buffer.asUint8List();
                   request.response.statusCode = HttpStatus.ok;
+                  request.response.headers.set("Access-Control-Allow-Origin", "*");
+                  
                   if (assetPath.endsWith(".html")) request.response.headers.contentType = ContentType("text", "html", charset: "utf-8");
                   else if (assetPath.endsWith(".js") || assetPath.endsWith(".mjs")) request.response.headers.contentType = ContentType("application", "javascript", charset: "utf-8");
                   else if (assetPath.endsWith(".css")) request.response.headers.contentType = ContentType("text", "css", charset: "utf-8");
@@ -141,6 +169,9 @@ jobs:
                   else if (assetPath.endsWith(".svg")) request.response.headers.contentType = ContentType("image", "svg+xml");
                   else if (assetPath.endsWith(".json")) request.response.headers.contentType = ContentType("application", "json", charset: "utf-8");
                   else if (assetPath.endsWith(".ico")) request.response.headers.contentType = ContentType("image", "x-icon");
+                  else if (assetPath.endsWith(".woff2")) request.response.headers.contentType = ContentType("font", "woff2");
+                  else if (assetPath.endsWith(".woff")) request.response.headers.contentType = ContentType("font", "woff");
+                  
                   request.response.add(bytes);
                 } else {
                   request.response.statusCode = HttpStatus.notFound;
@@ -148,6 +179,7 @@ jobs:
                 await request.response.close();
               });
             } catch (_) {}
+
             runApp(const MyApp());
           }
 
@@ -176,7 +208,7 @@ jobs:
               _controller = WebViewController()
                 ..setJavaScriptMode(JavaScriptMode.unrestricted)
                 ..setBackgroundColor(const Color(0xFF0B0B0B))
-                ..loadRequest(Uri.parse("http://127.0.0.1:8080"));
+                ..loadRequest(Uri.parse("http://127.0.0.1:\$serverPort"));
 
               Connectivity().checkConnectivity().then((results) => _updateConnectionStatus(results));
               _connectivitySubscription = Connectivity().onConnectivityChanged.listen((results) => _updateConnectionStatus(results));
@@ -230,14 +262,11 @@ jobs:
         run: |
           cd flutter_app
           
-          # أذونات الإنترنت والشبكة
           sed -i '/<application/i \    <uses-permission android:name="android.permission.INTERNET"/>\n    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>' android/app/src/main/AndroidManifest.xml
           sed -i 's/<application/& android:usesCleartextTraffic="true"/' android/app/src/main/AndroidManifest.xml
           
-          # إجبار أندرويد على قراءة اسم التطبيق من strings.xml
           sed -i 's/android:label="[^"]*"/android:label="@string\/app_name"/g' android/app/src/main/AndroidManifest.xml
 
-          # تعيين الاسم حصرياً في strings.xml
           node -e '
           const fs = require("fs");
           const stringsPath = "android/app/src/main/res/values/strings.xml";
@@ -245,7 +274,6 @@ jobs:
           fs.writeFileSync(stringsPath, xml, "utf8");
           '
 
-          # ضبط إعدادات الـ SDK
           node -e '
           const fs = require("fs");
           const buildGradlePath = "android/app/build.gradle";
@@ -268,6 +296,6 @@ jobs:
         uses: softprops/action-gh-release@v2
         if: success()
         with:
-          tag_name: v4.1.${{ github.run_number }}
-          name: Salman AI Final App v4.1.${{ github.run_number }}
+          tag_name: v4.2.${{ github.run_number }}
+          name: Salman AI Final App v4.2.${{ github.run_number }}
           files: flutter_app/build/app/outputs/flutter-apk/app-release.apk

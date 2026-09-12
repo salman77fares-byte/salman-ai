@@ -1,4 +1,4 @@
-name: Build Complete Offline Flutter APK
+name: Build Complete Offline Flutter APK with Connection Manager
 
 on:
   push:
@@ -26,7 +26,6 @@ jobs:
         npm install --legacy-peer-deps
         npm run build || npx vite build --base=./
 
-        # تجميع مخرجات البناء داخل مجلد موحد www
         mkdir -p www
         if [ -d ".output/public" ]; then
           cp -r .output/public/* www/
@@ -51,17 +50,18 @@ jobs:
         channel: 'stable'
         cache: true
 
-    - name: Build Complete Native Flutter Shell
+    - name: Build Native Flutter Shell with Connectivity Banner
       run: |
-        # 1. إنشاء تطبيق Flutter بالاسم والمعرف المطلوبين
+        # 1. إنشاء تطبيق Flutter بالهوية المعرفية المطلوبة
         flutter create --org com.salman --project-name ai flutter_app
         cd flutter_app
 
-        # 2. إضافة المكتبات المطلوبة (WebView + توليد الأيقونات)
+        # 2. إضافة مكتبات WebView وحالة الاتصال والأيقونات
         flutter pub add webview_flutter
+        flutter pub add connectivity_plus
         flutter pub add --dev flutter_launcher_icons
 
-        # 3. تجهيز ملفات الـ Web داخل أصول Flutter
+        # 3. تجهيز ملفات الموقع داخل أصول التطبيق
         mkdir -p assets/www
         cp -r ../www/* assets/www/
 
@@ -117,12 +117,14 @@ EOF
           fs.writeFileSync('pubspec.yaml', yaml);
         "
 
-        # 6. كتابة محرك Flutter الخادم أوفلاين (Local HTTP Server + WebView)
+        # 6. كتابة كود التطبيق الذكي (مراقبة الاتصال + خادم محلي لتشغيل الأزرار والقوائم 100%)
         cat << 'EOF' > lib/main.dart
+        import 'dart:async';
         import 'dart:io';
         import 'package:flutter/material.dart';
         import 'package:flutter/services.dart';
         import 'package:webview_flutter/webview_flutter.dart';
+        import 'package:connectivity_plus/connectivity_plus.dart';
 
         void main() async {
           WidgetsFlutterBinding.ensureInitialized();
@@ -133,7 +135,7 @@ EOF
             ),
           );
 
-          // تشغيل خادم محلي لمنع الشاشة السوداء ودعم ES Modules كلياً أوفلاين
+          // تشغيل خادم محلي يدعم كامل مسارات وتوجيهات SPA والـ LocalStorage أوفلاين
           final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 8080);
           server.listen((HttpRequest request) async {
             String path = request.uri.path;
@@ -189,6 +191,8 @@ EOF
 
         class _WebViewScreenState extends State<WebViewScreen> {
           late final WebViewController _controller;
+          late final StreamSubscription<List<ConnectivityResult>> _connectivitySubscription;
+          bool _isOffline = false;
 
           @override
           void initState() {
@@ -197,6 +201,20 @@ EOF
               ..setJavaScriptMode(JavaScriptMode.unrestricted)
               ..setBackgroundColor(const Color(0xFF0B0B0B))
               ..loadRequest(Uri.parse('http://127.0.0.1:8080'));
+
+            // مراقبة حالة الاتصال بالإنترنت حياً ومباشرة
+            _connectivitySubscription = Connectivity().onConnectivityChanged.listen((results) {
+              final isDisconnected = results.contains(ConnectivityResult.none) || results.isEmpty;
+              setState(() {
+                _isOffline = isDisconnected;
+              });
+            });
+          }
+
+          @override
+          void dispose() {
+            _connectivitySubscription.cancel();
+            super.dispose();
           }
 
           @override
@@ -204,22 +222,47 @@ EOF
             return Scaffold(
               backgroundColor: const Color(0xFF0B0B0B),
               body: SafeArea(
-                child: WebViewWidget(controller: _controller),
+                child: Stack(
+                  children: [
+                    WebViewWidget(controller: _controller),
+                    if (_isOffline)
+                      Positioned(
+                        top: 0,
+                        left: 0,
+                        right: 0,
+                        child: AnimatedContainer(
+                          duration: const Duration(milliseconds: 300),
+                          padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 12),
+                          color: const Color(0xDCB00020),
+                          child: const Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(Icons.wifi_off_rounded, color: Colors.white, size: 16),
+                              SizedBox(width: 8),
+                              Text(
+                                'لا يوجد اتصال بالإنترنت - الوضع أوفلاين',
+                                style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
               ),
             );
           }
         }
         EOF
 
-        # 7. تطبيق الشعار وضبط إرشادات التسمية والأذونات
+        # 7. تطبيق الشعار وضبط الأذونات والتسمية الرسمية
         flutter pub get
         if [ -n "$LOGO_PATH" ]; then
           dart run flutter_launcher_icons || true
         fi
 
-        # ضبط اسم التطبيق الظاهر للمستخدم إلى Salman AI
         sed -i 's/android:label="ai"/android:label="Salman AI"/g' android/app/src/main/AndroidManifest.xml
-        sed -i '/<application/i \    <uses-permission android:name="android.permission.INTERNET"/>' android/app/src/main/AndroidManifest.xml
+        sed -i '/<application/i \    <uses-permission android:name="android.permission.INTERNET"/>\n    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>' android/app/src/main/AndroidManifest.xml
 
     - name: Build Android Release APK
       run: |
@@ -231,5 +274,5 @@ EOF
       if: success()
       with:
         tag_name: v3.0.${{ github.run_number }}
-        name: Salman AI Offline Flutter App v3.0.${{ github.run_number }}
+        name: Salman AI Smart Offline Flutter App v3.0.${{ github.run_number }}
         files: flutter_app/build/app/outputs/flutter-apk/app-release.apk

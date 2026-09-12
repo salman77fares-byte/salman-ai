@@ -56,11 +56,19 @@ jobs:
           mkdir -p assets/www
           cp -r ../www/* assets/www/
 
+          # إصلاح حقيبة الـ assets وضمان تضمين ملفات الويب بدقة
           node -e '
           const fs = require("fs");
           let pubspec = fs.readFileSync("pubspec.yaml", "utf8");
-          if (!pubspec.includes("assets:")) {
-            pubspec += "\nflutter:\n  assets:\n    - assets/www/\n    - assets/www/assets/\n";
+          if (pubspec.includes("flutter:")) {
+            if (pubspec.includes("assets:")) {
+              pubspec = pubspec.replace(/#\s*assets:/, "assets:");
+              if (!pubspec.includes("assets/www/")) {
+                pubspec = pubspec.replace(/assets:/, "assets:\n    - assets/www/\n    - assets/www/assets/\n");
+              }
+            } else {
+              pubspec += "\nflutter:\n  assets:\n    - assets/www/\n    - assets/www/assets/\n";
+            }
           }
           fs.writeFileSync("pubspec.yaml", pubspec);
           '
@@ -108,16 +116,19 @@ jobs:
               final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 8080);
               server.listen((HttpRequest request) async {
                 String path = request.uri.path;
-                if (path == "/") path = "/index.html";
+                if (path == "/" || path.isEmpty) path = "/index.html";
                 String assetPath = "assets/www" + path;
                 ByteData? data;
                 try {
                   data = await rootBundle.load(assetPath);
                 } catch (_) {
-                  try {
-                    assetPath = "assets/www/index.html";
-                    data = await rootBundle.load(assetPath);
-                  } catch (_) {}
+                  bool isAssetFile = path.endsWith(".js") || path.endsWith(".mjs") || path.endsWith(".css") || path.endsWith(".png") || path.endsWith(".jpg") || path.endsWith(".svg") || path.endsWith(".json") || path.endsWith(".ico") || path.endsWith(".woff") || path.endsWith(".woff2");
+                  if (!isAssetFile) {
+                    try {
+                      assetPath = "assets/www/index.html";
+                      data = await rootBundle.load(assetPath);
+                    } catch (_) {}
+                  }
                 }
                 if (data != null) {
                   final bytes = data.buffer.asUint8List();
@@ -126,8 +137,10 @@ jobs:
                   else if (assetPath.endsWith(".js") || assetPath.endsWith(".mjs")) request.response.headers.contentType = ContentType("application", "javascript", charset: "utf-8");
                   else if (assetPath.endsWith(".css")) request.response.headers.contentType = ContentType("text", "css", charset: "utf-8");
                   else if (assetPath.endsWith(".png")) request.response.headers.contentType = ContentType("image", "png");
+                  else if (assetPath.endsWith(".jpg") || assetPath.endsWith(".jpeg")) request.response.headers.contentType = ContentType("image", "jpeg");
                   else if (assetPath.endsWith(".svg")) request.response.headers.contentType = ContentType("image", "svg+xml");
                   else if (assetPath.endsWith(".json")) request.response.headers.contentType = ContentType("application", "json", charset: "utf-8");
+                  else if (assetPath.endsWith(".ico")) request.response.headers.contentType = ContentType("image", "x-icon");
                   request.response.add(bytes);
                 } else {
                   request.response.statusCode = HttpStatus.notFound;
@@ -255,6 +268,6 @@ jobs:
         uses: softprops/action-gh-release@v2
         if: success()
         with:
-          tag_name: v4.0.${{ github.run_number }}
-          name: Salman AI Final App v4.0.${{ github.run_number }}
+          tag_name: v4.1.${{ github.run_number }}
+          name: Salman AI Final App v4.1.${{ github.run_number }}
           files: flutter_app/build/app/outputs/flutter-apk/app-release.apk

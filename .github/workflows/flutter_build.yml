@@ -247,22 +247,35 @@ jobs:
           fs.writeFileSync("lib/main.dart", code);
           '
 
-          # Fix Android Gradle SDK configurations and strip problematic NDK lines
+          echo "sdk.dir=$ANDROID_HOME" > android/local.properties
+          if [ -n "$FLUTTER_ROOT" ]; then
+            echo "flutter.sdk=$FLUTTER_ROOT" >> android/local.properties
+          fi
+
           node -e '
           const fs = require("fs");
-          ["android/app/build.gradle", "android/app/build.gradle.kts"].forEach(p => {
-            if (fs.existsSync(p)) {
-              let lines = fs.readFileSync(p, "utf8").split("\n");
-              lines = lines.filter(line => !line.includes("ndkVersion"));
-              let c = lines.join("\n");
-              c = c.replace(/flutter\.compileSdkVersion/g, "34");
-              c = c.replace(/flutter\.minSdkVersion/g, "21");
-              c = c.replace(/flutter\.targetSdkVersion/g, "34");
-              c = c.replace(/flutterVersionCode(?:\.toInteger\(\))?/g, "1");
-              c = c.replace(/flutterVersionName/g, "\"1.0.0\"");
-              fs.writeFileSync(p, c);
+          const path = require("path");
+
+          function processDir(dir) {
+            if (!fs.existsSync(dir)) return;
+            const entries = fs.readdirSync(dir, { withFileTypes: true });
+            for (const entry of entries) {
+              const fullPath = path.join(dir, entry.name);
+              if (entry.isDirectory()) {
+                processDir(fullPath);
+              } else if (entry.name.endsWith(".gradle") || entry.name.endsWith(".kts")) {
+                let content = fs.readFileSync(fullPath, "utf8");
+                content = content.replace(/flutter\.compileSdkVersion/g, "34");
+                content = content.replace(/flutter\.minSdkVersion/g, "21");
+                content = content.replace(/flutter\.targetSdkVersion/g, "34");
+                content = content.replace(/flutter\.versionCode(?:\.toInteger\(\))?/g, "1");
+                content = content.replace(/flutter\.versionName/g, "\"1.0.0\"");
+                let lines = content.split("\n").filter(l => !l.includes("ndkVersion"));
+                fs.writeFileSync(fullPath, lines.join("\n"));
+              }
             }
-          });
+          }
+          processDir("android");
           '
 
           flutter pub get

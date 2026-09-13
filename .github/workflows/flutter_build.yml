@@ -26,10 +26,10 @@ jobs:
           npm install --legacy-peer-deps
           npm run build || npx vite build --base=./
           mkdir -p www
-          if [ -d ".output/public" ]; then cp -r .output/public/* www/
-          elif [ -d "dist/client" ]; then cp -r dist/client/* www/
-          elif [ -d "dist" ]; then cp -r dist/* www/
+          if [ -d "dist" ]; then cp -r dist/* www/
           elif [ -d "build" ]; then cp -r build/* www/
+          elif [ -d ".output/public" ]; then cp -r .output/public/* www/
+          elif [ -d "dist/client" ]; then cp -r dist/client/* www/
           fi
 
       - name: ☕ Set up Java JDK
@@ -56,22 +56,21 @@ jobs:
           mkdir -p assets/www
           cp -r ../www/* assets/www/
 
-          # إضافة المجلدات بشكل دقيق داخل قسم flutter الرئيسي فقط
           node -e '
           const fs = require("fs");
           const path = require("path");
 
-          function getDirs(dirPath, list = []) {
+          function getDirs(dirPath, list = ["assets/www/"]) {
             if (!fs.existsSync(dirPath)) return list;
-            list.push(dirPath.replace(/\\/g, "/") + "/");
             const files = fs.readdirSync(dirPath);
             files.forEach((file) => {
               const fullPath = path.join(dirPath, file);
               if (fs.statSync(fullPath).isDirectory()) {
+                list.push(fullPath.replace(/\\/g, "/") + "/");
                 getDirs(fullPath, list);
               }
             });
-            return list;
+            return Array.from(new Set(list));
           }
 
           const dirs = getDirs("assets/www");
@@ -124,8 +123,9 @@ jobs:
 
             int assignedPort = 8080;
             try {
-              final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 8080);
+              final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
               assignedPort = server.port;
+              
               server.listen((HttpRequest request) async {
                 String path = Uri.decodeComponent(request.uri.path);
                 if (path == "/" || path.isEmpty) path = "/index.html";
@@ -137,12 +137,10 @@ jobs:
                 try {
                   data = await rootBundle.load(assetPath);
                 } catch (_) {
-                  if (!path.contains(".") || path.endsWith(".html")) {
-                    try {
-                      assetPath = "assets/www/index.html";
-                      data = await rootBundle.load(assetPath);
-                    } catch (_) {}
-                  }
+                  try {
+                    assetPath = "assets/www/index.html";
+                    data = await rootBundle.load(assetPath);
+                  } catch (_) {}
                 }
 
                 if (data != null) {
@@ -163,7 +161,9 @@ jobs:
                   
                   request.response.add(bytes);
                 } else {
-                  request.response.statusCode = HttpStatus.notFound;
+                  request.response.statusCode = HttpStatus.ok;
+                  request.response.headers.contentType = ContentType("text", "html", charset: "utf-8");
+                  request.response.write("<!DOCTYPE html><html><head><meta charset=\\"utf-8\\"><title>Salman AI</title></head><body style=\\"background:#0b0b0b;color:#fff;display:flex;justify-content:center;align-items:center;height:100vh;font-family:sans-serif;\\"><h2>جاري تحميل التطبيق...</h2></body></html>");
                 }
                 await request.response.close();
               });
@@ -292,6 +292,6 @@ jobs:
         uses: softprops/action-gh-release@v2
         if: success()
         with:
-          tag_name: v4.5.${{ github.run_number }}
-          name: Salman AI Final App v4.5.${{ github.run_number }}
+          tag_name: v4.6.${{ github.run_number }}
+          name: Salman AI Final App v4.6.${{ github.run_number }}
           files: flutter_app/build/app/outputs/flutter-apk/app-release.apk

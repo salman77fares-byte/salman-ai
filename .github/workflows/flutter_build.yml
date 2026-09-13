@@ -56,7 +56,7 @@ jobs:
           mkdir -p assets/www
           cp -r ../www/* assets/www/
 
-          # إضافة المجلدات بتنسيق YAML سليم ومتوافق 100%
+          # إضافة المجلدات بشكل دقيق داخل قسم flutter الرئيسي فقط
           node -e '
           const fs = require("fs");
           const path = require("path");
@@ -77,21 +77,10 @@ jobs:
           const dirs = getDirs("assets/www");
           let pubspec = fs.readFileSync("pubspec.yaml", "utf8");
 
-          let lines = pubspec.split("\n").filter(l => !l.includes("assets/") && !l.trim().startsWith("assets:"));
+          const assetLines = "  assets:\n" + dirs.map(d => "    - " + d).join("\n");
+          pubspec = pubspec.replace(/^flutter:/m, "flutter:\n" + assetLines);
 
-          let flutterIdx = lines.findIndex(l => l.trim() === "flutter:");
-          if (flutterIdx === -1) {
-            lines.push("flutter:");
-            flutterIdx = lines.length - 1;
-          }
-
-          const assetEntries = ["  assets:"];
-          dirs.forEach(d => {
-            assetEntries.push("    - " + d);
-          });
-
-          lines.splice(flutterIdx + 1, 0, ...assetEntries);
-          fs.writeFileSync("pubspec.yaml", lines.join("\n"));
+          fs.writeFileSync("pubspec.yaml", pubspec);
           '
 
           LOGO_PATH=""
@@ -303,6 +292,6 @@ jobs:
         uses: softprops/action-gh-release@v2
         if: success()
         with:
-          tag_name: v4.4.${{ github.run_number }}
-          name: Salman AI Final App v4.4.${{ github.run_number }}
+          tag_name: v4.5.${{ github.run_number }}
+          name: Salman AI Final App v4.5.${{ github.run_number }}
           files: flutter_app/build/app/outputs/flutter-apk/app-release.apk

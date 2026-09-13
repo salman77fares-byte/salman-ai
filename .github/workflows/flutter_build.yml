@@ -56,38 +56,32 @@ jobs:
           mkdir -p assets/www
           cp -r ../www/* assets/www/
 
-          # مسح شامل لجميع المجلدات الفرعية وتسجيلها تلقائياً في pubspec.yaml
+          # إضافة كافة مجلدات الويب بأمان داخل pubspec.yaml بدون تلف
           node -e '
           const fs = require("fs");
           const path = require("path");
 
-          function getAllDirectories(dirPath, arrayOfDirs) {
+          function getDirs(dirPath, list = []) {
+            if (!fs.existsSync(dirPath)) return list;
+            list.push(dirPath.replace(/\\/g, "/") + "/");
             const files = fs.readdirSync(dirPath);
-            arrayOfDirs = arrayOfDirs || [];
             files.forEach((file) => {
-              if (fs.statSync(path.join(dirPath, file)).isDirectory()) {
-                const subDir = path.join(dirPath, file);
-                arrayOfDirs.push(subDir.replace(/\\/g, "/"));
-                getAllDirectories(subDir, arrayOfDirs);
+              const fullPath = path.join(dirPath, file);
+              if (fs.statSync(fullPath).isDirectory()) {
+                getDirs(fullPath, list);
               }
             });
-            return arrayOfDirs;
+            return list;
           }
 
-          let dirList = ["assets/www/"];
-          if (fs.existsSync("assets/www")) {
-            const subDirs = getAllDirectories("assets/www");
-            subDirs.forEach(d => dirList.push(d + "/"));
-          }
-
+          const dirs = getDirs("assets/www");
           let pubspec = fs.readFileSync("pubspec.yaml", "utf8");
-          let assetsBlock = "\nflutter:\n  assets:\n" + dirList.map(d => "    - " + d).join("\n") + "\n";
 
-          if (pubspec.includes("flutter:")) {
-            pubspec = pubspec.replace(/flutter:[\s\S]*/, assetsBlock);
-          } else {
-            pubspec += assetsBlock;
-          }
+          dirs.forEach(d => {
+            if (!pubspec.includes("- " + d)) {
+              pubspec = pubspec.replace("assets:", "assets:\n    - " + d);
+            }
+          });
 
           fs.writeFileSync("pubspec.yaml", pubspec);
           '
@@ -125,30 +119,28 @@ jobs:
           import "package:webview_flutter/webview_flutter.dart";
           import "package:connectivity_plus/connectivity_plus.dart";
 
-          int serverPort = 8080;
-
           void main() async {
             WidgetsFlutterBinding.ensureInitialized();
             SystemChrome.setSystemUIOverlayStyle(
               const SystemUiOverlayStyle(statusBarColor: Colors.transparent, statusBarIconBrightness: Brightness.light),
             );
 
+            int assignedPort = 8080;
             try {
               final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 8080);
-              serverPort = server.port;
+              assignedPort = server.port;
               server.listen((HttpRequest request) async {
                 String path = Uri.decodeComponent(request.uri.path);
                 if (path == "/" || path.isEmpty) path = "/index.html";
+                if (path.startsWith("/")) path = path.substring(1);
                 
-                String cleanPath = path.startsWith("/") ? path.substring(1) : path;
-                String assetPath = "assets/www/" + cleanPath;
+                String assetPath = "assets/www/" + path;
 
                 ByteData? data;
                 try {
                   data = await rootBundle.load(assetPath);
                 } catch (_) {
-                  bool hasExtension = cleanPath.contains(".") && !cleanPath.endsWith(".html");
-                  if (!hasExtension) {
+                  if (!path.contains(".") || path.endsWith(".html")) {
                     try {
                       assetPath = "assets/www/index.html";
                       data = await rootBundle.load(assetPath);
@@ -180,19 +172,26 @@ jobs:
               });
             } catch (_) {}
 
-            runApp(const MyApp());
+            runApp(MyApp(port: assignedPort));
           }
 
           class MyApp extends StatelessWidget {
-            const MyApp({super.key});
+            final int port;
+            const MyApp({super.key, required this.port});
             @override
             Widget build(BuildContext context) {
-              return MaterialApp(title: "Salman AI", debugShowCheckedModeBanner: false, theme: ThemeData.dark(), home: const WebViewScreen());
+              return MaterialApp(
+                title: "Salman AI",
+                debugShowCheckedModeBanner: false,
+                theme: ThemeData.dark(),
+                home: WebViewScreen(port: port),
+              );
             }
           }
 
           class WebViewScreen extends StatefulWidget {
-            const WebViewScreen({super.key});
+            final int port;
+            const WebViewScreen({super.key, required this.port});
             @override
             State<WebViewScreen> createState() => _WebViewScreenState();
           }
@@ -208,7 +207,7 @@ jobs:
               _controller = WebViewController()
                 ..setJavaScriptMode(JavaScriptMode.unrestricted)
                 ..setBackgroundColor(const Color(0xFF0B0B0B))
-                ..loadRequest(Uri.parse("http://127.0.0.1:\$serverPort"));
+                ..loadRequest(Uri.parse("http://127.0.0.1:" + widget.port.toString()));
 
               Connectivity().checkConnectivity().then((results) => _updateConnectionStatus(results));
               _connectivitySubscription = Connectivity().onConnectivityChanged.listen((results) => _updateConnectionStatus(results));
@@ -296,6 +295,6 @@ jobs:
         uses: softprops/action-gh-release@v2
         if: success()
         with:
-          tag_name: v4.2.${{ github.run_number }}
-          name: Salman AI Final App v4.2.${{ github.run_number }}
+          tag_name: v4.3.${{ github.run_number }}
+          name: Salman AI Final App v4.3.${{ github.run_number }}
           files: flutter_app/build/app/outputs/flutter-apk/app-release.apk

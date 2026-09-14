@@ -1,4 +1,4 @@
-name: Build Perfect Flutter Offline APK
+name: Build Android APK (Capacitor)
 
 on:
   push:
@@ -11,39 +11,15 @@ jobs:
     permissions:
       contents: write
 
-    env:
-      GRADLE_OPTS: "-Xmx3072m -Dfile.encoding=UTF-8"
-
     steps:
       - name: 📥 Checkout Code
         uses: actions/checkout@v4
 
-      - name: ⚙️ Set up Node.js & Build Web App
+      - name: ⚙️ Set up Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '22'
+          node-version: '20'
           cache: 'npm'
-
-      - name: 🏗️ Compile Web Assets & Fix Paths
-        run: |
-          npm install --legacy-peer-deps
-          npx vite build --base=./ || npm run build
-          mkdir -p www
-          if [ -d "dist" ]; then cp -r dist/* www/
-          elif [ -d "build" ]; then cp -r build/* www/
-          elif [ -d ".output/public" ]; then cp -r .output/public/* www/
-          elif [ -d "dist/client" ]; then cp -r dist/client/* www/
-          fi
-
-          node -e '
-          const fs = require("fs");
-          const p = "www/index.html";
-          if (fs.existsSync(p)) {
-            let html = fs.readFileSync(p, "utf8");
-            html = html.replace(/src="\/([^"]+)"/g, "src=\"./$1\"").replace(/href="\/([^"]+)"/g, "href=\"./$1\"");
-            fs.writeFileSync(p, html);
-          }
-          '
 
       - name: ☕ Set up Java JDK
         uses: actions/setup-java@v4
@@ -51,422 +27,46 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
 
-      - name: 📱 Set up Flutter Environment
-        uses: subosito/flutter-action@v2
-        with:
-          flutter-version: '3.24.3'
-          channel: 'stable'
-          cache: true
-
-      - name: 🚀 Create Clean Flutter Shell & Pubspec
+      - name: 📦 Install Dependencies & Build Web Project
         run: |
-          flutter create --org com.salman --project-name ai flutter_app
-          cd flutter_app
+          npm install --legacy-peer-deps
+          npm run build || npx vite build --base=./
 
-          mkdir -p assets/www
-          if [ -d "../www" ] && [ "$(ls -A ../www)" ]; then
-            cp -r ../www/* assets/www/
+          # Locate dist / www directory
+          mkdir -p www
+          if [ -d "dist" ]; then cp -r dist/* www/
+          elif [ -d "build" ]; then cp -r build/* www/
+          elif [ -d ".output/public" ]; then cp -r .output/public/* www/
           fi
 
-          mkdir -p assets/icon
-          LOGO_PATH=""
-          for p in "../public/logo.png" "../logo.png" "../src/logo.png" "../public/favicon.png"; do
-            if [ -f "$p" ]; then
-              LOGO_PATH="$p"
-              break
-            fi
-          done
-
-          if [ -n "$LOGO_PATH" ]; then
-            cp "$LOGO_PATH" assets/icon/app_icon.png
-          else
-            node -e '
-            const fs = require("fs");
-            const fallback = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==";
-            fs.writeFileSync("assets/icon/app_icon.png", Buffer.from(fallback, "base64"));
-            '
-          fi
-
-          node -e '
-          const fs = require("fs");
-          const path = require("path");
-
-          const indexPath = "assets/www/index.html";
-          if (!fs.existsSync(indexPath)) {
-            fs.writeFileSync(indexPath, "<html><body><h1>Salman AI</h1></body></html>");
-          }
-
-          function getSubDirs(dir) {
-            let dirs = [];
-            if (!fs.existsSync(dir)) return dirs;
-            const items = fs.readdirSync(dir, { withFileTypes: true });
-            let hasFiles = false;
-            for (const item of items) {
-              const fullPath = path.join(dir, item.name);
-              if (item.isDirectory()) {
-                dirs = dirs.concat(getSubDirs(fullPath));
-              } else if (item.isFile()) {
-                hasFiles = true;
-              }
-            }
-            if (hasFiles) {
-              dirs.push(fullPathToAsset(dir));
-            }
-            return dirs;
-          }
-
-          function fullPathToAsset(p) {
-            let formatted = p.replace(/\\/g, "/");
-            if (!formatted.endsWith("/")) formatted += "/";
-            return formatted;
-          }
-
-          const rawDirs = [
-            ...getSubDirs("assets/www"),
-            ...getSubDirs("assets/icon")
-          ];
-          const uniqueDirs = Array.from(new Set(rawDirs));
-
-          let assetLines = uniqueDirs.map(d => "    - " + d).join("\n");
-          if (!assetLines) assetLines = "    - assets/www/";
-
-          const pubspecContent = `name: ai
-description: "Salman AI Mobile Application"
-publish_to: 'none'
-version: 1.0.0+1
-
-environment:
-  sdk: '>=3.0.0 <4.0.0'
-
-dependencies:
-  flutter:
-    sdk: flutter
-  webview_flutter: ^4.8.0
-  connectivity_plus: ^6.0.5
-
-dev_dependencies:
-  flutter_test:
-    sdk: flutter
-  flutter_launcher_icons: ^0.13.1
-
-flutter:
-  uses-material-design: true
-  assets:
-${assetLines}
-
-flutter_launcher_icons:
-  android: "launcher_icon"
-  image_path: "assets/icon/app_icon.png"
-  min_sdk_android: 21
-`;
-
-          fs.writeFileSync("pubspec.yaml", pubspecContent, "utf8");
-          '
-
-          flutter pub get
-          dart run flutter_launcher_icons || true
-
-      - name: 📝 Inject Native Asset WebView Code safely
+      - name: 🚀 Setup Capacitor Android Shell
         run: |
-          cd flutter_app
-          cat << 'EOF' > lib/main.dart
-          import "dart:async";
-          import "dart:io";
-          import "package:flutter/material.dart";
-          import "package:flutter/services.dart";
-          import "package:webview_flutter/webview_flutter.dart";
-          import "package:connectivity_plus/connectivity_plus.dart";
+          npm install @capacitor/core @capacitor/cli @capacitor/android --save-dev
+          npx cap init "Salman AI" "com.salman.ai" --web-dir "www"
+          npx cap add android
 
-          void main() async {
-            WidgetsFlutterBinding.ensureInitialized();
-            SystemChrome.setSystemUIOverlayStyle(
-              const SystemUiOverlayStyle(
-                statusBarColor: Colors.transparent,
-                statusBarIconBrightness: Brightness.light,
-              ),
-            );
-
-            int port = 0;
-            try {
-              final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
-              port = server.port;
-              server.listen((HttpRequest request) async {
-                String path = Uri.decodeComponent(request.uri.path);
-                if (path == "/" || path.isEmpty) path = "/index.html";
-                if (path.startsWith("/")) path = path.substring(1);
-
-                String assetPath = "assets/www/" + path;
-                ByteData? data;
-
-                try {
-                  data = await rootBundle.load(assetPath);
-                } catch (_) {
-                  try {
-                    assetPath = "assets/www/index.html";
-                    data = await rootBundle.load(assetPath);
-                  } catch (_) {}
-                }
-
-                if (data != null) {
-                  final bytes = data.buffer.asUint8List();
-                  request.response.statusCode = HttpStatus.ok;
-                  request.response.headers.set("Access-Control-Allow-Origin", "*");
-                  
-                  final lowerPath = assetPath.toLowerCase();
-                  if (lowerPath.endsWith(".html")) request.response.headers.contentType = ContentType("text", "html", charset: "utf-8");
-                  else if (lowerPath.endsWith(".js") || lowerPath.endsWith(".mjs")) request.response.headers.contentType = ContentType("application", "javascript", charset: "utf-8");
-                  else if (lowerPath.endsWith(".css")) request.response.headers.contentType = ContentType("text", "css", charset: "utf-8");
-                  else if (lowerPath.endsWith(".png")) request.response.headers.contentType = ContentType("image", "png");
-                  else if (lowerPath.endsWith(".jpg") || lowerPath.endsWith(".jpeg")) request.response.headers.contentType = ContentType("image", "jpeg");
-                  else if (lowerPath.endsWith(".svg")) request.response.headers.contentType = ContentType("image", "svg+xml");
-                  else if (lowerPath.endsWith(".json")) request.response.headers.contentType = ContentType("application", "json", charset: "utf-8");
-                  else if (lowerPath.endsWith(".ico")) request.response.headers.contentType = ContentType("image", "x-icon");
-                  else if (lowerPath.endsWith(".woff2")) request.response.headers.contentType = ContentType("font", "woff2");
-                  else if (lowerPath.endsWith(".woff")) request.response.headers.contentType = ContentType("font", "woff");
-                  else if (lowerPath.endsWith(".ttf")) request.response.headers.contentType = ContentType("font", "ttf");
-
-                  request.response.add(bytes);
-                } else {
-                  request.response.statusCode = HttpStatus.notFound;
-                }
-                await request.response.close();
-              });
-            } catch (_) {}
-
-            runApp(MyApp(port: port));
-          }
-
-          class MyApp extends StatelessWidget {
-            final int port;
-            const MyApp({super.key, required this.port});
-
-            @override
-            Widget build(BuildContext context) {
-              return MaterialApp(
-                title: "Salman AI",
-                debugShowCheckedModeBanner: false,
-                theme: ThemeData.dark(),
-                home: WebViewScreen(port: port),
-              );
-            }
-          }
-
-          class WebViewScreen extends StatefulWidget {
-            final int port;
-            const WebViewScreen({super.key, required this.port});
-
-            @override
-            State<WebViewScreen> createState() => _WebViewScreenState();
-          }
-
-          class _WebViewScreenState extends State<WebViewScreen> {
-            late final WebViewController _controller;
-            StreamSubscription<List<ConnectivityResult>>? _connectivitySubscription;
-            bool _isLoading = true;
-            bool _isOffline = false;
-            Timer? _safetyTimer;
-
-            @override
-            void initState() {
-              super.initState();
-
-              _safetyTimer = Timer(const Duration(milliseconds: 2000), () {
-                _hideLoader();
-              });
-
-              _controller = WebViewController()
-                ..setJavaScriptMode(JavaScriptMode.unrestricted)
-                ..setBackgroundColor(const Color(0xFF0B0B0B))
-                ..setNavigationDelegate(
-                  NavigationDelegate(
-                    onPageFinished: (String url) => _hideLoader(),
-                    onWebResourceError: (WebResourceError error) => _hideLoader(),
-                  ),
-                );
-
-              if (widget.port > 0) {
-                _controller.loadRequest(Uri.parse("http://127.0.0.1:${widget.port}"));
-              } else {
-                _controller.loadFlutterAsset("assets/www/index.html");
-              }
-
-              _initConnectivity();
-            }
-
-            void _initConnectivity() async {
-              try {
-                final results = await Connectivity().checkConnectivity();
-                _updateConnectionStatus(results);
-                _connectivitySubscription = Connectivity().onConnectivityChanged.listen((results) {
-                  _updateConnectionStatus(results);
-                });
-              } catch (_) {}
-            }
-
-            void _hideLoader() {
-              if (mounted && _isLoading) {
-                setState(() => _isLoading = false);
-                _safetyTimer?.cancel();
-              }
-            }
-
-            void _updateConnectionStatus(List<ConnectivityResult> results) {
-              if (mounted) {
-                setState(() {
-                  _isOffline = results.contains(ConnectivityResult.none) || results.isEmpty;
-                });
-              }
-            }
-
-            @override
-            void dispose() {
-              _safetyTimer?.cancel();
-              _connectivitySubscription?.cancel();
-              super.dispose();
-            }
-
-            @override
-            Widget build(BuildContext context) {
-              return Scaffold(
-                backgroundColor: const Color(0xFF0B0B0B),
-                body: SafeArea(
-                  child: Stack(
-                    children: [
-                      WebViewWidget(controller: _controller),
-                      
-                      if (_isLoading)
-                        Container(
-                          color: const Color(0xFF0B0B0B),
-                          width: double.infinity,
-                          height: double.infinity,
-                          child: Center(
-                            child: Column(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              crossAxisAlignment: CrossAlignment.center,
-                              children: [
-                                Image.asset(
-                                  "assets/icon/app_icon.png",
-                                  width: 110,
-                                  height: 110,
-                                  errorBuilder: (context, error, stackTrace) => const Icon(
-                                    Icons.smart_toy_rounded,
-                                    size: 100,
-                                    color: Colors.blueAccent,
-                                  ),
-                                ),
-                                const SizedBox(height: 20),
-                                const AnimatedWaitText(),
-                              ],
-                            ),
-                          ),
-                        ),
-
-                      if (_isOffline)
-                        Positioned(
-                          top: 0, left: 0, right: 0,
-                          child: AnimatedContainer(
-                            duration: const Duration(milliseconds: 300),
-                            padding: const EdgeInsets.symmetric(vertical: 7, horizontal: 12),
-                            color: const Color(0xDCB00020),
-                            child: const Row(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                Icon(Icons.wifi_off_rounded, color: Colors.white, size: 16),
-                                SizedBox(width: 8),
-                                Text(
-                                  "لا يوجد اتصال بالإنترنت - الوضع أوفلاين",
-                                  style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
-                    ],
-                  ),
-                ),
-              );
-            }
-          }
-
-          class AnimatedWaitText extends StatefulWidget {
-            const AnimatedWaitText({super.key});
-
-            @override
-            State<AnimatedWaitText> createState() => _AnimatedWaitTextState();
-          }
-
-          class _AnimatedWaitTextState extends State<AnimatedWaitText> {
-            int _dotCount = 0;
-            Timer? _timer;
-
-            @override
-            void initState() {
-              super.initState();
-              _timer = Timer.periodic(const Duration(milliseconds: 350), (timer) {
-                if (mounted) {
-                  setState(() {
-                    _dotCount = (_dotCount + 1) % 4;
-                  });
-                }
-              });
-            }
-
-            @override
-            void dispose() {
-              _timer?.cancel();
-              super.dispose();
-            }
-
-            @override
-            Widget build(BuildContext context) {
-              String dots = "." * _dotCount;
-              return Text(
-                "يرجى الانتظار$dots",
-                style: const TextStyle(
-                  color: Colors.white70,
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                ),
-              );
-            }
-          }
-          EOF
-
-      - name: 🛠️ Force Correct App Name & Permissions
+      - name: 🛠️ Grant Permissions & Configure Android
         run: |
-          cd flutter_app
-          node -e '
-          const fs = require("fs");
-          const manifestPath = "android/app/src/main/AndroidManifest.xml";
-          if (fs.existsSync(manifestPath)) {
-            let manifest = fs.readFileSync(manifestPath, "utf8");
-            if (!manifest.includes("android.permission.INTERNET")) {
-              manifest = manifest.replace(
-                "<manifest",
-                "<manifest xmlns:android=\"http://schemas.android.com/apk/res/android\">\n    <uses-permission android:name=\"android.permission.INTERNET\"/>\n    <uses-permission android:name=\"android.permission.ACCESS_NETWORK_STATE\"/>"
-              );
-            }
-            if (!manifest.includes("android:usesCleartextTraffic")) {
-              manifest = manifest.replace("<application", "<application android:usesCleartextTraffic=\"true\"");
-            }
-            fs.writeFileSync(manifestPath, manifest);
-          }
+          cd android
+          chmod +x gradlew
+          
+          # Inject Permissions
+          sed -i '/<application/i \    <uses-permission android:name="android.permission.INTERNET"/>\n    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>' app/src/main/AndroidManifest.xml
+          sed -i 's/<application/& android:usesCleartextTraffic="true"/' app/src/main/AndroidManifest.xml
 
-          const stringsPath = "android/app/src/main/res/values/strings.xml";
-          const stringsDir = require("path").dirname(stringsPath);
-          if (!fs.existsSync(stringsDir)) fs.mkdirSync(stringsDir, { recursive: true });
-          fs.writeFileSync(stringsPath, "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n<resources>\n    <string name=\"app_name\">Salman AI</string>\n</resources>");
-          '
-
-      - name: 🚀 Build Release APK
+      - name: 📱 Sync Web Assets to Android
         run: |
-          cd flutter_app
-          flutter build apk --release --no-tree-shake-icons
+          npx cap sync android
+
+      - name: 🏗️ Build Release APK with Gradle
+        run: |
+          cd android
+          ./gradlew assembleRelease
 
       - name: 📦 Upload Release Artifact
         uses: softprops/action-gh-release@v2
         if: success()
         with:
-          tag_name: v5.5.${{ github.run_number }}
-          name: Salman AI Final App v5.5.${{ github.run_number }}
-          files: flutter_app/build/app/outputs/flutter-apk/app-release.apk
+          tag_name: v6.0.${{ github.run_number }}
+          name: Salman AI APK v6.0.${{ github.run_number }}
+          files: android/app/build/outputs/apk/release/app-release-unsigned.apk

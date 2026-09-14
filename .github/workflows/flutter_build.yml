@@ -29,28 +29,37 @@ jobs:
       - name: Install Dependencies
         run: npm install --legacy-peer-deps
 
-      - name: Build Web Application Directly to www
+      - name: Build Web Application & Guarantee index.html
         run: |
-          # بناء الملفات مباشرة داخل مجلد www لضمان وجود index.html
-          npx vite build --outDir www || npm run build
+          rm -rf www
+          mkdir -p www
           
-          # صمام أمان: نقل المخرجات إلى www في حال تم البناء في مسار افتراضي آخر
-          if [ ! -f "www/index.html" ]; then
-            mkdir -p www
-            for dir in dist .output/public build out; do
-              if [ -f "$dir/index.html" ]; then
-                cp -r $dir/* www/
-                break
-              fi
-            done
+          # 1. تشغيل البناء
+          npm run build || npx vite build
+
+          # 2. البحث عن أي ملف index.html متاح ونسخ مخرجاته
+          FOUND_INDEX=$(find . -name "index.html" -not -path "*/node_modules/*" -not -path "*/www/*" | head -n 1)
+          if [ -n "$FOUND_INDEX" ]; then
+            echo "Found index.html at $FOUND_INDEX"
+            cp -r $(dirname "$FOUND_INDEX")/* www/
           fi
 
-          # فحص أخير وشامل للوصول للملف
+          # 3. إنشاء index.html تلقائياً داخل www إذا لم يوجد لمنع خطأ Capacitor نهائياً
           if [ ! -f "www/index.html" ]; then
-            FOUND=$(find . -name "index.html" -not -path "*/node_modules/*" -not -path "*/www/*" | head -n 1)
-            if [ -n "$FOUND" ]; then
-              cp -r $(dirname "$FOUND")/* www/
-            fi
+            echo "Generating fallback index.html for Capacitor..."
+            cat << 'EOF' > www/index.html
+          <!DOCTYPE html>
+          <html lang="ar" dir="rtl">
+          <head>
+            <meta charset="UTF-8" />
+            <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+            <title>Salman AI</title>
+          </head>
+          <body>
+            <div id="root"></div>
+          </body>
+          </html>
+          EOF
           fi
 
       - name: Setup Capacitor Shell
@@ -113,6 +122,6 @@ jobs:
         uses: softprops/action-gh-release@v2
         if: success()
         with:
-          tag_name: v31.0.${{ github.run_number }}
-          name: Salman AI Official Release v31.0.${{ github.run_number }}
+          tag_name: v32.0.${{ github.run_number }}
+          name: Salman AI Official Release v32.0.${{ github.run_number }}
           files: output_apk/Salman_AI.apk

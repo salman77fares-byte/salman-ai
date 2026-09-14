@@ -1,4 +1,4 @@
-name: Build Salman AI Full Hybrid APK
+name: Build Salman AI Clean Fullscreen APK
 
 on:
   push:
@@ -31,95 +31,44 @@ jobs:
           npm install --legacy-peer-deps
           npm run build || npx vite build || true
 
-      - name: Construct Complete UI Bundle (Eliminate White Screen)
+      - name: Prepare Clean Fullscreen Web Bundle (No Headers / No Overlays)
         run: |
           rm -rf www
-          mkdir -p www/assets
+          mkdir -p www
 
-          # 1. نسخ كافة الأصول الناتجة عن البناء إلى مجلد www
-          for dir in dist .output/public build out; do
-            if [ -d "$dir" ]; then
-              cp -r $dir/* www/ 2>/dev/null || true
+          # 1. نقل ملفات الواجهة الحقيقية المبنية بجميع أصولها إلى مجلد www
+          BUILT_DIR=""
+          for dir in dist dist/client .output/public build out; do
+            if [ -d "$dir" ] && [ -f "$dir/index.html" ]; then
+              BUILT_DIR="$dir"
+              break
             fi
           done
 
-          # 2. نسخ الشعار المتاح لاستخدامه في الواجهة
-          LOGO_SRC=""
-          for p in "public/logo.png" "public/icon-512.png" "logo.png" "src/logo.png"; do
-            if [ -f "$p" ]; then LOGO_SRC="$p"; break; fi
-          done
-          if [ -n "$LOGO_SRC" ]; then cp "$LOGO_SRC" www/logo.png; fi
-
-          # 3. إنتاج ملف index.html غني بالتنسيقات والواجهة الحقيقية المضمنة
-          cat << 'EOF' > www/index.html
+          if [ -n "$BUILT_DIR" ]; then
+            echo "Copying native built web bundle from $BUILT_DIR"
+            cp -r $BUILT_DIR/* www/
+          else
+            echo "Fallback: Packaging clean full-screen web view"
+            cat << 'EOF' > www/index.html
           <!DOCTYPE html>
           <html lang="ar" dir="rtl">
           <head>
             <meta charset="UTF-8">
-            <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
             <title>Salman AI</title>
             <style>
-              * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
-              body, html { width: 100%; height: 100%; background-color: #0f172a; color: #f8fafc; overflow: hidden; }
-              #app-header { height: 60px; background-color: #1e293b; display: flex; align-items: center; justify-content: space-between; padding: 0 16px; border-bottom: 1px solid #334155; }
-              .brand { display: flex; align-items: center; gap: 10px; }
-              .brand img { width: 34px; height: 34px; border-radius: 8px; object-fit: cover; }
-              .brand span { font-weight: bold; font-size: 18px; color: #10b981; }
-              .status-badge { font-size: 12px; padding: 4px 10px; border-radius: 20px; font-weight: 500; }
-              .online { background: rgba(16, 185, 129, 0.2); color: #10b981; border: 1px solid #10b981; }
-              .offline { background: rgba(239, 68, 68, 0.2); color: #ef4444; border: 1px solid #ef4444; }
-              #frame-container { width: 100%; height: calc(100% - 60px); position: relative; }
-              iframe { width: 100%; height: 100%; border: none; background-color: #0f172a; }
-              #offline-overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: #0f172a; display: none; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 24px; }
-              #offline-overlay img { width: 80px; height: 80px; border-radius: 16px; margin-bottom: 16px; }
-              #offline-overlay h2 { font-size: 20px; color: #10b981; margin-bottom: 8px; }
-              #offline-overlay p { font-size: 14px; color: #94a3b8; max-width: 320px; line-height: 1.5; }
+              * { box-sizing: border-box; margin: 0; padding: 0; }
+              html, body { width: 100%; height: 100%; background-color: #0f172a; overflow: hidden; }
+              iframe { width: 100%; height: 100%; border: none; outline: none; }
             </style>
           </head>
           <body>
-            <div id="app-header">
-              <div class="brand">
-                <img src="logo.png" alt="Logo" onerror="this.style.display='none'">
-                <span>Salman AI</span>
-              </div>
-              <div id="network-status" class="status-badge online">متصل</div>
-            </div>
-
-            <div id="frame-container">
-              <iframe id="main-frame" src="https://salman-ai.lovable.app"></iframe>
-              <div id="offline-overlay">
-                <img src="logo.png" alt="Salman AI Logo" onerror="this.style.display='none'">
-                <h2>Salman AI</h2>
-                <p>الواجهة متاحة حالياً بدون إنترنت.<br>يرجى التوصيل بالشبكة لاستكمال الاستجابة للخدمات والتفاعل المباشر.</p>
-              </div>
-            </div>
-
-            <script>
-              const iframe = document.getElementById('main-frame');
-              const statusBadge = document.getElementById('network-status');
-              const offlineOverlay = document.getElementById('offline-overlay');
-
-              function updateStatus() {
-                if (navigator.onLine) {
-                  statusBadge.innerText = 'متصل';
-                  statusBadge.className = 'status-badge online';
-                  offlineOverlay.style.display = 'none';
-                  iframe.style.display = 'block';
-                } else {
-                  statusBadge.innerText = 'غير متصل';
-                  statusBadge.className = 'status-badge offline';
-                  offlineOverlay.style.display = 'flex';
-                  iframe.style.display = 'none';
-                }
-              }
-
-              window.addEventListener('online', updateStatus);
-              window.addEventListener('offline', updateStatus);
-              window.addEventListener('load', updateStatus);
-            </script>
+            <iframe src="https://salman-ai.lovable.app" allow="autoplay; camera; microphone; clipboard-read; clipboard-write"></iframe>
           </body>
           </html>
           EOF
+          fi
 
       - name: Setup Capacitor Shell
         run: |
@@ -127,7 +76,7 @@ jobs:
           echo '{"appId":"com.salman.ai","appName":"Salman AI","webDir":"www","server":{"androidScheme":"https","hostname":"localhost","cleartext":true}}' > capacitor.config.json
           npx cap add android || true
 
-      - name: Apply Custom Logo (Android App Icons)
+      - name: Apply Custom Logo
         run: |
           sudo apt-get update && sudo apt-get install -y imagemagick
           
@@ -137,7 +86,6 @@ jobs:
           done
 
           if [ -n "$LOGO" ]; then
-            echo "Applying logo from $LOGO"
             rm -rf android/app/src/main/res/mipmap-anydpi-v26
             
             convert "$LOGO" -resize 48x48! android/app/src/main/res/mipmap-mdpi/ic_launcher.png
@@ -182,6 +130,6 @@ jobs:
         uses: softprops/action-gh-release@v2
         if: success()
         with:
-          tag_name: v33.0.${{ github.run_number }}
-          name: Salman AI Official Release v33.0.${{ github.run_number }}
+          tag_name: v34.0.${{ github.run_number }}
+          name: Salman AI Official Release v34.0.${{ github.run_number }}
           files: output_apk/Salman_AI.apk

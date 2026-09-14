@@ -1,6 +1,15 @@
 import { defineConfig } from "@lovable.dev/vite-tanstack-config";
 
 export default defineConfig({
+  tanstackStart: {
+    spa: {
+      enabled: true,
+      prerender: {
+        outputPath: "/index.html",
+      },
+    },
+  },
+
   vite: {
     base: "/",
 
@@ -24,8 +33,14 @@ export default defineConfig({
 
         transformIndexHtml(html) {
           return html
-            .replace(/<script[^>]*gptengineer[^>]*><\/script>/gi, "")
-            .replace(/<script[^>]*lovable[^>]*><\/script>/gi, "");
+            .replace(
+              /<script[^>]*gptengineer[^>]*><\/script>/gi,
+              "",
+            )
+            .replace(
+              /<script[^>]*lovable[^>]*><\/script>/gi,
+              "",
+            );
         },
       },
     ],

@@ -88,31 +88,100 @@ jobs:
         run: |
           npm run build
 
+      - name: Locate and prepare web build
+        run: |
+          echo "Searching for build output..."
+
+          echo ""
+          echo "Top-level directories:"
+          find . -maxdepth 2 -type d \
+            ! -path "./node_modules*" \
+            ! -path "./.git*" \
+            | sort
+
+          echo ""
+          echo "Searching for index.html files:"
+          find . -type f -name "index.html" \
+            ! -path "./node_modules/*" \
+            ! -path "./.git/*" \
+            | sort
+
+          echo ""
+          echo "Searching common TanStack build directories..."
+
+          if [ -f ".output/public/index.html" ]; then
+            echo "Found: .output/public/index.html"
+
+            rm -rf dist
+            mkdir -p dist
+
+            cp -a .output/public/. dist/
+
+          elif [ -f ".output/index.html" ]; then
+            echo "Found: .output/index.html"
+
+            rm -rf dist
+            mkdir -p dist
+
+            cp -a .output/. dist/
+
+          elif [ -f "build/index.html" ]; then
+            echo "Found: build/index.html"
+
+            rm -rf dist
+            mkdir -p dist
+
+            cp -a build/. dist/
+
+          elif [ -f "dist/index.html" ]; then
+            echo "Found: dist/index.html"
+
+          else
+            echo "ERROR: No index.html was found in the build output."
+            echo ""
+            echo "Full .output contents:"
+            find .output -maxdepth 5 -type f 2>/dev/null | sort || true
+
+            echo ""
+            echo "Full build contents:"
+            find build -maxdepth 5 -type f 2>/dev/null | sort || true
+
+            echo ""
+            echo "Full dist contents:"
+            find dist -maxdepth 5 -type f 2>/dev/null | sort || true
+
+            exit 1
+          fi
+
+          echo ""
+          echo "Final Capacitor web directory:"
+          find dist -maxdepth 4 -type f | sort | head -300
+
       - name: Verify web build
         run: |
-          echo "Checking build output..."
+          echo "Checking final build output..."
 
           if [ ! -d "dist" ]; then
             echo "ERROR: dist directory was not created."
             exit 1
           fi
 
-          echo "Contents of dist:"
-          find dist -maxdepth 3 -type f | sort | head -200
-
           if [ ! -f "dist/index.html" ]; then
             echo "ERROR: dist/index.html was not created."
-            echo "The web application cannot be packaged into Capacitor yet."
             exit 1
           fi
 
           echo "SUCCESS: dist/index.html exists."
+          echo ""
+          echo "dist size:"
+          du -sh dist
 
       - name: Initialize Capacitor Android
         run: |
           if [ ! -d "android" ]; then
             echo "Android project does not exist."
             echo "Creating Android project..."
+
             npx cap add android
           else
             echo "Android project already exists."

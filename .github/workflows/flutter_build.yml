@@ -93,9 +93,13 @@ jobs:
             convert "$LOGO_PATH" -resize 108x108 -gravity center -background none -extent 144x144 android/app/src/main/res/mipmap-xxhdpi/ic_launcher.png
             convert "$LOGO_PATH" -resize 144x144 -gravity center -background none -extent 192x192 android/app/src/main/res/mipmap-xxxhdpi/ic_launcher.png
 
-            for dir in android/app/src/main/res/mipmap-*; do
-              cp "$dir/ic_launcher.png" "$dir/ic_launcher_round.png"
-              cp "$dir/ic_launcher.png" "$dir/ic_launcher_foreground.png"
+            # Target only valid image directories to avoid XML folder errors
+            for DPI in mdpi hdpi xhdpi xxhdpi xxxhdpi; do
+              DIR="android/app/src/main/res/mipmap-$DPI"
+              if [ -f "$DIR/ic_launcher.png" ]; then
+                cp "$DIR/ic_launcher.png" "$DIR/ic_launcher_round.png"
+                cp "$DIR/ic_launcher.png" "$DIR/ic_launcher_foreground.png"
+              fi
             done
           fi
 
@@ -143,6 +147,6 @@ jobs:
         uses: softprops/action-gh-release@v2
         if: success()
         with:
-          tag_name: v15.0.${{ github.run_number }}
-          name: Salman AI Final APK v15.0.${{ github.run_number }}
+          tag_name: v16.0.${{ github.run_number }}
+          name: Salman AI Final APK v16.0.${{ github.run_number }}
           files: output_apk/Salman_AI.apk

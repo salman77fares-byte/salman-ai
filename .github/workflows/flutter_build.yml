@@ -29,18 +29,14 @@ jobs:
       - name: Install Dependencies & Build Web Assets
         run: |
           npm install --legacy-peer-deps
-          npm run build || npx vite build --base=./
+          npm run build
 
       - name: Prepare Web Assets Directory (www)
         run: |
           rm -rf www
           mkdir -p www
           if [ -d "dist" ]; then cp -r dist/* www/ ; fi
-          if [ -d "build" ] && [ ! -f "www/index.html" ]; then cp -r build/* www/ ; fi
-          if [ -d ".output/public" ] && [ ! -f "www/index.html" ]; then cp -r .output/public/* www/ ; fi
-          if [ ! -f "www/index.html" ]; then
-            echo '<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width, initial-scale=1.0"/><title>Salman AI</title></head><body><div id="root"></div></body></html>' > www/index.html
-          fi
+          if [ -d ".output/public" ]; then cp -r .output/public/* www/ ; fi
 
       - name: Inject Network & Error Sensor
         run: |
@@ -54,30 +50,13 @@ jobs:
                 if(!d) {
                   d = document.createElement("div");
                   d.id = "err-box";
-                  d.style.cssText = "position:fixed;top:0;left:0;right:0;background:#d9534f;color:white;padding:8px;z-index:99999;font-size:12px;";
+                  d.style.cssText = "position:fixed;top:0;left:0;right:0;background:#d9534f;color:white;padding:10px;z-index:99999;font-size:12px;";
                   document.body.appendChild(d);
                 }
                 d.innerText = "App Error: " + (e.message || "Unknown error");
               });
-              function checkNet() {
-                var banner = document.getElementById("off-banner");
-                if(!navigator.onLine) {
-                  if(!banner) {
-                    banner = document.createElement("div");
-                    banner.id = "off-banner";
-                    banner.style.cssText = "position:fixed;bottom:0;left:0;right:0;background:#d9534f;color:#fff;text-align:center;padding:8px;z-index:99999;font-size:13px;font-weight:bold;";
-                    banner.innerText = "⚠️ أنت غير متصل بالإنترنت (وضع الأوفلاين)";
-                    document.body.appendChild(banner);
-                  }
-                } else {
-                  if(banner) banner.remove();
-                }
-              }
-              window.addEventListener("online", checkNet);
-              window.addEventListener("offline", checkNet);
-              document.addEventListener("DOMContentLoaded", checkNet);
             </script>`;
-            if (html.includes("</head>") && !html.includes("checkNet")) {
+            if (html.includes("</head>") && !html.includes("err-box")) {
               html = html.replace("</head>", script + "</head>");
               fs.writeFileSync("www/index.html", html);
             }
@@ -86,7 +65,7 @@ jobs:
 
       - name: Setup Capacitor Shell
         run: |
-          npm install @capacitor/core@5.7.0 @capacitor/cli@5.7.0 @capacitor/android@5.7.0 @capacitor/network@5.0.7 --save-dev
+          npm install @capacitor/core@5.7.0 @capacitor/cli@5.7.0 @capacitor/android@5.7.0 --save-dev
           echo '{"appId":"com.salman.ai","appName":"Salman AI","webDir":"www","server":{"androidScheme":"https","hostname":"localhost","cleartext":true}}' > capacitor.config.json
           npx cap add android || true
 
@@ -100,7 +79,6 @@ jobs:
           done
 
           if [ -n "$LOGO" ]; then
-            echo "Logo found at: $LOGO"
             rm -rf android/app/src/main/res/mipmap-anydpi-v26
             
             convert "$LOGO" -resize 48x48! android/app/src/main/res/mipmap-mdpi/ic_launcher.png
@@ -122,7 +100,7 @@ jobs:
         run: |
           MANIFEST="android/app/src/main/AndroidManifest.xml"
           if [ -f "$MANIFEST" ]; then
-            sed -i '/<application/i \    <uses-permission android:name="android.permission.INTERNET"/>\n    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>\n    <uses-permission android:name="android.permission.ACCESS_WIFI_STATE"/>' "$MANIFEST"
+            sed -i '/<application/i \    <uses-permission android:name="android.permission.INTERNET"/>\n    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>' "$MANIFEST"
           fi
           chmod +x android/gradlew
           npx cap sync android
@@ -145,6 +123,6 @@ jobs:
         uses: softprops/action-gh-release@v2
         if: success()
         with:
-          tag_name: v25.0.${{ github.run_number }}
-          name: Salman AI Official Release v25.0.${{ github.run_number }}
+          tag_name: v27.0.${{ github.run_number }}
+          name: Salman AI Official Release v27.0.${{ github.run_number }}
           files: output_apk/Salman_AI.apk

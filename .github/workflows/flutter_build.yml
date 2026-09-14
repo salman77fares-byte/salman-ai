@@ -1,4 +1,4 @@
-name: Build Android APK (Capacitor)
+name: Build Salman AI Official APK
 
 on:
   push:
@@ -21,13 +21,13 @@ jobs:
           node-version: '20'
           cache: 'npm'
 
-      - name: ☕ Set up Java JDK 21
+      - name: ☕ Set up Java JDK 17
         uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
-          java-version: '21'
+          java-version: '17'
 
-      - name: 📦 Install Dependencies & Build Web Project
+      - name: 📦 Build Web Assets
         run: |
           npm install --legacy-peer-deps
           npm run build || npx vite build --base=./
@@ -40,15 +40,30 @@ jobs:
 
       - name: 🚀 Setup Capacitor Android Shell
         run: |
-          npm install @capacitor/core @capacitor/cli @capacitor/android --save-dev
+          npm install @capacitor/core@5.7.0 @capacitor/cli@5.7.0 @capacitor/android@5.7.0 --save-dev
           npx cap init "Salman AI" "com.salman.ai" --web-dir "www"
           npx cap add android
 
-      - name: 🛠️ Grant Permissions & Configure Android
+      - name: 🛠️ Fix Kotlin Duplicate Class & Set Android Specs
         run: |
           cd android
+
+          # Fix Kotlin stdlib conflict globally in build.gradle
+          node -e '
+          const fs = require("fs");
+          const p = "build.gradle";
+          if (fs.existsSync(p)) {
+            let content = fs.readFileSync(p, "utf8");
+            if (!content.includes("resolutionStrategy")) {
+              content += `\nallprojects {\n    configurations.all {\n        resolutionStrategy {\n            exclude group: "org.jetbrains.kotlin", module: "kotlin-stdlib-jdk8"\n            exclude group: "org.jetbrains.kotlin", module: "kotlin-stdlib-jdk7"\n        }\n    }\n}\n`;
+              fs.writeFileSync(p, content);
+            }
+          }
+          '
+
           chmod +x gradlew
           
+          # Inject Permissions & Cleartext Traffic
           sed -i '/<application/i \    <uses-permission android:name="android.permission.INTERNET"/>\n    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>' app/src/main/AndroidManifest.xml
           sed -i 's/<application/& android:usesCleartextTraffic="true"/' app/src/main/AndroidManifest.xml
 
@@ -56,7 +71,7 @@ jobs:
         run: |
           npx cap sync android
 
-      - name: 📷 Build Release APK with Gradle
+      - name: 🏗️ Build Release APK with Gradle
         run: |
           cd android
           ./gradlew assembleRelease
@@ -65,6 +80,6 @@ jobs:
         uses: softprops/action-gh-release@v2
         if: success()
         with:
-          tag_name: v6.0.${{ github.run_number }}
-          name: Salman AI APK v6.0.${{ github.run_number }}
+          tag_name: v7.0.${{ github.run_number }}
+          name: Salman AI Official APK v7.0.${{ github.run_number }}
           files: android/app/build/outputs/apk/release/app-release-unsigned.apk

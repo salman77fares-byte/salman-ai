@@ -35,7 +35,6 @@ jobs:
         run: |
           rm -rf www
           mkdir -p www
-          if [ -d "dist" ]; me cp -r dist/* www/ ; fi
           if [ -d "dist" ]; then cp -r dist/* www/ ; fi
           if [ -d "build" ] && [ ! -f "www/index.html" ]; then cp -r build/* www/ ; fi
           if [ -d ".output/public" ] && [ ! -f "www/index.html" ]; then cp -r .output/public/* www/ ; fi
@@ -146,6 +145,6 @@ jobs:
         uses: softprops/action-gh-release@v2
         if: success()
         with:
-          tag_name: v24.0.${{ github.run_number }}
-          name: Salman AI Official Release v24.0.${{ github.run_number }}
+          tag_name: v25.0.${{ github.run_number }}
+          name: Salman AI Official Release v25.0.${{ github.run_number }}
           files: output_apk/Salman_AI.apk

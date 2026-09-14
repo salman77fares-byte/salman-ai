@@ -27,27 +27,22 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
 
-      - name: 📦 Build Web & Configure Offline Asset Routes
+      - name: 📦 Build Web App & Configure Relative Paths
         run: |
           npm install --legacy-peer-deps
-          npm run build || npx vite build --base=./ || true
+          
+          # البناء بمسارات نسبية لحل مشكلة الشاشة البيضاء في أندرويد
+          npx vite build --base=./ || npm run build || true
 
           rm -rf www
           mkdir -p www
 
-          # Extract Web Assets
-          if [ -d ".output/public" ]; then cp -r .output/public/* www/ ; fi
+          # نسخ مخرجات البناء إلى مجلد www
           if [ -d "dist" ]; then cp -r dist/* www/ ; fi
-          if [ -d "build" ]; then cp -r build/* www/ ; fi
-          if [ -d "out" ]; then cp -r out/* www/ ; fi
+          if [ -d "build" ] && [ ! -f "www/index.html" ]; then cp -r build/* www/ ; fi
+          if [ -d ".output/public" ] && [ ! -f "www/index.html" ]; me cp -r .output/public/* www/ ; fi
 
-          # Guarantee index.html root placement
-          NESTED_INDEX=$(find www -name "index.html" | head -n 1)
-          if [ -n "$NESTED_INDEX" ] && [ "$NESTED_INDEX" != "www/index.html" ]; then
-            PARENT_DIR=$(dirname "$NESTED_INDEX")
-            cp -r $PARENT_DIR/* www/
-          fi
-
+          # إنشاء ملف index.html احتياطي إن لم يوجد
           if [ ! -f "www/index.html" ]; then
             cat <<EOF > www/index.html
           <!DOCTYPE html>
@@ -64,16 +59,71 @@ jobs:
           EOF
           fi
 
-          # Convert absolute asset URLs to relative for local Offline WebView execution
-          sed -i 's/href="\//href=".//g' www/index.html || true
-          sed -i 's/src="\//src=".//g' www/index.html || true
+      - name: 🌐 Inject Global Network Sensor & Crash Handler
+        run: |
+          # حقن مستشعر الشبكة ومعالج الأخطاء تلقائياً في index.html
+          node -e '
+          const fs = require("fs");
+          let html = fs.readFileSync("www/index.html", "utf8");
 
-      - name: 🚀 Setup Capacitor Offline Shell & Network Plugin
+          const injectedScript = `
+          <script>
+            // معالج الأخطاء لمنع الشاشة البيضاء وإظهار سبب الخطأ إن وجد
+            window.addEventListener("error", function(e) {
+              console.error("Runtime Error:", e.message);
+              var errDiv = document.getElementById("debug-error-box");
+              if (!errDiv) {
+                errDiv = document.createElement("div");
+                errDiv.id = "debug-error-box";
+                errDiv.style.cssText = "position:fixed;top:0;left:0;width:100%;background:#d9534f;color:#fff;padding:10px;z-index:999999;font-size:12px;direction:ltr;";
+                document.body.appendChild(errDiv);
+              }
+              errDiv.innerText = "App Init Error: " + (e.message || "Unknown JS Error");
+            });
+
+            // مستشعر إنترنت تلقائي يعمل على مستوى النظام والأوفلاين
+            window.SalmanNetworkSensor = {
+              isOnline: navigator.onLine,
+              init: function() {
+                var self = this;
+                window.addEventListener("online", function() { self.update(true); });
+                window.addEventListener("offline", function() { self.update(false); });
+                self.update(navigator.onLine);
+              },
+              update: function(status) {
+                this.isOnline = status;
+                window.dispatchEvent(new CustomEvent("networkStatusChange", { detail: { connected: status } }));
+                var banner = document.getElementById("offline-status-banner");
+                if (!status) {
+                  if (!banner) {
+                    banner = document.createElement("div");
+                    banner.id = "offline-status-banner";
+                    banner.style.cssText = "position:fixed;bottom:0;left:0;right:0;background:#d9534f;color:#fff;text-align:center;padding:8px;z-index:99999;font-size:13px;font-family:sans-serif;font-weight:bold;";
+                    banner.innerText = "⚠️ أنت غير متصل بالإنترنت (وضع الأوفلاين)";
+                    document.body.appendChild(banner);
+                  }
+                } else {
+                  if (banner) banner.remove();
+                }
+              }
+            };
+            document.addEventListener("DOMContentLoaded", function() {
+              window.SalmanNetworkSensor.init();
+            });
+          </script>
+          `;
+
+          if (!html.includes("SalmanNetworkSensor")) {
+            html = html.replace("</head>", injectedScript + "\n</head>");
+            fs.writeFileSync("www/index.html", html);
+          }
+          '
+
+      - name: 🚀 Setup Capacitor Shell & Network Plugin
         run: |
           npm install @capacitor/core@5.7.0 @capacitor/cli@5.7.0 @capacitor/android@5.7.0 @capacitor/network@5.0.7 --save-dev
-          npx cap init "Salman AI" "com.salman.ai" --web-dir "www"
-
-          # Force local HTTPS scheme for SPA routing & Offline support
+          
+          # ضبط إعدادات Capacitor لتشغيل الأوفلاين والسيرفر المحلي
           node -e '
           const fs = require("fs");
           const config = {
@@ -82,15 +132,16 @@ jobs:
             webDir: "www",
             server: {
               androidScheme: "https",
-              allowNavigation: ["*"]
+              hostname: "localhost",
+              cleartext: true
             }
           };
           fs.writeFileSync("capacitor.config.json", JSON.stringify(config, null, 2));
           '
 
-          npx cap add android
+          npx cap add android || true
 
-      - name: 🖼️ Process & Pad App Logo
+      - name: 🖼️ Process App Logo (Safe Fallback)
         run: |
           sudo apt-get update && sudo apt-get install -y imagemagick
 
@@ -103,7 +154,6 @@ jobs:
           done
 
           if [ -n "$LOGO_PATH" ]; then
-            # Direct generation to image folders only (skipping xml folders)
             convert "$LOGO_PATH" -resize 36x36 -gravity center -background none -extent 48x48 android/app/src/main/res/mipmap-mdpi/ic_launcher.png || true
             convert "$LOGO_PATH" -resize 54x54 -gravity center -background none -extent 72x72 android/app/src/main/res/mipmap-hdpi/ic_launcher.png || true
             convert "$LOGO_PATH" -resize 72x72 -gravity center -background none -extent 96x96 android/app/src/main/res/mipmap-xhdpi/ic_launcher.png || true
@@ -113,33 +163,40 @@ jobs:
             for DPI in mdpi hdpi xhdpi xxhdpi xxxhdpi; do
               DIR="android/app/src/main/res/mipmap-$DPI"
               if [ -f "$DIR/ic_launcher.png" ]; then
-                cp "$DIR/ic_launcher.png" "$DIR/ic_launcher_round.png"
-                cp "$DIR/ic_launcher.png" "$DIR/ic_launcher_foreground.png"
+                cp "$DIR/ic_launcher.png" "$DIR/ic_launcher_round.png" || true
+                cp "$DIR/ic_launcher.png" "$DIR/ic_launcher_foreground.png" || true
               fi
             done
           fi
 
-      - name: 🛠️ Configure Permissions & Network Specs
+      - name: 🛠️ Configure Android Permissions & Network Manifest
         run: |
           cd android
 
+          # إضافة صلاحيات شبكة أندرويد مباشرة في AndroidManifest.xml
           node -e '
           const fs = require("fs");
-          const p = "build.gradle";
-          if (fs.existsSync(p)) {
-            let content = fs.readFileSync(p, "utf8");
-            if (!content.includes("resolutionStrategy")) {
-              content += `\nallprojects {\n    configurations.all {\n        resolutionStrategy {\n            exclude group: "org.jetbrains.kotlin", module: "kotlin-stdlib-jdk8"\n            exclude group: "org.jetbrains.kotlin", module: "kotlin-stdlib-jdk7"\n        }\n    }\n}\n`;
-              fs.writeFileSync(p, content);
+          const manifestPath = "app/src/main/AndroidManifest.xml";
+          if (fs.existsSync(manifestPath)) {
+            let manifest = fs.readFileSync(manifestPath, "utf8");
+            
+            const permissions = `
+    <uses-permission android:name="android.permission.INTERNET"/>
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>
+    <uses-permission android:name="android.permission.ACCESS_WIFI_STATE"/>
+            `;
+            
+            if (!manifest.includes("ACCESS_NETWORK_STATE")) {
+              manifest = manifest.replace("<application", permissions + "\n    <application");
             }
+            if (!manifest.includes("android:usesCleartextTraffic")) {
+              manifest = manifest.replace("<application", "<application android:usesCleartextTraffic=\"true\"");
+            }
+            fs.writeFileSync(manifestPath, manifest);
           }
           '
 
           chmod +x gradlew
-          
-          # Inject full network connectivity detection permissions
-          sed -i '/<application/i \    <uses-permission android:name="android.permission.INTERNET"/>\n    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>\n    <uses-permission android:name="android.permission.ACCESS_WIFI_STATE"/>' app/src/main/AndroidManifest.xml
-          sed -i 's/<application/& android:usesCleartextTraffic="true"/' app/src/main/AndroidManifest.xml
 
       - name: 📱 Sync Native Assets
         run: npx cap sync android
@@ -164,6 +221,6 @@ jobs:
         uses: softprops/action-gh-release@v2
         if: success()
         with:
-          tag_name: v17.0.${{ github.run_number }}
-          name: Salman AI Final APK v17.0.${{ github.run_number }}
+          tag_name: v18.0.${{ github.run_number }}
+          name: Salman AI Final APK v18.0.${{ github.run_number }}
           files: output_apk/Salman_AI.apk

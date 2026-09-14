@@ -42,32 +42,30 @@ jobs:
           echo "Creating a fresh package-lock.json..."
           npm install --package-lock-only --legacy-peer-deps
 
-          echo "Lock file created successfully."
-
       - name: Install dependencies
         run: |
           npm install --legacy-peer-deps
 
       - name: Verify required dependencies
         run: |
-          echo "Checking required packages..."
+          echo "Checking required dependencies..."
 
-          node -e "require.resolve('@radix-ui/react-switch/package.json')" || {
+          node -e "require.resolve('@radix-ui/react-switch')" || {
             echo "ERROR: @radix-ui/react-switch is not installed."
             exit 1
           }
 
-          node -e "require.resolve('@streamdown/math/package.json')" || {
+          node -e "require.resolve('@streamdown/math')" || {
             echo "ERROR: @streamdown/math is not installed."
             exit 1
           }
 
-          node -e "require.resolve('@streamdown/mermaid/package.json')" || {
+          node -e "require.resolve('@streamdown/mermaid')" || {
             echo "ERROR: @streamdown/mermaid is not installed."
             exit 1
           }
 
-          echo "Required dependencies are installed successfully."
+          echo "All required dependencies are installed successfully."
 
       - name: Build web application
         run: |

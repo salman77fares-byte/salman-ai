@@ -64,7 +64,9 @@ jobs:
           flutter pub add --dev flutter_launcher_icons:0.13.1
 
           mkdir -p assets/www
-          cp -r ../www/* assets/www/
+          if [ -d "../www" ] && [ "$(ls -A ../www)" ]; then
+            cp -r ../www/* assets/www/
+          fi
 
           mkdir -p assets/icon
           LOGO_PATH=""
@@ -83,36 +85,58 @@ jobs:
           const fs = require("fs");
           const path = require("path");
 
-          function getDirs(dirPath, list = ["assets/www/", "assets/icon/"]) {
-            if (!fs.existsSync(dirPath)) return list;
-            const files = fs.readdirSync(dirPath);
-            files.forEach((file) => {
-              const fullPath = path.join(dirPath, file);
-              if (fs.statSync(fullPath).isDirectory()) {
-                list.push(fullPath.replace(/\\/g, "/") + "/");
-                getDirs(fullPath, list);
-              }
-            });
-            return Array.from(new Set(list));
+          // Ensure icon exists
+          const iconPath = "assets/icon/app_icon.png";
+          if (!fs.existsSync(iconPath)) {
+            const fallbackBase64 = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==";
+            fs.writeFileSync(iconPath, Buffer.from(fallbackBase64, "base64"));
           }
 
-          const dirs = getDirs("assets/www");
-          let pubspec = fs.readFileSync("pubspec.yaml", "utf8");
+          // Ensure index.html exists in assets/www
+          const indexPath = "assets/www/index.html";
+          if (!fs.existsSync(indexPath)) {
+            fs.writeFileSync(indexPath, "<html><body><h1>Salman AI</h1></body></html>");
+          }
 
-          const assetLines = "  assets:\n" + dirs.map(d => "    - " + d).join("\n");
+          function getDirsWithFiles(dirPath) {
+            const result = new Set();
+            function scan(current) {
+              if (!fs.existsSync(current)) return;
+              const entries = fs.readdirSync(current, { withFileTypes: true });
+              let hasFiles = false;
+              for (const entry of entries) {
+                const full = path.join(current, entry.name);
+                if (entry.isDirectory()) {
+                  scan(full);
+                } else if (entry.isFile()) {
+                  hasFiles = true;
+                }
+              }
+              if (hasFiles) {
+                let formatted = current.replace(/\\/g, "/");
+                if (!formatted.endsWith("/")) formatted += "/";
+                result.add(formatted);
+              }
+            }
+            scan(dirPath);
+            return Array.from(result);
+          }
+
+          const validDirs = [
+            ...getDirsWithFiles("assets/icon"),
+            ...getDirsWithFiles("assets/www")
+          ];
+
+          let pubspec = fs.readFileSync("pubspec.yaml", "utf8");
+          const assetLines = "  assets:\n" + validDirs.map(d => "    - " + d).join("\n");
           pubspec = pubspec.replace(/^flutter:/m, "flutter:\n" + assetLines);
 
-          if (fs.existsSync("assets/icon/app_icon.png")) {
-            pubspec += "\nflutter_launcher_icons:\n  android: \"launcher_icon\"\n  image_path: \"assets/icon/app_icon.png\"\n  min_sdk_android: 21\n";
-          }
+          pubspec += "\nflutter_launcher_icons:\n  android: \"launcher_icon\"\n  image_path: \"assets/icon/app_icon.png\"\n  min_sdk_android: 21\n";
 
           fs.writeFileSync("pubspec.yaml", pubspec);
           '
 
-          if [ -f "assets/icon/app_icon.png" ]; then
-            dart run flutter_launcher_icons || true
-          fi
-
+          dart run flutter_launcher_icons || true
           flutter pub get
 
       - name: 📝 Inject Native Asset WebView Code safely
@@ -161,16 +185,18 @@ jobs:
                   request.response.statusCode = HttpStatus.ok;
                   request.response.headers.set("Access-Control-Allow-Origin", "*");
                   
-                  if (assetPath.endsWith(".html")) request.response.headers.contentType = ContentType("text", "html", charset: "utf-8");
-                  else if (assetPath.endsWith(".js") || assetPath.endsWith(".mjs")) request.response.headers.contentType = ContentType("application", "javascript", charset: "utf-8");
-                  else if (assetPath.endsWith(".css")) request.response.headers.contentType = ContentType("text", "css", charset: "utf-8");
-                  else if (assetPath.endsWith(".png")) request.response.headers.contentType = ContentType("image", "png");
-                  else if (assetPath.endsWith(".jpg") || assetPath.endsWith(".jpeg")) request.response.headers.contentType = ContentType("image", "jpeg");
-                  else if (assetPath.endsWith(".svg")) request.response.headers.contentType = ContentType("image", "svg+xml");
-                  else if (assetPath.endsWith(".json")) request.response.headers.contentType = ContentType("application", "json", charset: "utf-8");
-                  else if (assetPath.endsWith(".ico")) request.response.headers.contentType = ContentType("image", "x-icon");
-                  else if (assetPath.endsWith(".woff2")) request.response.headers.contentType = ContentType("font", "woff2");
-                  else if (assetPath.endsWith(".woff")) request.response.headers.contentType = ContentType("font", "woff");
+                  final lowerPath = assetPath.toLowerCase();
+                  if (lowerPath.endsWith(".html")) request.response.headers.contentType = ContentType("text", "html", charset: "utf-8");
+                  else if (lowerPath.endsWith(".js") || lowerPath.endsWith(".mjs")) request.response.headers.contentType = ContentType("application", "javascript", charset: "utf-8");
+                  else if (lowerPath.endsWith(".css")) request.response.headers.contentType = ContentType("text", "css", charset: "utf-8");
+                  else if (lowerPath.endsWith(".png")) request.response.headers.contentType = ContentType("image", "png");
+                  else if (lowerPath.endsWith(".jpg") || lowerPath.endsWith(".jpeg")) request.response.headers.contentType = ContentType("image", "jpeg");
+                  else if (lowerPath.endsWith(".svg")) request.response.headers.contentType = ContentType("image", "svg+xml");
+                  else if (lowerPath.endsWith(".json")) request.response.headers.contentType = ContentType("application", "json", charset: "utf-8");
+                  else if (lowerPath.endsWith(".ico")) request.response.headers.contentType = ContentType("image", "x-icon");
+                  else if (lowerPath.endsWith(".woff2")) request.response.headers.contentType = ContentType("font", "woff2");
+                  else if (lowerPath.endsWith(".woff")) request.response.headers.contentType = ContentType("font", "woff");
+                  else if (lowerPath.endsWith(".ttf")) request.response.headers.contentType = ContentType("font", "ttf");
 
                   request.response.add(bytes);
                 } else {
@@ -208,7 +234,7 @@ jobs:
 
           class _WebViewScreenState extends State<WebViewScreen> {
             late final WebViewController _controller;
-            late final StreamSubscription<List<ConnectivityResult>> _connectivitySubscription;
+            StreamSubscription<List<ConnectivityResult>>? _connectivitySubscription;
             bool _isLoading = true;
             bool _isOffline = false;
             Timer? _safetyTimer;
@@ -217,7 +243,7 @@ jobs:
             void initState() {
               super.initState();
 
-              _safetyTimer = Timer(const Duration(milliseconds: 1500), () {
+              _safetyTimer = Timer(const Duration(milliseconds: 2000), () {
                 _hideLoader();
               });
 
@@ -237,8 +263,17 @@ jobs:
                 _controller.loadFlutterAsset("assets/www/index.html");
               }
 
-              Connectivity().checkConnectivity().then((results) => _updateConnectionStatus(results));
-              _connectivitySubscription = Connectivity().onConnectivityChanged.listen((results) => _updateConnectionStatus(results));
+              _initConnectivity();
+            }
+
+            void _initConnectivity() async {
+              try {
+                final results = await Connectivity().checkConnectivity();
+                _updateConnectionStatus(results);
+                _connectivitySubscription = Connectivity().onConnectivityChanged.listen((results) {
+                  _updateConnectionStatus(results);
+                });
+              } catch (_) {}
             }
 
             void _hideLoader() {
@@ -250,14 +285,16 @@ jobs:
 
             void _updateConnectionStatus(List<ConnectivityResult> results) {
               if (mounted) {
-                setState(() => _isOffline = results.contains(ConnectivityResult.none) || results.isEmpty);
+                setState(() {
+                  _isOffline = results.contains(ConnectivityResult.none) || results.isEmpty;
+                });
               }
             }
 
             @override
             void dispose() {
               _safetyTimer?.cancel();
-              _connectivitySubscription.cancel();
+              _connectivitySubscription?.cancel();
               super.dispose();
             }
 
@@ -309,7 +346,10 @@ jobs:
                               children: [
                                 Icon(Icons.wifi_off_rounded, color: Colors.white, size: 16),
                                 SizedBox(width: 8),
-                                Text("لا يوجد اتصال بالإنترنت - الوضع أوفلاين", style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold)),
+                                Text(
+                                  "لا يوجد اتصال بالإنترنت - الوضع أوفلاين",
+                                  style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
+                                ),
                               ],
                             ),
                           ),
@@ -352,17 +392,13 @@ jobs:
 
             @override
             Widget build(BuildContext context) {
-              String dots = "";
-              for (int i = 0; i < _dotCount; i++) {
-                dots += ".";
-              }
+              String dots = "." * _dotCount;
               return Text(
-                "يرجى الانتظار" + dots,
+                "يرجى الانتظار$dots",
                 style: const TextStyle(
                   color: Colors.white70,
                   fontSize: 16,
                   fontWeight: FontWeight.bold,
-                  fontFamily: "sans-serif",
                 ),
               );
             }
@@ -372,16 +408,27 @@ jobs:
       - name: 🛠️ Force Correct App Name & Permissions
         run: |
           cd flutter_app
-          
-          sed -i '/<application/i \    <uses-permission android:name="android.permission.INTERNET"/>\n    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>' android/app/src/main/AndroidManifest.xml
-          sed -i 's/<application/& android:usesCleartextTraffic="true"/' android/app/src/main/AndroidManifest.xml
-          sed -i 's/android:label="[^"]*"/android:label="@string\/app_name"/g' android/app/src/main/AndroidManifest.xml
-
           node -e '
           const fs = require("fs");
+          const manifestPath = "android/app/src/main/AndroidManifest.xml";
+          if (fs.existsSync(manifestPath)) {
+            let manifest = fs.readFileSync(manifestPath, "utf8");
+            if (!manifest.includes("android.permission.INTERNET")) {
+              manifest = manifest.replace(
+                "<manifest",
+                "<manifest xmlns:android=\"http://schemas.android.com/apk/res/android\">\n    <uses-permission android:name=\"android.permission.INTERNET\"/>\n    <uses-permission android:name=\"android.permission.ACCESS_NETWORK_STATE\"/>"
+              );
+            }
+            if (!manifest.includes("android:usesCleartextTraffic")) {
+              manifest = manifest.replace("<application", "<application android:usesCleartextTraffic=\"true\"");
+            }
+            fs.writeFileSync(manifestPath, manifest);
+          }
+
           const stringsPath = "android/app/src/main/res/values/strings.xml";
-          let xml = "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n<resources>\n    <string name=\"app_name\">Salman AI</string>\n</resources>";
-          fs.writeFileSync(stringsPath, xml, "utf8");
+          const stringsDir = require("path").dirname(stringsPath);
+          if (!fs.existsSync(stringsDir)) fs.mkdirSync(stringsDir, { recursive: true });
+          fs.writeFileSync(stringsPath, "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n<resources>\n    <string name=\"app_name\">Salman AI</string>\n</resources>");
           '
 
       - name: 🚀 Build Release APK
@@ -393,6 +440,6 @@ jobs:
         uses: softprops/action-gh-release@v2
         if: success()
         with:
-          tag_name: v5.3.${{ github.run_number }}
-          name: Salman AI Final App v5.3.${{ github.run_number }}
+          tag_name: v5.4.${{ github.run_number }}
+          name: Salman AI Final App v5.4.${{ github.run_number }}
           files: flutter_app/build/app/outputs/flutter-apk/app-release.apk

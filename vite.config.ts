@@ -16,10 +16,5 @@ export default defineConfig({
 
   vite: {
     base: "/",
-
-    build: {
-      outDir: "dist",
-      emptyOutDir: true,
-    },
   },
 });

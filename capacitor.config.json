@@ -2,11 +2,14 @@
   "appId": "com.salman.ai",
   "appName": "Salman AI",
   "webDir": "dist",
-  "server": {
-    "url": "https://salman-ai.lovable.app",
-    "cleartext": true
-  },
   "android": {
     "backgroundColor": "#0B0B0B"
+  },
+  "plugins": {
+    "SplashScreen": {
+      "launchShowDuration": 0,
+      "backgroundColor": "#0B0B0B",
+      "showSpinner": false
+    }
   }
 }

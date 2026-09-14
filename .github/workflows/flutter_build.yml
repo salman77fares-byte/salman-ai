@@ -1,4 +1,4 @@
-name: Build Salman AI Full Offline UI APK
+name: Build Salman AI Full App APK
 
 on:
   push:
@@ -26,43 +26,31 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
 
-      - name: Install Dependencies & Build Web Bundle
+      - name: Install Dependencies
+        run: npm install --legacy-peer-deps
+
+      - name: Build Web Application Directly to www
         run: |
-          npm install --legacy-peer-deps
-          # بناء ملفات الواجهة الحقيقية بالكامل
-          npm run build || npx vite build --base=./
-
-      - name: Package Real Web UI into Capacitor (www)
-        run: |
-          rm -rf www
-          mkdir -p www
-
-          # البحث عن المجلد الناتج عن البناء ونسخ كافة أصول الواجهة الحقيقية
-          BUILD_DIR=""
-          for dir in dist .output/public build out; do
-            if [ -d "$dir" ] && [ -f "$dir/index.html" ]; then
-              BUILD_DIR="$dir"
-              break
-            fi
-          done
-
-          if [ -n "$BUILD_DIR" ]; then
-            echo "Copying real app bundle from $BUILD_DIR to www/"
-            cp -r $BUILD_DIR/* www/
-          else
-            echo "Searching for index.html recursively..."
-            FOUND_INDEX=$(find . -maxdepth 3 -name "index.html" -not -path "*/node_modules/*" -not -path "*/www/*" | head -n 1)
-            if [ -n "$FOUND_INDEX" ]; then
-              PARENT_DIR=$(dirname "$FOUND_INDEX")
-              echo "Found web assets in $PARENT_DIR"
-              cp -r "$PARENT_DIR"/* www/
-            fi
+          # بناء الملفات مباشرة داخل مجلد www لضمان وجود index.html
+          npx vite build --outDir www || npm run build
+          
+          # صمام أمان: نقل المخرجات إلى www في حال تم البناء في مسار افتراضي آخر
+          if [ ! -f "www/index.html" ]; then
+            mkdir -p www
+            for dir in dist .output/public build out; do
+              if [ -f "$dir/index.html" ]; then
+                cp -r $dir/* www/
+                break
+              fi
+            done
           fi
 
-          # تأكيد وجود index.html لضمان عدم توقف npx cap sync
+          # فحص أخير وشامل للوصول للملف
           if [ ! -f "www/index.html" ]; then
-            echo "ERROR: index.html not found in build directory!"
-            cp index.html www/index.html || true
+            FOUND=$(find . -name "index.html" -not -path "*/node_modules/*" -not -path "*/www/*" | head -n 1)
+            if [ -n "$FOUND" ]; then
+              cp -r $(dirname "$FOUND")/* www/
+            fi
           fi
 
       - name: Setup Capacitor Shell
@@ -71,7 +59,7 @@ jobs:
           echo '{"appId":"com.salman.ai","appName":"Salman AI","webDir":"www","server":{"androidScheme":"https","hostname":"localhost","cleartext":true}}' > capacitor.config.json
           npx cap add android || true
 
-      - name: Apply Custom Logo (Overwrite Android Icons)
+      - name: Apply Custom Logo
         run: |
           sudo apt-get update && sudo apt-get install -y imagemagick
           
@@ -125,6 +113,6 @@ jobs:
         uses: softprops/action-gh-release@v2
         if: success()
         with:
-          tag_name: v30.0.${{ github.run_number }}
-          name: Salman AI Official Release v30.0.${{ github.run_number }}
+          tag_name: v31.0.${{ github.run_number }}
+          name: Salman AI Official Release v31.0.${{ github.run_number }}
           files: output_apk/Salman_AI.apk

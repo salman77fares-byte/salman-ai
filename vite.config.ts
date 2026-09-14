@@ -1,11 +1,8 @@
 import { defineConfig } from "@lovable.dev/vite-tanstack-config";
 
 export default defineConfig({
-  tanstackStart: {
-    server: { entry: "server" },
-  },
   vite: {
-    base: "./", // يمنع الشاشة السوداء في الأندرويد ويجعل المسارات نسبية
+    base: "./", // مسارات نسبية لضمان عمل الملفات داخل WebView أندرويد
     build: {
       outDir: "dist",
       emptyOutDir: true,

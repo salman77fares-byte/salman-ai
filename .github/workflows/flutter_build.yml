@@ -21,16 +21,26 @@ jobs:
           node-version: '22'
           cache: 'npm'
 
-      - name: 🏗️ Compile Web Assets
+      - name: 🏗️ Compile Web Assets & Fix Paths
         run: |
           npm install --legacy-peer-deps
-          npm run build || npx vite build --base=./
+          npx vite build --base=./ || npm run build
           mkdir -p www
           if [ -d "dist" ]; then cp -r dist/* www/
           elif [ -d "build" ]; then cp -r build/* www/
           elif [ -d ".output/public" ]; then cp -r .output/public/* www/
           elif [ -d "dist/client" ]; then cp -r dist/client/* www/
           fi
+
+          node -e '
+          const fs = require("fs");
+          const p = "www/index.html";
+          if (fs.existsSync(p)) {
+            let html = fs.readFileSync(p, "utf8");
+            html = html.replace(/src="\/([^"]+)"/g, "src=\"./$1\"").replace(/href="\/([^"]+)"/g, "href=\"./$1\"");
+            fs.writeFileSync(p, html);
+          }
+          '
 
       - name: ☕ Set up Java JDK
         uses: actions/setup-java@v4
@@ -99,17 +109,17 @@ jobs:
             pubspec += "\nflutter_launcher_icons:\n  android: \"launcher_icon\"\n  image_path: \"assets/icon/app_icon.png\"\n  min_sdk_android: 21\n";
             fs.writeFileSync("pubspec.yaml", pubspec);
             '
-            flutter pub get
             dart run flutter_launcher_icons || true
           fi
 
-      - name: 📝 Inject Fixed WebView Dart Code
+          flutter pub get
+
+      - name: 📝 Inject Native Asset WebView Code
         run: |
           cd flutter_app
           node -e '
           const fs = require("fs");
           const code = `import "dart:async";
-          import "dart:io";
           import "package:flutter/material.dart";
           import "package:flutter/services.dart";
           import "package:webview_flutter/webview_flutter.dart";
@@ -118,77 +128,29 @@ jobs:
           void main() async {
             WidgetsFlutterBinding.ensureInitialized();
             SystemChrome.setSystemUIOverlayStyle(
-              const SystemUiOverlayStyle(statusBarColor: Colors.transparent, statusBarIconBrightness: Brightness.light),
+              const SystemUiOverlayStyle(
+                statusBarColor: Colors.transparent,
+                statusBarIconBrightness: Brightness.light,
+              ),
             );
-
-            int assignedPort = 8080;
-            try {
-              final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
-              assignedPort = server.port;
-              
-              server.listen((HttpRequest request) async {
-                String path = Uri.decodeComponent(request.uri.path);
-                if (path == "/" || path.isEmpty) path = "/index.html";
-                if (path.startsWith("/")) path = path.substring(1);
-                
-                String assetPath = "assets/www/" + path;
-
-                ByteData? data;
-                try {
-                  data = await rootBundle.load(assetPath);
-                } catch (_) {
-                  try {
-                    assetPath = "assets/www/index.html";
-                    data = await rootBundle.load(assetPath);
-                  } catch (_) {}
-                }
-
-                if (data != null) {
-                  final bytes = data.buffer.asUint8List();
-                  request.response.statusCode = HttpStatus.ok;
-                  request.response.headers.set("Access-Control-Allow-Origin", "*");
-                  
-                  if (assetPath.endsWith(".html")) request.response.headers.contentType = ContentType("text", "html", charset: "utf-8");
-                  else if (assetPath.endsWith(".js") || assetPath.endsWith(".mjs")) request.response.headers.contentType = ContentType("application", "javascript", charset: "utf-8");
-                  else if (assetPath.endsWith(".css")) request.response.headers.contentType = ContentType("text", "css", charset: "utf-8");
-                  else if (assetPath.endsWith(".png")) request.response.headers.contentType = ContentType("image", "png");
-                  else if (assetPath.endsWith(".jpg") || assetPath.endsWith(".jpeg")) request.response.headers.contentType = ContentType("image", "jpeg");
-                  else if (assetPath.endsWith(".svg")) request.response.headers.contentType = ContentType("image", "svg+xml");
-                  else if (assetPath.endsWith(".json")) request.response.headers.contentType = ContentType("application", "json", charset: "utf-8");
-                  else if (assetPath.endsWith(".ico")) request.response.headers.contentType = ContentType("image", "x-icon");
-                  else if (assetPath.endsWith(".woff2")) request.response.headers.contentType = ContentType("font", "woff2");
-                  else if (assetPath.endsWith(".woff")) request.response.headers.contentType = ContentType("font", "woff");
-                  
-                  request.response.add(bytes);
-                } else {
-                  request.response.statusCode = HttpStatus.ok;
-                  request.response.headers.contentType = ContentType("text", "html", charset: "utf-8");
-                  request.response.write("<!DOCTYPE html><html><head><meta charset=\\"utf-8\\"><title>Salman AI</title></head><body style=\\"background:#0b0b0b;color:#fff;display:flex;justify-content:center;align-items:center;height:100vh;font-family:sans-serif;\\"><h2>جاري تحميل التطبيق...</h2></body></html>");
-                }
-                await request.response.close();
-              });
-            } catch (_) {}
-
-            runApp(MyApp(port: assignedPort));
+            runApp(const MyApp());
           }
 
           class MyApp extends StatelessWidget {
-            final int port;
-            const MyApp({super.key, required this.port});
+            const MyApp({super.key});
             @override
             Widget build(BuildContext context) {
               return MaterialApp(
                 title: "Salman AI",
                 debugShowCheckedModeBanner: false,
                 theme: ThemeData.dark(),
-                home: WebViewScreen(port: port),
+                home: const WebViewScreen(),
               );
             }
           }
 
           class WebViewScreen extends StatefulWidget {
-            final int port;
-            const WebViewScreen({super.key, required this.port});
+            const WebViewScreen({super.key});
             @override
             State<WebViewScreen> createState() => _WebViewScreenState();
           }
@@ -204,7 +166,7 @@ jobs:
               _controller = WebViewController()
                 ..setJavaScriptMode(JavaScriptMode.unrestricted)
                 ..setBackgroundColor(const Color(0xFF0B0B0B))
-                ..loadRequest(Uri.parse("http://127.0.0.1:" + widget.port.toString()));
+                ..loadFlutterAsset("assets/www/index.html");
 
               Connectivity().checkConnectivity().then((results) => _updateConnectionStatus(results));
               _connectivitySubscription = Connectivity().onConnectivityChanged.listen((results) => _updateConnectionStatus(results));
@@ -254,13 +216,11 @@ jobs:
           fs.writeFileSync("lib/main.dart", code);
           '
 
-      - name: 🛠️ Force Correct App Name & Configurations
+      - name: 🛠️ Force Correct App Name & Permissions
         run: |
           cd flutter_app
           
           sed -i '/<application/i \    <uses-permission android:name="android.permission.INTERNET"/>\n    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>' android/app/src/main/AndroidManifest.xml
-          sed -i 's/<application/& android:usesCleartextTraffic="true"/' android/app/src/main/AndroidManifest.xml
-          
           sed -i 's/android:label="[^"]*"/android:label="@string\/app_name"/g' android/app/src/main/AndroidManifest.xml
 
           node -e '
@@ -292,6 +252,6 @@ jobs:
         uses: softprops/action-gh-release@v2
         if: success()
         with:
-          tag_name: v4.6.${{ github.run_number }}
-          name: Salman AI Final App v4.6.${{ github.run_number }}
+          tag_name: v4.8.${{ github.run_number }}
+          name: Salman AI Final App v4.8.${{ github.run_number }}
           files: flutter_app/build/app/outputs/flutter-apk/app-release.apk

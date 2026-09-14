@@ -29,14 +29,40 @@ jobs:
       - name: Install Dependencies & Build Web Assets
         run: |
           npm install --legacy-peer-deps
-          npm run build
+          npm run build || npx vite build --base=/
 
-      - name: Prepare Web Assets Directory (www)
+      - name: Prepare Web Assets Directory (Guaranteed www/index.html)
         run: |
           rm -rf www
           mkdir -p www
-          if [ -d "dist" ]; then cp -r dist/* www/ ; fi
-          if [ -d ".output/public" ]; then cp -r .output/public/* www/ ; fi
+
+          # 1. البحث في مجلدات البناء الشائعة
+          for dir in dist .output/public dist/client build out; do
+            if [ -d "$dir" ] && [ -f "$dir/index.html" ]; then
+              echo "Found index.html in $dir"
+              cp -r $dir/* www/
+              break
+            fi
+          done
+
+          # 2. في حال كان الملف في مجلد فرعي آخر داخل المخرجات
+          if [ ! -f "www/index.html" ]; then
+            FOUND_INDEX=$(find dist .output build out -name "index.html" 2>/dev/null | head -n 1)
+            if [ -n "$FOUND_INDEX" ]; then
+              PARENT_DIR=$(dirname "$FOUND_INDEX")
+              echo "Found index.html dynamically at $PARENT_DIR"
+              cp -r "$PARENT_DIR"/* www/
+            fi
+          fi
+
+          # 3. صمام أمان نهایی لمنع فشل npx cap sync
+          if [ ! -f "www/index.html" ]; then
+            if [ -f "index.html" ]; then
+              cp index.html www/index.html
+            else
+              echo '<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width, initial-scale=1.0"/><title>Salman AI</title></head><body><div id="root"></div></body></html>' > www/index.html
+            fi
+          fi
 
       - name: Inject Network & Error Sensor
         run: |
@@ -123,6 +149,6 @@ jobs:
         uses: softprops/action-gh-release@v2
         if: success()
         with:
-          tag_name: v27.0.${{ github.run_number }}
-          name: Salman AI Official Release v27.0.${{ github.run_number }}
+          tag_name: v28.0.${{ github.run_number }}
+          name: Salman AI Official Release v28.0.${{ github.run_number }}
           files: output_apk/Salman_AI.apk

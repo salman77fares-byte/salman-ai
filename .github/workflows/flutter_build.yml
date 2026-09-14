@@ -15,7 +15,7 @@ jobs:
       - name: 📥 Checkout Code
         uses: actions/checkout@v4
 
-      - name: ⚙️ Set up Node.js
+      - name: ⚙️ Set up Node.js & Image Utilities
         uses: actions/setup-node@v4
         with:
           node-version: '20'
@@ -27,7 +27,7 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
 
-      - name: 🔧 Generate Missing Root index.html if needed
+      - name: 🔧 Generate Root index.html if Missing
         run: |
           if [ ! -f "index.html" ]; then
             ENTRY_FILE=""
@@ -73,24 +73,6 @@ jobs:
           npx cap init "Salman AI" "com.salman.ai" --web-dir "www"
           npx cap add android
 
-      - name: 🖼️ Extract & Set Application Logo
-        run: |
-          LOGO_PATH=""
-          for p in "public/logo.png" "logo.png" "src/logo.png" "public/favicon.png" "public/icon.png"; do
-            if [ -f "$p" ]; then
-              LOGO_PATH="$p"
-              break
-            fi
-          done
-
-          if [ -n "$LOGO_PATH" ]; then
-            echo "Found logo at $LOGO_PATH"
-            npm install cordova-res --save-dev || true
-            mkdir -p resources
-            cp "$LOGO_PATH" resources/icon.png
-            npx cordova-res android --only icon || true
-          fi
-
       - name: 🛠️ Fix Kotlin Resolution & Set Android Specs
         run: |
           cd android
@@ -112,19 +94,93 @@ jobs:
           sed -i '/<application/i \    <uses-permission android:name="android.permission.INTERNET"/>\n    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>' app/src/main/AndroidManifest.xml
           sed -i 's/<application/& android:usesCleartextTraffic="true"/' app/src/main/AndroidManifest.xml
 
-      - name: 📱 Sync Web Assets & Native Config
+      - name: 📱 Sync Web Assets to Android
         run: |
           npx cap sync android
 
-      - name: 🏗️ Build APK with Gradle
+      - name: 🖼️ Inject App Icons directly into Native Res
+        run: |
+          LOGO_PATH=""
+          for p in "public/logo.png" "logo.png" "src/logo.png" "public/favicon.png" "public/icon.png" "public/apple-touch-icon.png"; do
+            if [ -f "$p" ]; then
+              LOGO_PATH="$p"
+              break
+            fi
+          done
+
+          if [ -n "$LOGO_PATH" ]; then
+            echo "Processing logo from: $LOGO_PATH"
+            npm install jimp --save-dev || true
+            node -e '
+            const fs = require("fs");
+            const path = require("path");
+            
+            async function generateIcons() {
+              try {
+                const Jimp = require("jimp");
+                const image = await Jimp.read(process.env.LOGO_PATH);
+                
+                const targets = [
+                  { dir: "android/app/src/main/res/mipmap-mdpi", size: 48 },
+                  { dir: "android/app/src/main/res/mipmap-hdpi", size: 72 },
+                  { dir: "android/app/src/main/res/mipmap-xhdpi", size: 96 },
+                  { dir: "android/app/src/main/res/mipmap-xxhdpi", size: 144 },
+                  { dir: "android/app/src/main/res/mipmap-xxxhdpi", size: 192 }
+                ];
+
+                for (const t of targets) {
+                  if (!fs.existsSync(t.dir)) fs.mkdirSync(t.dir, { recursive: true });
+                  const resized = image.clone().resize(t.size, t.size);
+                  await resized.writeAsync(path.join(t.dir, "ic_launcher.png"));
+                  await resized.writeAsync(path.join(t.dir, "ic_launcher_round.png"));
+                  await resized.writeAsync(path.join(t.dir, "ic_launcher_foreground.png"));
+                }
+                console.log("Icons injected successfully!");
+              } catch (e) {
+                console.log("Icon generation fallback: copying file directly.");
+                const targets = [
+                  "android/app/src/main/res/mipmap-mdpi",
+                  "android/app/src/main/res/mipmap-hdpi",
+                  "android/app/src/main/res/mipmap-xhdpi",
+                  "android/app/src/main/res/mipmap-xxhdpi",
+                  "android/app/src/main/res/mipmap-xxxhdpi"
+                ];
+                for (const t of targets) {
+                  if (!fs.existsSync(t)) fs.mkdirSync(t, { recursive: true });
+                  fs.copyFileSync(process.env.LOGO_PATH, path.join(t, "ic_launcher.png"));
+                  fs.copyFileSync(process.env.LOGO_PATH, path.join(t, "ic_launcher_round.png"));
+                  fs.copyFileSync(process.env.LOGO_PATH, path.join(t, "ic_launcher_foreground.png"));
+                }
+              }
+            }
+            generateIcons();
+            '
+          fi
+        env:
+          LOGO_PATH: ${{ env.LOGO_PATH }}
+
+      - name: 🏗️ Build Release Unsigned APK
         run: |
           cd android
-          ./gradlew assembleDebug
+          ./gradlew assembleRelease
 
-      - name: 📦 Upload Signed Ready-to-Install APK
+      - name: 🔑 Create Key & Sign APK For Direct Installation
+        run: |
+          mkdir -p signed_apk
+          APK_PATH=$(find android/app/build/outputs/apk/release/ -name "*.apk" | head -n 1)
+          
+          # Generate keystore dynamically
+          keytool -genkeypair -v -keystore salman.keystore -storepass salman123 -alias salman -keypass salman123 -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=SalmanAI, OU=Dev, O=Salman, L=City, S=State, C=US"
+          
+          # Align and Sign APK using Android SDK Build-Tools
+          BUILD_TOOLS_DIR=$(ls -d $ANDROID_HOME/build-tools/* | tail -n 1)
+          $BUILD_TOOLS_DIR/zipalign -v 4 $APK_PATH signed_apk/Salman_AI.apk
+          $BUILD_TOOLS_DIR/apksigner sign --ks salman.keystore --ks-pass pass:salman123 --ks-key-alias salman --key-pass pass:salman123 signed_apk/Salman_AI.apk
+
+      - name: 📦 Upload Ready-to-Install APK
         uses: softprops/action-gh-release@v2
         if: success()
         with:
-          tag_name: v8.0.${{ github.run_number }}
-          name: Salman AI Final Signed APK v8.0.${{ github.run_number }}
-          files: android/app/build/outputs/apk/debug/app-debug.apk
+          tag_name: v9.0.${{ github.run_number }}
+          name: Salman AI Final APK v9.0.${{ github.run_number }}
+          files: signed_apk/Salman_AI.apk

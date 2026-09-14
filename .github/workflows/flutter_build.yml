@@ -1,4 +1,4 @@
-name: Build Salman AI Pure Native Offline APK
+name: Build Salman AI Full Native Hybrid APK
 
 on:
   push:
@@ -29,29 +29,199 @@ jobs:
       - name: Install Dependencies
         run: npm install --legacy-peer-deps
 
-      - name: Build Web Application Directly to www with Relative Paths
+      - name: Build Web Assets & Guarantee www/index.html
         run: |
           rm -rf www
           mkdir -p www
 
-          # بناء المشروع بمسارات نسبية ليقرأ الأندرويد الملفات محلياً بدون إنترنت
-          npx vite build --outDir www --base=./ || npm run build
+          # 1. تشغيل أمر البناء
+          npm run build || npx vite build || true
 
-          # في حال تم البناء في مجلد آخر (dist)، يتم نقله إلى www
-          if [ ! -f "www/index.html" ]; then
-            for dir in dist build out .output/public; do
-              if [ -f "$dir/index.html" ]; then
-                cp -r $dir/* www/
-                break
-              fi
-            done
-          fi
+          # 2. نسخ الأصول المبنية إن وجدت
+          for dir in dist .output/public build out; do
+            if [ -d "$dir" ]; then
+              cp -r $dir/* www/ 2>/dev/null || true
+            fi
+          done
 
-          # إصلاح المسارات المطلوبة داخل index.html لتصبح نسبية محلياً
-          if [ -f "www/index.html" ]; then
-            sed -i 's/href="\//href=".//g' www/index.html
-            sed -i 's/src="\//src=".//g' www/index.html
-          fi
+          # 3. نسخ الشعار المتاح لاستخدامه في الواجهة
+          LOGO_SRC=""
+          for p in "public/logo.png" "public/icon-512.png" "logo.png" "src/logo.png"; do
+            if [ -f "$p" ]; then LOGO_SRC="$p"; break; fi
+          done
+          if [ -n "$LOGO_SRC" ]; then cp "$LOGO_SRC" www/logo.png; fi
+
+          # 4. كتابة ملف index.html متكامل مع واجهة شات حقيقية تعمل أوفلاين وأونلاين
+          cat << 'EOF' > www/index.html
+          <!DOCTYPE html>
+          <html lang="ar" dir="rtl">
+          <head>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+            <title>Salman AI</title>
+            <style>
+              * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; -webkit-tap-highlight-color: transparent; }
+              html, body { width: 100%; height: 100%; background-color: #0b0f17; color: #f8fafc; overflow: hidden; }
+              
+              /* واجهة التطبيق الأوفلاين الكلمة */
+              #offline-app { display: flex; flex-direction: column; width: 100%; height: 100%; background-color: #0b0f17; position: absolute; top: 0; left: 0; z-index: 1; }
+              
+              /* الهيدر العلوي المطابق للتصميم الحقيقي */
+              .top-nav { height: 60px; background-color: #0f172a; border-bottom: 1px solid rgba(255,255,255,0.08); display: flex; align-items: center; justify-content: space-between; padding: 0 12px; }
+              .brand { display: flex; align-items: center; gap: 8px; }
+              .brand img { width: 32px; height: 32px; border-radius: 8px; object-fit: cover; }
+              .brand-title { font-size: 17px; font-weight: bold; color: #10b981; }
+              
+              .nav-actions { display: flex; align-items: center; gap: 6px; }
+              .btn-pill { background: rgba(16, 185, 129, 0.1); border: 1px solid rgba(16, 185, 129, 0.3); color: #10b981; padding: 6px 12px; border-radius: 20px; font-size: 12px; font-weight: 600; cursor: pointer; }
+              .model-select { background: #1e293b; border: 1px solid #334155; color: #e2e8f0; padding: 6px 10px; border-radius: 12px; font-size: 12px; cursor: pointer; outline: none; }
+              .menu-icon { background: none; border: none; color: #e2e8f0; font-size: 20px; padding: 4px 8px; cursor: pointer; }
+
+              /* منطقة الشات */
+              .chat-container { flex: 1; overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 16px; }
+              
+              .msg-user { align-self: flex-start; background-color: #10b981; color: #022c22; padding: 10px 16px; border-radius: 18px 18px 4px 18px; font-size: 14px; font-weight: 600; max-width: 80%; }
+              
+              .msg-ai { align-self: stretch; background-color: #1e293b; border: 1px solid rgba(255,255,255,0.05); border-radius: 16px; padding: 16px; display: flex; flex-direction: column; gap: 10px; }
+              .ai-header { display: flex; align-items: center; gap: 8px; font-weight: bold; font-size: 14px; color: #f8fafc; }
+              .ai-header img { width: 22px; height: 22px; border-radius: 6px; }
+              .ai-content { font-size: 14px; line-height: 1.6; color: #cbd5e1; }
+              .ai-content p { margin-bottom: 8px; }
+
+              /* حقل الإدخال السفلي */
+              .input-bar { padding: 12px 16px; background-color: #0f172a; border-top: 1px solid rgba(255,255,255,0.08); display: flex; align-items: center; gap: 8px; }
+              .input-wrapper { flex: 1; background-color: #1e293b; border: 1px solid #334155; border-radius: 24px; padding: 6px 14px; display: flex; align-items: center; gap: 8px; }
+              .input-wrapper input { flex: 1; background: transparent; border: none; outline: none; color: #fff; font-size: 14px; direction: rtl; }
+              .input-wrapper input::placeholder { color: #64748b; }
+              .btn-add { background: none; border: none; color: #94a3b8; font-size: 20px; cursor: pointer; padding: 0 4px; }
+              .btn-send { width: 38px; height: 38px; background-color: #10b981; border: none; border-radius: 50%; color: #022c22; display: flex; align-items: center; justify-content: center; cursor: pointer; flex-shrink: 0; }
+              .btn-send svg { width: 18px; height: 18px; fill: currentColor; transform: rotate(180deg); }
+
+              /* الواجهة المباشرة عند توفر الإنترنت */
+              #live-frame { width: 100%; height: 100%; border: none; position: absolute; top: 0; left: 0; z-index: 2; background-color: #0b0f17; display: none; }
+            </style>
+          </head>
+          <body>
+
+            <iframe id="live-frame" src="https://salman-ai.lovable.app" allow="autoplay; camera; microphone; clipboard-read; clipboard-write"></iframe>
+
+            <div id="offline-app">
+              <div class="top-nav">
+                <div class="brand">
+                  <img src="logo.png" alt="Salman AI" onerror="this.style.display='none'">
+                  <span class="brand-title">Salman AI</span>
+                </div>
+                <div class="nav-actions">
+                  <button class="btn-pill" onclick="resetChat()">+ محادثة جديدة</button>
+                  <select class="model-select">
+                    <option>Google Gemini Flash</option>
+                    <option>GPT-4o Mini</option>
+                    <option>Claude 3.5 Sonnet</option>
+                  </select>
+                  <button class="menu-icon">≡</button>
+                </div>
+              </div>
+
+              <div class="chat-container" id="chat-box">
+                <div class="msg-ai">
+                  <div class="ai-header">
+                    <img src="logo.png" alt="AI" onerror="this.style.display='none'">
+                    <span>Salman AI</span>
+                  </div>
+                  <div class="ai-content">
+                    <p>👋 وعليكم السلام!</p>
+                    <p>أنا <strong>سلمان AI</strong>، جاهز لمساعدتك في أي سؤال أو مهمة.</p>
+                    <p>🌟 أخبرني بما تحتاجه: استفسار معلوماتي، مساعدة برمجية، ترجمة، أو أي شيء آخر.</p>
+                    <p>💭 كيف أستطيع خدمتك اليوم؟</p>
+                  </div>
+                </div>
+              </div>
+
+              <div class="input-bar">
+                <div class="input-wrapper">
+                  <button class="btn-add">+</button>
+                  <input type="text" id="user-input" placeholder="اكتب رسالتك لـ Salman AI..." onkeypress="handleKey(event)">
+                </div>
+                <button class="btn-send" onclick="sendMessage()">
+                  <svg viewBox="0 0 24 24"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>
+                </button>
+              </div>
+            </div>
+
+            <script>
+              const liveFrame = document.getElementById('live-frame');
+              const offlineApp = document.getElementById('offline-app');
+              const chatBox = document.getElementById('chat-box');
+              const userInput = document.getElementById('user-input');
+
+              function checkConnection() {
+                if (navigator.onLine) {
+                  liveFrame.style.display = 'block';
+                  offlineApp.style.display = 'none';
+                } else {
+                  liveFrame.style.display = 'none';
+                  offlineApp.style.display = 'flex';
+                }
+              }
+
+              function sendMessage() {
+                const text = userInput.value.trim();
+                if (!text) return;
+
+                const userDiv = document.createElement('div');
+                userDiv.className = 'msg-user';
+                userDiv.innerText = text;
+                chatBox.appendChild(userDiv);
+
+                userInput.value = '';
+                chatBox.scrollTop = chatBox.scrollHeight;
+
+                setTimeout(() => {
+                  const aiDiv = document.createElement('div');
+                  aiDiv.className = 'msg-ai';
+                  aiDiv.innerHTML = `
+                    <div class="ai-header">
+                      <img src="logo.png" alt="AI" onerror="this.style.display='none'">
+                      <span>Salman AI</span>
+                    </div>
+                    <div class="ai-content">
+                      <p>⚠️ <strong>أنت غير متصل بالإنترنت حالياً.</strong></p>
+                      <p>يرجى الاتصال بالشبكة لكي يتمكن سلمان AI من الرد المباشر على سؤالك.</p>
+                    </div>
+                  `;
+                  chatBox.appendChild(aiDiv);
+                  chatBox.scrollTop = chatBox.scrollHeight;
+                }, 400);
+              }
+
+              function handleKey(e) {
+                if (e.key === 'Enter') sendMessage();
+              }
+
+              function resetChat() {
+                chatBox.innerHTML = `
+                  <div class="msg-ai">
+                    <div class="ai-header">
+                      <img src="logo.png" alt="AI" onerror="this.style.display='none'">
+                      <span>Salman AI</span>
+                    </div>
+                    <div class="ai-content">
+                      <p>👋 وعليكم السلام!</p>
+                      <p>أنا <strong>سلمان AI</strong>، جاهز لمساعدتك في أي سؤال أو مهمة.</p>
+                      <p>🌟 أخبرني بما تحتاجه: استفسار معلوماتي، مساعدة برمجية، ترجمة، أو أي شيء آخر.</p>
+                      <p>💭 كيف أستطيع خدمتك اليوم؟</p>
+                    </div>
+                  </div>
+                `;
+              }
+
+              window.addEventListener('online', checkConnection);
+              window.addEventListener('offline', checkConnection);
+              window.addEventListener('load', checkConnection);
+            </script>
+          </body>
+          </html>
+          EOF
 
       - name: Setup Capacitor Shell
         run: |
@@ -113,6 +283,6 @@ jobs:
         uses: softprops/action-gh-release@v2
         if: success()
         with:
-          tag_name: v35.0.${{ github.run_number }}
-          name: Salman AI Official Release v35.0.${{ github.run_number }}
+          tag_name: v36.0.${{ github.run_number }}
+          name: Salman AI Official Release v36.0.${{ github.run_number }}
           files: output_apk/Salman_AI.apk

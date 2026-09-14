@@ -35,31 +35,15 @@ jobs:
           rm -rf www
           mkdir -p www
 
-          # Nitro / Vinxi output path support
           if [ -d ".output/public" ]; then cp -r .output/public/* www/ ;
           elif [ -d "dist" ]; then cp -r dist/* www/ ;
           elif [ -d "build" ]; then cp -r build/* www/ ;
           fi
 
-          # Fallback check for SPA routes
           if [ ! -f "www/index.html" ]; then
             INDEX_FOUND=$(find www -name "index.html" | head -n 1)
             if [ -n "$INDEX_FOUND" ]; then
               cp "$INDEX_FOUND" www/index.html
-            else
-              cat <<EOF > www/index.html
-          <!DOCTYPE html>
-          <html lang="ar" dir="rtl">
-            <head>
-              <meta charset="UTF-8" />
-              <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-              <title>Salman AI</title>
-            </head>
-            <body>
-              <div id="root"></div>
-            </body>
-          </html>
-          EOF
             fi
           fi
 
@@ -69,7 +53,7 @@ jobs:
           npx cap init "Salman AI" "com.salman.ai" --web-dir "www"
           npx cap add android
 
-      - name: 🖼️ Process & Pad App Logo
+      - name: 🖼️ Process & Pad App Logo with Native ImageMagick
         run: |
           LOGO_PATH=""
           for p in "public/logo.png" "logo.png" "src/logo.png" "public/favicon.png" "public/icon.png"; do
@@ -80,42 +64,30 @@ jobs:
           done
 
           if [ -n "$LOGO_PATH" ]; then
-            npm install jimp --save-dev
-            node -e '
-            const Jimp = require("jimp");
-            const path = require("path");
-            const fs = require("fs");
+            mkdir -p android/app/src/main/res/mipmap-mdpi
+            mkdir -p android/app/src/main/res/mipmap-hdpi
+            mkdir -p android/app/src/main/res/mipmap-xhdpi
+            mkdir -p android/app/src/main/res/mipmap-xxhdpi
+            mkdir -p android/app/src/main/res/mipmap-xxxhdpi
 
-            async function processLogo() {
-              const image = await Jimp.read(process.env.LOGO_PATH);
-              const targets = [
-                { dir: "android/app/src/main/res/mipmap-mdpi", size: 48 },
-                { dir: "android/app/src/main/res/mipmap-hdpi", size: 72 },
-                { dir: "android/app/src/main/res/mipmap-xhdpi", size: 96 },
-                { dir: "android/app/src/main/res/mipmap-xxhdpi", size: 144 },
-                { dir: "android/app/src/main/res/mipmap-xxxhdpi", size: 192 }
-              ];
+            # Generate padded icons using native imagemagick (75% inner size = 25% padding)
+            convert "$LOGO_PATH" -resize 36x36 -gravity center -background none -extent 48x48 android/app/src/main/res/mipmap-mdpi/ic_launcher.png
+            convert "$LOGO_PATH" -resize 54x54 -gravity center -background none -extent 72x72 android/app/src/main/res/mipmap-hdpi/ic_launcher.png
+            convert "$LOGO_PATH" -resize 72x72 -gravity center -background none -extent 96x96 android/app/src/main/res/mipmap-xhdpi/ic_launcher.png
+            convert "$LOGO_PATH" -resize 108x108 -gravity center -background none -extent 144x144 android/app/src/main/res/mipmap-xxhdpi/ic_launcher.png
+            convert "$LOGO_PATH" -resize 144x144 -gravity center -background none -extent 192x192 android/app/src/main/res/mipmap-xxxhdpi/ic_launcher.png
 
-              for (const t of targets) {
-                if (!fs.existsSync(t.dir)) fs.mkdirSync(t.dir, { recursive: true });
-                const paddedSize = Math.round(t.size * 0.75);
-                const canvas = new Jimp(t.size, t.size, 0x00000000);
-                const resized = image.clone().resize(paddedSize, paddedSize);
-                const offset = Math.round((t.size - paddedSize) / 2);
-                canvas.composite(resized, offset, offset);
-
-                await canvas.writeAsync(path.join(t.dir, "ic_launcher.png"));
-                await canvas.writeAsync(path.join(t.dir, "ic_launcher_round.png"));
-                await canvas.writeAsync(path.join(t.dir, "ic_launcher_foreground.png"));
-              }
-            }
-            processLogo();
-            '
+            # Copy for round & foreground variants
+            for dir in android/app/src/main/res/mipmap-*; do
+              cp "$dir/ic_launcher.png" "$dir/ic_launcher_round.png"
+              cp "$dir/ic_launcher.png" "$dir/ic_launcher_foreground.png"
+            done
+            echo "Logo padded and processed successfully via ImageMagick!"
+          else
+            echo "Logo not found, using default Capacitor icon."
           fi
-        env:
-          LOGO_PATH: ${{ env.LOGO_PATH }}
 
-      - name: 🛠️ Configure Android Permissions & Network Specs
+      - name: 🛠️ Configure Permissions & Network Specs
         run: |
           cd android
 
@@ -133,11 +105,11 @@ jobs:
 
           chmod +x gradlew
           
-          # Inject full network permissions
+          # Inject Internet & Network permissions for sensor support
           sed -i '/<application/i \    <uses-permission android:name="android.permission.INTERNET"/>\n    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>\n    <uses-permission android:name="android.permission.ACCESS_WIFI_STATE"/>' app/src/main/AndroidManifest.xml
           sed -i 's/<application/& android:usesCleartextTraffic="true"/' app/src/main/AndroidManifest.xml
 
-      - name: 📱 Sync Web Assets & Plugins
+      - name: 📱 Sync Native Assets
         run: npx cap sync android
 
       - name: 🏗️ Build Optimized Release APK
@@ -156,10 +128,10 @@ jobs:
           $BUILD_TOOLS_DIR/zipalign -v 4 $RAW_APK output_apk/Salman_AI.apk
           $BUILD_TOOLS_DIR/apksigner sign --ks release.keystore --ks-pass pass:salman123 --ks-key-alias salman --key-pass pass:salman123 output_apk/Salman_AI.apk
 
-      - name: 📦 Upload Optimized APK
+      - name: 📦 Upload Final APK
         uses: softprops/action-gh-release@v2
         if: success()
         with:
-          tag_name: v11.0.${{ github.run_number }}
-          name: Salman AI Final APK v11.0.${{ github.run_number }}
+          tag_name: v13.0.${{ github.run_number }}
+          name: Salman AI Final APK v13.0.${{ github.run_number }}
           files: output_apk/Salman_AI.apk

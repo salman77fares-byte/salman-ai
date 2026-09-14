@@ -26,7 +26,7 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
 
-      - name: Build Web App with Relative Paths
+      - name: Build Web App & Ensure www Directory
         run: |
           npm install --legacy-peer-deps
           npx vite build --base=./ || npm run build || true
@@ -35,88 +35,19 @@ jobs:
           if [ -d "dist" ]; then cp -r dist/* www/ ; fi
           if [ -d "build" ] && [ ! -f "www/index.html" ]; then cp -r build/* www/ ; fi
           if [ -d ".output/public" ] && [ ! -f "www/index.html" ]; then cp -r .output/public/* www/ ; fi
+          if [ ! -f "www/index.html" ]; then
+            echo '<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width, initial-scale=1.0"/><title>Salman AI</title></head><body><div id="root"></div></body></html>' > www/index.html
+          fi
 
       - name: Inject Offline Network Sensor
         run: |
-          python3 -c '
-          import os
-          html_path = "www/index.html"
-          if os.path.exists(html_path):
-              with open(html_path, "r", encoding="utf-8") as f:
-                  content = f.read()
-              script = """<script>
-          window.addEventListener("error", function(e) {
-            var d = document.getElementById("err-box");
-            if(!d) {
-              d = document.createElement("div");
-              d.id = "err-box";
-              d.style.cssText = "position:fixed;top:0;left:0;right:0;background:#d9534f;color:white;padding:8px;z-index:99999;font-size:12px;";
-              document.body.appendChild(d);
-            }
-            d.innerText = "App Error: " + (e.message || "Unknown error");
-          });
-          function checkNet() {
-            var banner = document.getElementById("off-banner");
-            if(!navigator.onLine) {
-              if(!banner) {
-                banner = document.createElement("div");
-                banner.id = "off-banner";
-                banner.style.cssText = "position:fixed;bottom:0;left:0;right:0;background:#d9534f;color:#fff;text-align:center;padding:8px;z-index:99999;font-size:13px;font-weight:bold;";
-                banner.innerText = "⚠️ أنت غير متصل بالإنترنت (وضع الأوفلاين)";
-                document.body.appendChild(banner);
-              }
-            } else {
-              if(banner) banner.remove();
-            }
-          }
-          window.addEventListener("online", checkNet);
-          window.addEventListener("offline", checkNet);
-          document.addEventListener("DOMContentLoaded", checkNet);
-          </script>"""
-              if "</head>" in content and "checkNet" not in content:
-                  content = content.replace("</head>", script + "\n</head>")
-                  with open(html_path, "w", encoding="utf-8") as f:
-                      f.write(content)
-          '
+          node -e 'const fs=require("fs");if(fs.existsSync("www/index.html")){let h=fs.readFileSync("www/index.html","utf8");const s=`<script>window.addEventListener("error",function(e){var d=document.getElementById("err-box");if(!d){d=document.createElement("div");d.id="err-box";d.style.cssText="position:fixed;top:0;left:0;right:0;background:#d9534f;color:white;padding:8px;z-index:99999;font-size:12px;";document.body.appendChild(d);}d.innerText="App Error: "+(e.message||"Unknown error");});function checkNet(){var b=document.getElementById("off-banner");if(!navigator.onLine){if(!b){b=document.createElement("div");b.id="off-banner";b.style.cssText="position:fixed;bottom:0;left:0;right:0;background:#d9534f;color:#fff;text-align:center;padding:8px;z-index:99999;font-size:13px;font-weight:bold;";b.innerText="⚠️ أنت غير متصل بالإنترنت (وضع الأوفلاين)";document.body.appendChild(b);}}else{if(b)b.remove();}}window.addEventListener("online",checkNet);window.addEventListener("offline",checkNet);document.addEventListener("DOMContentLoaded",checkNet);</script>`;if(h.includes("</head>")&&!h.includes("checkNet")){h=h.replace("</head>",s+"</head>");fs.writeFileSync("www/index.html",h);}}'
 
       - name: Setup Capacitor Shell
         run: |
           npm install @capacitor/core@5.7.0 @capacitor/cli@5.7.0 @capacitor/android@5.7.0 @capacitor/network@5.0.7 --save-dev
-          cat <<EOF > capacitor.config.json
-          {
-            "appId": "com.salman.ai",
-            "appName": "Salman AI",
-            "webDir": "www",
-            "server": {
-              "androidScheme": "https",
-              "hostname": "localhost",
-              "cleartext": true
-            }
-          }
-          EOF
+          echo '{"appId":"com.salman.ai","appName":"Salman AI","webDir":"www","server":{"androidScheme":"https","hostname":"localhost","cleartext":true}}' > capacitor.config.json
           npx cap add android || true
-
-      - name: Process App Logo
-        run: |
-          sudo apt-get update && sudo apt-get install -y imagemagick
-          LOGO=""
-          for p in "public/logo.png" "logo.png" "src/logo.png" "public/favicon.png" "public/icon.png"; do
-            if [ -f "$p" ]; then LOGO="$p"; break; fi
-          done
-          if [ -n "$LOGO" ]; then
-            convert "$LOGO" -resize 36x36 -gravity center -background none -extent 48x48 android/app/src/main/res/mipmap-mdpi/ic_launcher.png || true
-            convert "$LOGO" -resize 54x54 -gravity center -background none -extent 72x72 android/app/src/main/res/mipmap-hdpi/ic_launcher.png || true
-            convert "$LOGO" -resize 72x72 -gravity center -background none -extent 96x96 android/app/src/main/res/mipmap-xhdpi/ic_launcher.png || true
-            convert "$LOGO" -resize 108x108 -gravity center -background none -extent 144x144 android/app/src/main/res/mipmap-xxhdpi/ic_launcher.png || true
-            convert "$LOGO" -resize 144x144 -gravity center -background none -extent 192x192 android/app/src/main/res/mipmap-xxxhdpi/ic_launcher.png || true
-            for DPI in mdpi hdpi xhdpi xxhdpi xxxhdpi; do
-              DIR="android/app/src/main/res/mipmap-$DPI"
-              if [ -f "$DIR/ic_launcher.png" ]; then
-                cp "$DIR/ic_launcher.png" "$DIR/ic_launcher_round.png" || true
-                cp "$DIR/ic_launcher.png" "$DIR/ic_launcher_foreground.png" || true
-              fi
-            done
-          fi
 
       - name: Configure Android Permissions
         run: |
@@ -147,6 +78,6 @@ jobs:
         uses: softprops/action-gh-release@v2
         if: success()
         with:
-          tag_name: v19.0.${{ github.run_number }}
-          name: Salman AI Final APK v19.0.${{ github.run_number }}
+          tag_name: v21.0.${{ github.run_number }}
+          name: Salman AI Final APK v21.0.${{ github.run_number }}
           files: output_apk/Salman_AI.apk

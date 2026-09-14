@@ -66,11 +66,25 @@ jobs:
           mkdir -p assets/www
           cp -r ../www/* assets/www/
 
+          # إضافة شعار التطبيق إلى الأصول للاستخدام في شاشة التحميل
+          mkdir -p assets/icon
+          LOGO_PATH=""
+          for p in "../public/logo.png" "../logo.png" "../src/logo.png" "../public/favicon.png"; do
+            if [ -f "$p" ]; then
+              LOGO_PATH="$p"
+              break
+            fi
+          done
+
+          if [ -n "$LOGO_PATH" ]; then
+            cp "$LOGO_PATH" assets/icon/app_icon.png
+          fi
+
           node -e '
           const fs = require("fs");
           const path = require("path");
 
-          function getDirs(dirPath, list = ["assets/www/"]) {
+          function getDirs(dirPath, list = ["assets/www/", "assets/icon/"]) {
             if (!fs.existsSync(dirPath)) return list;
             const files = fs.readdirSync(dirPath);
             files.forEach((file) => {
@@ -89,32 +103,20 @@ jobs:
           const assetLines = "  assets:\n" + dirs.map(d => "    - " + d).join("\n");
           pubspec = pubspec.replace(/^flutter:/m, "flutter:\n" + assetLines);
 
+          if (fs.existsSync("assets/icon/app_icon.png")) {
+            pubspec += "\nflutter_launcher_icons:\n  android: \"launcher_icon\"\n  image_path: \"assets/icon/app_icon.png\"\n  min_sdk_android: 21\n";
+          }
+
           fs.writeFileSync("pubspec.yaml", pubspec);
           '
 
-          LOGO_PATH=""
-          for p in "../public/logo.png" "../logo.png" "../src/logo.png" "../public/favicon.png"; do
-            if [ -f "$p" ]; then
-              LOGO_PATH="$p"
-              break
-            fi
-          done
-
-          if [ -n "$LOGO_PATH" ]; then
-            mkdir -p assets/icon
-            cp "$LOGO_PATH" assets/icon/app_icon.png
-            node -e '
-            const fs = require("fs");
-            let pubspec = fs.readFileSync("pubspec.yaml", "utf8");
-            pubspec += "\nflutter_launcher_icons:\n  android: \"launcher_icon\"\n  image_path: \"assets/icon/app_icon.png\"\n  min_sdk_android: 21\n";
-            fs.writeFileSync("pubspec.yaml", pubspec);
-            '
+          if [ -f "assets/icon/app_icon.png" ]; then
             dart run flutter_launcher_icons || true
           fi
 
           flutter pub get
 
-      - name: 📝 Inject Native Asset WebView Code
+      - name: 📝 Inject Native Asset WebView Code with Dynamic Loader
         run: |
           cd flutter_app
           node -e '
@@ -158,6 +160,7 @@ jobs:
           class _WebViewScreenState extends State<WebViewScreen> {
             late final WebViewController _controller;
             late final StreamSubscription<List<ConnectivityResult>> _connectivitySubscription;
+            bool _isLoading = true;
             bool _isOffline = false;
 
             @override
@@ -166,6 +169,19 @@ jobs:
               _controller = WebViewController()
                 ..setJavaScriptMode(JavaScriptMode.unrestricted)
                 ..setBackgroundColor(const Color(0xFF0B0B0B))
+                ..setNavigationDelegate(
+                  NavigationDelegate(
+                    onPageStarted: (String url) {
+                      setState(() => _isLoading = true);
+                    },
+                    onPageFinished: (String url) {
+                      setState(() => _isLoading = false);
+                    },
+                    onWebResourceError: (WebResourceError error) {
+                      setState(() => _isLoading = false);
+                    },
+                  ),
+                )
                 ..loadFlutterAsset("assets/www/index.html");
 
               Connectivity().checkConnectivity().then((results) => _updateConnectionStatus(results));
@@ -190,6 +206,46 @@ jobs:
                   child: Stack(
                     children: [
                       WebViewWidget(controller: _controller),
+                      
+                      // شاشة التحميل المؤقتة (تختفي فور وصول الصفحة)
+                      if (_isLoading)
+                        Container(
+                          color: const Color(0xFF0B0B0B),
+                          width: double.infinity,
+                          height: double.infinity,
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Image.asset(
+                                "assets/icon/app_icon.png",
+                                width: 90,
+                                height: 90,
+                                errorBuilder: (context, error, stackTrace) => const Icon(
+                                  Icons.smart_toy_rounded,
+                                  size: 80,
+                                  color: Colors.blueAccent,
+                                ),
+                              ),
+                              const SizedBox(height: 24),
+                              const CircularProgressIndicator(
+                                color: Colors.blueAccent,
+                                strokeWidth: 3,
+                              ),
+                              const SizedBox(height: 16),
+                              const Text(
+                                "جاري تحميل التطبيق...",
+                                style: TextStyle(
+                                  color: Colors.white70,
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.bold,
+                                  fontFamily: "sans-serif",
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+
+                      // شريط تنبيه الأوفلاين
                       if (_isOffline)
                         Positioned(
                           top: 0, left: 0, right: 0,
@@ -252,6 +308,6 @@ jobs:
         uses: softprops/action-gh-release@v2
         if: success()
         with:
-          tag_name: v4.8.${{ github.run_number }}
-          name: Salman AI Final App v4.8.${{ github.run_number }}
+          tag_name: v4.9.${{ github.run_number }}
+          name: Salman AI Final App v4.9.${{ github.run_number }}
           files: flutter_app/build/app/outputs/flutter-apk/app-release.apk

@@ -115,12 +115,11 @@ jobs:
 
           flutter pub get
 
-      - name: 📝 Inject Native Asset WebView Code with Dynamic Centered Loader
+      - name: 📝 Inject Native Asset WebView Code safely
         run: |
           cd flutter_app
-          node -e '
-          const fs = require("fs");
-          const code = `import "dart:async";
+          cat << 'EOF' > lib/main.dart
+          import "dart:async";
           import "dart:io";
           import "package:flutter/material.dart";
           import "package:flutter/services.dart";
@@ -233,7 +232,7 @@ jobs:
                 );
 
               if (widget.port > 0) {
-                _controller.loadRequest(Uri.parse("http://127.0.0.1:" + widget.port.toString()));
+                _controller.loadRequest(Uri.parse("http://127.0.0.1:${widget.port}"));
               } else {
                 _controller.loadFlutterAsset("assets/www/index.html");
               }
@@ -367,9 +366,8 @@ jobs:
                 ),
               );
             }
-          }`;
-          fs.writeFileSync("lib/main.dart", code);
-          '
+          }
+          EOF
 
       - name: 🛠️ Force Correct App Name & Permissions
         run: |
@@ -386,28 +384,15 @@ jobs:
           fs.writeFileSync(stringsPath, xml, "utf8");
           '
 
-          node -e '
-          const fs = require("fs");
-          const buildGradlePath = "android/app/build.gradle";
-          if (fs.existsSync(buildGradlePath)) {
-            let content = fs.readFileSync(buildGradlePath, "utf8");
-            content = content.replace(/ndkVersion\s*=\s*.*/g, "");
-            content = content.replace(/flutter\.compileSdkVersion/g, "34");
-            content = content.replace(/flutter\.minSdkVersion/g, "21");
-            content = content.replace(/flutter\.targetSdkVersion/g, "34");
-            fs.writeFileSync(buildGradlePath, content, "utf8");
-          }
-          '
-
       - name: 🚀 Build Release APK
         run: |
           cd flutter_app
-          flutter build apk --release
+          flutter build apk --release --no-tree-shake-icons
 
       - name: 📦 Upload Release Artifact
         uses: softprops/action-gh-release@v2
         if: success()
         with:
-          tag_name: v5.2.${{ github.run_number }}
-          name: Salman AI Final App v5.2.${{ github.run_number }}
+          tag_name: v5.3.${{ github.run_number }}
+          name: Salman AI Final App v5.3.${{ github.run_number }}
           files: flutter_app/build/app/outputs/flutter-apk/app-release.apk

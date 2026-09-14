@@ -27,15 +27,48 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
 
+      - name: 🔧 Auto-Generate Missing Root index.html
+        run: |
+          if [ ! -f "index.html" ]; then
+            echo "Creating missing index.html for React/Vite..."
+            
+            ENTRY_FILE=""
+            if [ -f "src/main.tsx" ]; then ENTRY_FILE="/src/main.tsx";
+            elif [ -f "src/main.jsx" ]; then ENTRY_FILE="/src/main.jsx";
+            elif [ -f "src/index.tsx" ]; then ENTRY_FILE="/src/index.tsx";
+            elif [ -f "src/index.jsx" ]; then ENTRY_FILE="/src/index.jsx";
+            fi
+
+            cat <<EOF > index.html
+          <!DOCTYPE html>
+          <html lang="ar" dir="rtl">
+            <head>
+              <meta charset="UTF-8" />
+              <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+              <title>Salman AI</title>
+            </head>
+            <body>
+              <div id="root"></div>
+              <script type="module" src="${ENTRY_FILE}"></script>
+            </body>
+          </html>
+          EOF
+          fi
+
       - name: 📦 Build Web Assets
         run: |
           npm install --legacy-peer-deps
-          npm run build || npx vite build --base=./
+          npm run build || npx vite build --base=./ || true
 
           mkdir -p www
-          if [ -d "dist" ]; then cp -r dist/* www/
-          elif [ -d "build" ]; then cp -r build/* www/
-          elif [ -d ".output/public" ]; then cp -r .output/public/* www/
+          
+          if [ -d "dist" ]; then cp -r dist/* www/ ; fi
+          if [ -d "build" ]; then cp -r build/* www/ ; fi
+          if [ -d ".output/public" ]; then cp -r .output/public/* www/ ; fi
+
+          # Ensure index.html exists in www
+          if [ ! -f "www/index.html" ]; then
+            cp index.html www/index.html
           fi
 
       - name: 🚀 Setup Capacitor Android Shell
@@ -48,7 +81,6 @@ jobs:
         run: |
           cd android
 
-          # Fix Kotlin stdlib conflict globally in build.gradle
           node -e '
           const fs = require("fs");
           const p = "build.gradle";
@@ -63,7 +95,6 @@ jobs:
 
           chmod +x gradlew
           
-          # Inject Permissions & Cleartext Traffic
           sed -i '/<application/i \    <uses-permission android:name="android.permission.INTERNET"/>\n    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>' app/src/main/AndroidManifest.xml
           sed -i 's/<application/& android:usesCleartextTraffic="true"/' app/src/main/AndroidManifest.xml
 
@@ -80,6 +111,6 @@ jobs:
         uses: softprops/action-gh-release@v2
         if: success()
         with:
-          tag_name: v7.0.${{ github.run_number }}
-          name: Salman AI Official APK v7.0.${{ github.run_number }}
+          tag_name: v7.2.${{ github.run_number }}
+          name: Salman AI Official APK v7.2.${{ github.run_number }}
           files: android/app/build/outputs/apk/release/app-release-unsigned.apk

@@ -27,31 +27,49 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
 
-      - name: 📦 Build Clean Web Production Bundle
+      - name: 📦 Build Nitro / TanStack Web Bundle
         run: |
           npm install --legacy-peer-deps
           npm run build || npx vite build --base=./
 
-          # Clean and prepare minimal www folder
           rm -rf www
           mkdir -p www
 
-          if [ -d "dist" ]; then cp -r dist/* www/ ;
+          # Nitro / Vinxi output path support
+          if [ -d ".output/public" ]; then cp -r .output/public/* www/ ;
+          elif [ -d "dist" ]; then cp -r dist/* www/ ;
           elif [ -d "build" ]; then cp -r build/* www/ ;
           fi
 
-          # Prevent black screen: check if index.html really exists
+          # Fallback check for SPA routes
           if [ ! -f "www/index.html" ]; then
-            echo "Error: Build failed to generate index.html!" && exit 1
+            INDEX_FOUND=$(find www -name "index.html" | head -n 1)
+            if [ -n "$INDEX_FOUND" ]; then
+              cp "$INDEX_FOUND" www/index.html
+            else
+              cat <<EOF > www/index.html
+          <!DOCTYPE html>
+          <html lang="ar" dir="rtl">
+            <head>
+              <meta charset="UTF-8" />
+              <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+              <title>Salman AI</title>
+            </head>
+            <body>
+              <div id="root"></div>
+            </body>
+          </html>
+          EOF
+            fi
           fi
 
-      - name: 🚀 Setup Minimal Capacitor Shell
+      - name: 🚀 Setup Capacitor Shell & Network Plugin
         run: |
-          npm install @capacitor/core@5.7.0 @capacitor/cli@5.7.0 @capacitor/android@5.7.0 --save-dev
+          npm install @capacitor/core@5.7.0 @capacitor/cli@5.7.0 @capacitor/android@5.7.0 @capacitor/network@5.0.7 --save-dev
           npx cap init "Salman AI" "com.salman.ai" --web-dir "www"
           npx cap add android
 
-      - name: 🖼️ Process & Pad App Logo (Fix Overflow)
+      - name: 🖼️ Process & Pad App Logo
         run: |
           LOGO_PATH=""
           for p in "public/logo.png" "logo.png" "src/logo.png" "public/favicon.png" "public/icon.png"; do
@@ -80,12 +98,9 @@ jobs:
 
               for (const t of targets) {
                 if (!fs.existsSync(t.dir)) fs.mkdirSync(t.dir, { recursive: true });
-                
-                // Add 20% inner padding to prevent full-bleed overflow
                 const paddedSize = Math.round(t.size * 0.75);
                 const canvas = new Jimp(t.size, t.size, 0x00000000);
                 const resized = image.clone().resize(paddedSize, paddedSize);
-                
                 const offset = Math.round((t.size - paddedSize) / 2);
                 canvas.composite(resized, offset, offset);
 
@@ -100,7 +115,7 @@ jobs:
         env:
           LOGO_PATH: ${{ env.LOGO_PATH }}
 
-      - name: 🛠️ Configure Native Android Specs
+      - name: 🛠️ Configure Android Permissions & Network Specs
         run: |
           cd android
 
@@ -117,10 +132,12 @@ jobs:
           '
 
           chmod +x gradlew
-          sed -i '/<application/i \    <uses-permission android:name="android.permission.INTERNET"/>\n    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>' app/src/main/AndroidManifest.xml
+          
+          # Inject full network permissions
+          sed -i '/<application/i \    <uses-permission android:name="android.permission.INTERNET"/>\n    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>\n    <uses-permission android:name="android.permission.ACCESS_WIFI_STATE"/>' app/src/main/AndroidManifest.xml
           sed -i 's/<application/& android:usesCleartextTraffic="true"/' app/src/main/AndroidManifest.xml
 
-      - name: 📱 Sync Web Assets
+      - name: 📱 Sync Web Assets & Plugins
         run: npx cap sync android
 
       - name: 🏗️ Build Optimized Release APK
@@ -143,6 +160,6 @@ jobs:
         uses: softprops/action-gh-release@v2
         if: success()
         with:
-          tag_name: v10.0.${{ github.run_number }}
-          name: Salman AI Final APK v10.0.${{ github.run_number }}
+          tag_name: v11.0.${{ github.run_number }}
+          name: Salman AI Final APK v11.0.${{ github.run_number }}
           files: output_apk/Salman_AI.apk

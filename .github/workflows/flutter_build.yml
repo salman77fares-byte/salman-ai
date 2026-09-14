@@ -31,9 +31,43 @@ jobs:
           distribution: "temurin"
           java-version: "21"
 
+      - name: Prepare npm lock file
+        run: |
+          echo "Removing old package-lock.json..."
+          rm -f package-lock.json
+
+          echo "Cleaning npm cache..."
+          npm cache clean --force
+
+          echo "Creating a fresh package-lock.json..."
+          npm install --package-lock-only --legacy-peer-deps
+
+          echo "Lock file created successfully."
+
       - name: Install dependencies
         run: |
           npm install --legacy-peer-deps
+
+      - name: Verify required dependencies
+        run: |
+          echo "Checking required packages..."
+
+          node -e "require.resolve('@radix-ui/react-switch/package.json')" || {
+            echo "ERROR: @radix-ui/react-switch is not installed."
+            exit 1
+          }
+
+          node -e "require.resolve('@streamdown/math/package.json')" || {
+            echo "ERROR: @streamdown/math is not installed."
+            exit 1
+          }
+
+          node -e "require.resolve('@streamdown/mermaid/package.json')" || {
+            echo "ERROR: @streamdown/mermaid is not installed."
+            exit 1
+          }
+
+          echo "Required dependencies are installed successfully."
 
       - name: Build web application
         run: |
@@ -59,7 +93,17 @@ jobs:
 
           echo "SUCCESS: dist/index.html exists."
 
-      - name: Install Capacitor Android
+      - name: Initialize Capacitor Android
+        run: |
+          if [ ! -d "android" ]; then
+            echo "Android project does not exist."
+            echo "Creating Android project..."
+            npx cap add android
+          else
+            echo "Android project already exists."
+          fi
+
+      - name: Sync Capacitor Android
         run: |
           npx cap sync android
 
@@ -70,7 +114,12 @@ jobs:
             exit 1
           fi
 
-          echo "Android project found."
+          if [ ! -f "android/gradlew" ]; then
+            echo "ERROR: android/gradlew was not created."
+            exit 1
+          fi
+
+          echo "Android project found successfully."
 
       - name: Make Gradle executable
         run: |

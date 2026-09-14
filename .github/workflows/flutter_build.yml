@@ -15,7 +15,7 @@ jobs:
       - name: 📥 Checkout Code
         uses: actions/checkout@v4
 
-      - name: ⚙️ Set up Node.js & Image Utilities
+      - name: ⚙️ Set up Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '20'
@@ -27,53 +27,80 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
 
-      - name: 🔧 Generate Root index.html if Missing
-        run: |
-          if [ ! -f "index.html" ]; then
-            ENTRY_FILE=""
-            if [ -f "src/main.tsx" ]; then ENTRY_FILE="/src/main.tsx";
-            elif [ -f "src/main.jsx" ]; then ENTRY_FILE="/src/main.jsx";
-            elif [ -f "src/index.tsx" ]; then ENTRY_FILE="/src/index.tsx";
-            elif [ -f "src/index.jsx" ]; then ENTRY_FILE="/src/index.jsx";
-            fi
-
-            cat <<EOF > index.html
-          <!DOCTYPE html>
-          <html lang="ar" dir="rtl">
-            <head>
-              <meta charset="UTF-8" />
-              <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-              <title>Salman AI</title>
-            </head>
-            <body>
-              <div id="root"></div>
-              <script type="module" src="${ENTRY_FILE}"></script>
-            </body>
-          </html>
-          EOF
-          fi
-
-      - name: 📦 Build Web Assets
+      - name: 📦 Build Clean Web Production Bundle
         run: |
           npm install --legacy-peer-deps
-          npm run build || npx vite build --base=./ || true
+          npm run build || npx vite build --base=./
 
+          # Clean and prepare minimal www folder
+          rm -rf www
           mkdir -p www
-          if [ -d "dist" ]; then cp -r dist/* www/ ; fi
-          if [ -d "build" ]; then cp -r build/* www/ ; fi
-          if [ -d ".output/public" ]; then cp -r .output/public/* www/ ; fi
 
-          if [ ! -f "www/index.html" ] && [ -f "index.html" ]; then
-            cp index.html www/index.html
+          if [ -d "dist" ]; then cp -r dist/* www/ ;
+          elif [ -d "build" ]; then cp -r build/* www/ ;
           fi
 
-      - name: 🚀 Setup Capacitor Android Shell
+          # Prevent black screen: check if index.html really exists
+          if [ ! -f "www/index.html" ]; then
+            echo "Error: Build failed to generate index.html!" && exit 1
+          fi
+
+      - name: 🚀 Setup Minimal Capacitor Shell
         run: |
           npm install @capacitor/core@5.7.0 @capacitor/cli@5.7.0 @capacitor/android@5.7.0 --save-dev
           npx cap init "Salman AI" "com.salman.ai" --web-dir "www"
           npx cap add android
 
-      - name: 🛠️ Fix Kotlin Resolution & Set Android Specs
+      - name: 🖼️ Process & Pad App Logo (Fix Overflow)
+        run: |
+          LOGO_PATH=""
+          for p in "public/logo.png" "logo.png" "src/logo.png" "public/favicon.png" "public/icon.png"; do
+            if [ -f "$p" ]; then
+              LOGO_PATH="$p"
+              break
+            fi
+          done
+
+          if [ -n "$LOGO_PATH" ]; then
+            npm install jimp --save-dev
+            node -e '
+            const Jimp = require("jimp");
+            const path = require("path");
+            const fs = require("fs");
+
+            async function processLogo() {
+              const image = await Jimp.read(process.env.LOGO_PATH);
+              const targets = [
+                { dir: "android/app/src/main/res/mipmap-mdpi", size: 48 },
+                { dir: "android/app/src/main/res/mipmap-hdpi", size: 72 },
+                { dir: "android/app/src/main/res/mipmap-xhdpi", size: 96 },
+                { dir: "android/app/src/main/res/mipmap-xxhdpi", size: 144 },
+                { dir: "android/app/src/main/res/mipmap-xxxhdpi", size: 192 }
+              ];
+
+              for (const t of targets) {
+                if (!fs.existsSync(t.dir)) fs.mkdirSync(t.dir, { recursive: true });
+                
+                // Add 20% inner padding to prevent full-bleed overflow
+                const paddedSize = Math.round(t.size * 0.75);
+                const canvas = new Jimp(t.size, t.size, 0x00000000);
+                const resized = image.clone().resize(paddedSize, paddedSize);
+                
+                const offset = Math.round((t.size - paddedSize) / 2);
+                canvas.composite(resized, offset, offset);
+
+                await canvas.writeAsync(path.join(t.dir, "ic_launcher.png"));
+                await canvas.writeAsync(path.join(t.dir, "ic_launcher_round.png"));
+                await canvas.writeAsync(path.join(t.dir, "ic_launcher_foreground.png"));
+              }
+            }
+            processLogo();
+            '
+          fi
+        env:
+          LOGO_PATH: ${{ env.LOGO_PATH }}
+
+      - name: 🛠️ Configure Native Android Specs
         run: |
           cd android
 
@@ -90,97 +117,32 @@ jobs:
           '
 
           chmod +x gradlew
-          
           sed -i '/<application/i \    <uses-permission android:name="android.permission.INTERNET"/>\n    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>' app/src/main/AndroidManifest.xml
           sed -i 's/<application/& android:usesCleartextTraffic="true"/' app/src/main/AndroidManifest.xml
 
-      - name: 📱 Sync Web Assets to Android
-        run: |
-          npx cap sync android
+      - name: 📱 Sync Web Assets
+        run: npx cap sync android
 
-      - name: 🖼️ Inject App Icons directly into Native Res
-        run: |
-          LOGO_PATH=""
-          for p in "public/logo.png" "logo.png" "src/logo.png" "public/favicon.png" "public/icon.png" "public/apple-touch-icon.png"; do
-            if [ -f "$p" ]; then
-              LOGO_PATH="$p"
-              break
-            fi
-          done
-
-          if [ -n "$LOGO_PATH" ]; then
-            echo "Processing logo from: $LOGO_PATH"
-            npm install jimp --save-dev || true
-            node -e '
-            const fs = require("fs");
-            const path = require("path");
-            
-            async function generateIcons() {
-              try {
-                const Jimp = require("jimp");
-                const image = await Jimp.read(process.env.LOGO_PATH);
-                
-                const targets = [
-                  { dir: "android/app/src/main/res/mipmap-mdpi", size: 48 },
-                  { dir: "android/app/src/main/res/mipmap-hdpi", size: 72 },
-                  { dir: "android/app/src/main/res/mipmap-xhdpi", size: 96 },
-                  { dir: "android/app/src/main/res/mipmap-xxhdpi", size: 144 },
-                  { dir: "android/app/src/main/res/mipmap-xxxhdpi", size: 192 }
-                ];
-
-                for (const t of targets) {
-                  if (!fs.existsSync(t.dir)) fs.mkdirSync(t.dir, { recursive: true });
-                  const resized = image.clone().resize(t.size, t.size);
-                  await resized.writeAsync(path.join(t.dir, "ic_launcher.png"));
-                  await resized.writeAsync(path.join(t.dir, "ic_launcher_round.png"));
-                  await resized.writeAsync(path.join(t.dir, "ic_launcher_foreground.png"));
-                }
-                console.log("Icons injected successfully!");
-              } catch (e) {
-                console.log("Icon generation fallback: copying file directly.");
-                const targets = [
-                  "android/app/src/main/res/mipmap-mdpi",
-                  "android/app/src/main/res/mipmap-hdpi",
-                  "android/app/src/main/res/mipmap-xhdpi",
-                  "android/app/src/main/res/mipmap-xxhdpi",
-                  "android/app/src/main/res/mipmap-xxxhdpi"
-                ];
-                for (const t of targets) {
-                  if (!fs.existsSync(t)) fs.mkdirSync(t, { recursive: true });
-                  fs.copyFileSync(process.env.LOGO_PATH, path.join(t, "ic_launcher.png"));
-                  fs.copyFileSync(process.env.LOGO_PATH, path.join(t, "ic_launcher_round.png"));
-                  fs.copyFileSync(process.env.LOGO_PATH, path.join(t, "ic_launcher_foreground.png"));
-                }
-              }
-            }
-            generateIcons();
-            '
-          fi
-        env:
-          LOGO_PATH: ${{ env.LOGO_PATH }}
-
-      - name: 🏗️ Build Release Unsigned APK
+      - name: 🏗️ Build Optimized Release APK
         run: |
           cd android
-          ./gradlew assembleRelease
+          ./gradlew assembleRelease --no-daemon
 
-      - name: 🔑 Create Key & Sign APK For Direct Installation
+      - name: 🔑 Sign & ZipAlign APK
         run: |
-          mkdir -p signed_apk
-          APK_PATH=$(find android/app/build/outputs/apk/release/ -name "*.apk" | head -n 1)
+          mkdir -p output_apk
+          RAW_APK=$(find android/app/build/outputs/apk/release/ -name "*.apk" | head -n 1)
           
-          # Generate keystore dynamically
-          keytool -genkeypair -v -keystore salman.keystore -storepass salman123 -alias salman -keypass salman123 -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=SalmanAI, OU=Dev, O=Salman, L=City, S=State, C=US"
+          keytool -genkeypair -v -keystore release.keystore -storepass salman123 -alias salman -keypass salman123 -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=SalmanAI"
           
-          # Align and Sign APK using Android SDK Build-Tools
           BUILD_TOOLS_DIR=$(ls -d $ANDROID_HOME/build-tools/* | tail -n 1)
-          $BUILD_TOOLS_DIR/zipalign -v 4 $APK_PATH signed_apk/Salman_AI.apk
-          $BUILD_TOOLS_DIR/apksigner sign --ks salman.keystore --ks-pass pass:salman123 --ks-key-alias salman --key-pass pass:salman123 signed_apk/Salman_AI.apk
+          $BUILD_TOOLS_DIR/zipalign -v 4 $RAW_APK output_apk/Salman_AI.apk
+          $BUILD_TOOLS_DIR/apksigner sign --ks release.keystore --ks-pass pass:salman123 --ks-key-alias salman --key-pass pass:salman123 output_apk/Salman_AI.apk
 
-      - name: 📦 Upload Ready-to-Install APK
+      - name: 📦 Upload Optimized APK
         uses: softprops/action-gh-release@v2
         if: success()
         with:
-          tag_name: v9.0.${{ github.run_number }}
-          name: Salman AI Final APK v9.0.${{ github.run_number }}
-          files: signed_apk/Salman_AI.apk
+          tag_name: v10.0.${{ github.run_number }}
+          name: Salman AI Final APK v10.0.${{ github.run_number }}
+          files: output_apk/Salman_AI.apk

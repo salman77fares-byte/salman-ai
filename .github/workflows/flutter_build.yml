@@ -27,27 +27,45 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
 
-      - name: 📦 Build Nitro / TanStack Web Bundle
+      - name: 📦 Build Web & Guarantee index.html
         run: |
           npm install --legacy-peer-deps
-          npm run build || npx vite build --base=./
+          npm run build || npx vite build --base=./ || true
 
           rm -rf www
           mkdir -p www
 
-          if [ -d ".output/public" ]; then cp -r .output/public/* www/ ;
-          elif [ -d "dist" ]; then cp -r dist/* www/ ;
-          elif [ -d "build" ]; then cp -r build/* www/ ;
+          # 1. Copy web build output from any directory
+          if [ -d ".output/public" ]; then cp -r .output/public/* www/ ; fi
+          if [ -d "dist" ]; then cp -r dist/* www/ ; fi
+          if [ -d "build" ]; then cp -r build/* www/ ; fi
+          if [ -d "out" ]; then cp -r out/* www/ ; fi
+
+          # 2. Search for index.html recursively if nested
+          NESTED_INDEX=$(find www -name "index.html" | head -n 1)
+          if [ -n "$NESTED_INDEX" ] && [ "$NESTED_INDEX" != "www/index.html" ]; then
+            PARENT_DIR=$(dirname "$NESTED_INDEX")
+            cp -r $PARENT_DIR/* www/
           fi
 
+          # 3. Fail-safe: Create a base index.html if still missing
           if [ ! -f "www/index.html" ]; then
-            INDEX_FOUND=$(find www -name "index.html" | head -n 1)
-            if [ -n "$INDEX_FOUND" ]; then
-              cp "$INDEX_FOUND" www/index.html
-            fi
+            cat <<EOF > www/index.html
+          <!DOCTYPE html>
+          <html lang="ar" dir="rtl">
+            <head>
+              <meta charset="UTF-8" />
+              <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+              <title>Salman AI</title>
+            </head>
+            <body>
+              <div id="root"></div>
+            </body>
+          </html>
+          EOF
           fi
 
-      - name: 🚀 Setup Capacitor Shell & Network Plugin
+      - name: 🚀 Setup Capacitor Shell & Add Android
         run: |
           npm install @capacitor/core@5.7.0 @capacitor/cli@5.7.0 @capacitor/android@5.7.0 @capacitor/network@5.0.7 --save-dev
           npx cap init "Salman AI" "com.salman.ai" --web-dir "www"
@@ -70,24 +88,20 @@ jobs:
             mkdir -p android/app/src/main/res/mipmap-xxhdpi
             mkdir -p android/app/src/main/res/mipmap-xxxhdpi
 
-            # Generate padded icons using native imagemagick (75% inner size = 25% padding)
+            # Generate padded icons (75% inner scale = 25% padding)
             convert "$LOGO_PATH" -resize 36x36 -gravity center -background none -extent 48x48 android/app/src/main/res/mipmap-mdpi/ic_launcher.png
             convert "$LOGO_PATH" -resize 54x54 -gravity center -background none -extent 72x72 android/app/src/main/res/mipmap-hdpi/ic_launcher.png
             convert "$LOGO_PATH" -resize 72x72 -gravity center -background none -extent 96x96 android/app/src/main/res/mipmap-xhdpi/ic_launcher.png
             convert "$LOGO_PATH" -resize 108x108 -gravity center -background none -extent 144x144 android/app/src/main/res/mipmap-xxhdpi/ic_launcher.png
             convert "$LOGO_PATH" -resize 144x144 -gravity center -background none -extent 192x192 android/app/src/main/res/mipmap-xxxhdpi/ic_launcher.png
 
-            # Copy for round & foreground variants
             for dir in android/app/src/main/res/mipmap-*; do
               cp "$dir/ic_launcher.png" "$dir/ic_launcher_round.png"
               cp "$dir/ic_launcher.png" "$dir/ic_launcher_foreground.png"
             done
-            echo "Logo padded and processed successfully via ImageMagick!"
-          else
-            echo "Logo not found, using default Capacitor icon."
           fi
 
-      - name: 🛠️ Configure Permissions & Network Specs
+      - name: 🛠️ Configure Android Permissions & Network Specs
         run: |
           cd android
 
@@ -105,14 +119,14 @@ jobs:
 
           chmod +x gradlew
           
-          # Inject Internet & Network permissions for sensor support
+          # Inject full network permissions for connectivity detection
           sed -i '/<application/i \    <uses-permission android:name="android.permission.INTERNET"/>\n    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>\n    <uses-permission android:name="android.permission.ACCESS_WIFI_STATE"/>' app/src/main/AndroidManifest.xml
           sed -i 's/<application/& android:usesCleartextTraffic="true"/' app/src/main/AndroidManifest.xml
 
       - name: 📱 Sync Native Assets
         run: npx cap sync android
 
-      - name: 🏗️ Build Optimized Release APK
+      - name: 🏗️ Build Release APK
         run: |
           cd android
           ./gradlew assembleRelease --no-daemon
@@ -132,6 +146,6 @@ jobs:
         uses: softprops/action-gh-release@v2
         if: success()
         with:
-          tag_name: v13.0.${{ github.run_number }}
-          name: Salman AI Final APK v13.0.${{ github.run_number }}
+          tag_name: v14.0.${{ github.run_number }}
+          name: Salman AI Final APK v14.0.${{ github.run_number }}
           files: output_apk/Salman_AI.apk

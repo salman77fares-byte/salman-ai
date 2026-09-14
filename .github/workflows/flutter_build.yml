@@ -35,20 +35,17 @@ jobs:
           rm -rf www
           mkdir -p www
 
-          # 1. Copy web build output from any directory
           if [ -d ".output/public" ]; then cp -r .output/public/* www/ ; fi
           if [ -d "dist" ]; then cp -r dist/* www/ ; fi
           if [ -d "build" ]; then cp -r build/* www/ ; fi
           if [ -d "out" ]; then cp -r out/* www/ ; fi
 
-          # 2. Search for index.html recursively if nested
           NESTED_INDEX=$(find www -name "index.html" | head -n 1)
           if [ -n "$NESTED_INDEX" ] && [ "$NESTED_INDEX" != "www/index.html" ]; then
             PARENT_DIR=$(dirname "$NESTED_INDEX")
             cp -r $PARENT_DIR/* www/
           fi
 
-          # 3. Fail-safe: Create a base index.html if still missing
           if [ ! -f "www/index.html" ]; then
             cat <<EOF > www/index.html
           <!DOCTYPE html>
@@ -71,8 +68,10 @@ jobs:
           npx cap init "Salman AI" "com.salman.ai" --web-dir "www"
           npx cap add android
 
-      - name: 🖼️ Process & Pad App Logo with Native ImageMagick
+      - name: 🖼️ Process & Pad App Logo
         run: |
+          sudo apt-get update && sudo apt-get install -y imagemagick
+
           LOGO_PATH=""
           for p in "public/logo.png" "logo.png" "src/logo.png" "public/favicon.png" "public/icon.png"; do
             if [ -f "$p" ]; then
@@ -88,7 +87,6 @@ jobs:
             mkdir -p android/app/src/main/res/mipmap-xxhdpi
             mkdir -p android/app/src/main/res/mipmap-xxxhdpi
 
-            # Generate padded icons (75% inner scale = 25% padding)
             convert "$LOGO_PATH" -resize 36x36 -gravity center -background none -extent 48x48 android/app/src/main/res/mipmap-mdpi/ic_launcher.png
             convert "$LOGO_PATH" -resize 54x54 -gravity center -background none -extent 72x72 android/app/src/main/res/mipmap-hdpi/ic_launcher.png
             convert "$LOGO_PATH" -resize 72x72 -gravity center -background none -extent 96x96 android/app/src/main/res/mipmap-xhdpi/ic_launcher.png
@@ -119,7 +117,6 @@ jobs:
 
           chmod +x gradlew
           
-          # Inject full network permissions for connectivity detection
           sed -i '/<application/i \    <uses-permission android:name="android.permission.INTERNET"/>\n    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>\n    <uses-permission android:name="android.permission.ACCESS_WIFI_STATE"/>' app/src/main/AndroidManifest.xml
           sed -i 's/<application/& android:usesCleartextTraffic="true"/' app/src/main/AndroidManifest.xml
 
@@ -146,6 +143,6 @@ jobs:
         uses: softprops/action-gh-release@v2
         if: success()
         with:
-          tag_name: v14.0.${{ github.run_number }}
-          name: Salman AI Final APK v14.0.${{ github.run_number }}
+          tag_name: v15.0.${{ github.run_number }}
+          name: Salman AI Final APK v15.0.${{ github.run_number }}
           files: output_apk/Salman_AI.apk

@@ -90,76 +90,71 @@ jobs:
 
       - name: Locate and prepare web build
         run: |
-          echo "Searching for build output..."
+          echo "Searching for web build output..."
 
           echo ""
-          echo "Top-level directories:"
-          find . -maxdepth 2 -type d \
-            ! -path "./node_modules*" \
-            ! -path "./.git*" \
-            | sort
+          echo "Searching for HTML files:"
+          find .output -type f \( -name "*.html" -o -name "*.htm" \) 2>/dev/null | sort || true
 
           echo ""
-          echo "Searching for index.html files:"
-          find . -type f -name "index.html" \
-            ! -path "./node_modules/*" \
-            ! -path "./.git/*" \
-            | sort
+          echo "Searching for index.html:"
+          find .output -type f -name "index.html" 2>/dev/null | sort || true
 
           echo ""
-          echo "Searching common TanStack build directories..."
+          echo "Searching for _shell.html:"
+          find .output -type f -name "_shell.html" 2>/dev/null | sort || true
+
+          echo ""
+          echo "Checking known TanStack output locations..."
+
+          rm -rf dist
+          mkdir -p dist
 
           if [ -f ".output/public/index.html" ]; then
-            echo "Found: .output/public/index.html"
-
-            rm -rf dist
-            mkdir -p dist
-
+            echo "Found .output/public/index.html"
             cp -a .output/public/. dist/
 
+          elif [ -f ".output/public/_shell.html" ]; then
+            echo "Found .output/public/_shell.html"
+            cp -a .output/public/. dist/
+            cp ".output/public/_shell.html" "dist/index.html"
+
+          elif [ -f ".output/public/index/index.html" ]; then
+            echo "Found .output/public/index/index.html"
+            cp -a .output/public/. dist/
+            cp ".output/public/index/index.html" "dist/index.html"
+
           elif [ -f ".output/index.html" ]; then
-            echo "Found: .output/index.html"
-
-            rm -rf dist
-            mkdir -p dist
-
+            echo "Found .output/index.html"
             cp -a .output/. dist/
 
-          elif [ -f "build/index.html" ]; then
-            echo "Found: build/index.html"
-
-            rm -rf dist
-            mkdir -p dist
-
-            cp -a build/. dist/
-
-          elif [ -f "dist/index.html" ]; then
-            echo "Found: dist/index.html"
-
           else
-            echo "ERROR: No index.html was found in the build output."
-            echo ""
-            echo "Full .output contents:"
-            find .output -maxdepth 5 -type f 2>/dev/null | sort || true
+            echo "Searching all project files for a usable HTML shell..."
 
-            echo ""
-            echo "Full build contents:"
-            find build -maxdepth 5 -type f 2>/dev/null | sort || true
+            SHELL_FILE=$(find .output -type f \( -name "_shell.html" -o -name "index.html" \) 2>/dev/null | head -1)
 
-            echo ""
-            echo "Full dist contents:"
-            find dist -maxdepth 5 -type f 2>/dev/null | sort || true
+            if [ -n "$SHELL_FILE" ]; then
+              echo "Found usable shell:"
+              echo "$SHELL_FILE"
 
-            exit 1
+              cp "$SHELL_FILE" "dist/index.html"
+            else
+              echo "ERROR: No usable HTML file was found."
+              echo ""
+              echo "Full .output contents:"
+              find .output -maxdepth 5 -type f 2>/dev/null | sort | head -500 || true
+
+              exit 1
+            fi
           fi
 
           echo ""
-          echo "Final Capacitor web directory:"
-          find dist -maxdepth 4 -type f | sort | head -300
+          echo "Final dist contents:"
+          find dist -maxdepth 5 -type f | sort | head -500
 
       - name: Verify web build
         run: |
-          echo "Checking final build output..."
+          echo "Checking final web build..."
 
           if [ ! -d "dist" ]; then
             echo "ERROR: dist directory was not created."
@@ -168,10 +163,14 @@ jobs:
 
           if [ ! -f "dist/index.html" ]; then
             echo "ERROR: dist/index.html was not created."
+            echo ""
+            echo "dist contents:"
+            find dist -maxdepth 5 -type f | sort || true
             exit 1
           fi
 
           echo "SUCCESS: dist/index.html exists."
+
           echo ""
           echo "dist size:"
           du -sh dist

@@ -11,6 +11,9 @@ jobs:
     permissions:
       contents: write
 
+    env:
+      GRADLE_OPTS: "-Xmx3072m -Dfile.encoding=UTF-8"
+
     steps:
       - name: 📥 Checkout Code
         uses: actions/checkout@v4
@@ -55,13 +58,10 @@ jobs:
           channel: 'stable'
           cache: true
 
-      - name: 🚀 Create Flutter Shell & Configure
+      - name: 🚀 Create Clean Flutter Shell & Pubspec
         run: |
           flutter create --org com.salman --project-name ai flutter_app
           cd flutter_app
-          
-          flutter pub add webview_flutter:4.8.0 connectivity_plus:6.0.5
-          flutter pub add --dev flutter_launcher_icons:0.13.1
 
           mkdir -p assets/www
           if [ -d "../www" ] && [ "$(ls -A ../www)" ]; then
@@ -79,65 +79,92 @@ jobs:
 
           if [ -n "$LOGO_PATH" ]; then
             cp "$LOGO_PATH" assets/icon/app_icon.png
+          else
+            node -e '
+            const fs = require("fs");
+            const fallback = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==";
+            fs.writeFileSync("assets/icon/app_icon.png", Buffer.from(fallback, "base64"));
+            '
           fi
 
           node -e '
           const fs = require("fs");
           const path = require("path");
 
-          // Ensure icon exists
-          const iconPath = "assets/icon/app_icon.png";
-          if (!fs.existsSync(iconPath)) {
-            const fallbackBase64 = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==";
-            fs.writeFileSync(iconPath, Buffer.from(fallbackBase64, "base64"));
-          }
-
-          // Ensure index.html exists in assets/www
           const indexPath = "assets/www/index.html";
           if (!fs.existsSync(indexPath)) {
             fs.writeFileSync(indexPath, "<html><body><h1>Salman AI</h1></body></html>");
           }
 
-          function getDirsWithFiles(dirPath) {
-            const result = new Set();
-            function scan(current) {
-              if (!fs.existsSync(current)) return;
-              const entries = fs.readdirSync(current, { withFileTypes: true });
-              let hasFiles = false;
-              for (const entry of entries) {
-                const full = path.join(current, entry.name);
-                if (entry.isDirectory()) {
-                  scan(full);
-                } else if (entry.isFile()) {
-                  hasFiles = true;
-                }
-              }
-              if (hasFiles) {
-                let formatted = current.replace(/\\/g, "/");
-                if (!formatted.endsWith("/")) formatted += "/";
-                result.add(formatted);
+          function getSubDirs(dir) {
+            let dirs = [];
+            if (!fs.existsSync(dir)) return dirs;
+            const items = fs.readdirSync(dir, { withFileTypes: true });
+            let hasFiles = false;
+            for (const item of items) {
+              const fullPath = path.join(dir, item.name);
+              if (item.isDirectory()) {
+                dirs = dirs.concat(getSubDirs(fullPath));
+              } else if (item.isFile()) {
+                hasFiles = true;
               }
             }
-            scan(dirPath);
-            return Array.from(result);
+            if (hasFiles) {
+              dirs.push(fullPathToAsset(dir));
+            }
+            return dirs;
           }
 
-          const validDirs = [
-            ...getDirsWithFiles("assets/icon"),
-            ...getDirsWithFiles("assets/www")
+          function fullPathToAsset(p) {
+            let formatted = p.replace(/\\/g, "/");
+            if (!formatted.endsWith("/")) formatted += "/";
+            return formatted;
+          }
+
+          const rawDirs = [
+            ...getSubDirs("assets/www"),
+            ...getSubDirs("assets/icon")
           ];
+          const uniqueDirs = Array.from(new Set(rawDirs));
 
-          let pubspec = fs.readFileSync("pubspec.yaml", "utf8");
-          const assetLines = "  assets:\n" + validDirs.map(d => "    - " + d).join("\n");
-          pubspec = pubspec.replace(/^flutter:/m, "flutter:\n" + assetLines);
+          let assetLines = uniqueDirs.map(d => "    - " + d).join("\n");
+          if (!assetLines) assetLines = "    - assets/www/";
 
-          pubspec += "\nflutter_launcher_icons:\n  android: \"launcher_icon\"\n  image_path: \"assets/icon/app_icon.png\"\n  min_sdk_android: 21\n";
+          const pubspecContent = `name: ai
+description: "Salman AI Mobile Application"
+publish_to: 'none'
+version: 1.0.0+1
 
-          fs.writeFileSync("pubspec.yaml", pubspec);
+environment:
+  sdk: '>=3.0.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  webview_flutter: ^4.8.0
+  connectivity_plus: ^6.0.5
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_launcher_icons: ^0.13.1
+
+flutter:
+  uses-material-design: true
+  assets:
+${assetLines}
+
+flutter_launcher_icons:
+  android: "launcher_icon"
+  image_path: "assets/icon/app_icon.png"
+  min_sdk_android: 21
+`;
+
+          fs.writeFileSync("pubspec.yaml", pubspecContent, "utf8");
           '
 
-          dart run flutter_launcher_icons || true
           flutter pub get
+          dart run flutter_launcher_icons || true
 
       - name: 📝 Inject Native Asset WebView Code safely
         run: |
@@ -440,6 +467,6 @@ jobs:
         uses: softprops/action-gh-release@v2
         if: success()
         with:
-          tag_name: v5.4.${{ github.run_number }}
-          name: Salman AI Final App v5.4.${{ github.run_number }}
+          tag_name: v5.5.${{ github.run_number }}
+          name: Salman AI Final App v5.5.${{ github.run_number }}
           files: flutter_app/build/app/outputs/flutter-apk/app-release.apk

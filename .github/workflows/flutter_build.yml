@@ -66,7 +66,6 @@ jobs:
           mkdir -p assets/www
           cp -r ../www/* assets/www/
 
-          # إضافة شعار التطبيق إلى الأصول للاستخدام في شاشة التحميل
           mkdir -p assets/icon
           LOGO_PATH=""
           for p in "../public/logo.png" "../logo.png" "../src/logo.png" "../public/favicon.png"; do
@@ -116,12 +115,13 @@ jobs:
 
           flutter pub get
 
-      - name: 📝 Inject Native Asset WebView Code with Dynamic Loader
+      - name: 📝 Inject Native Asset WebView Code with Dynamic Centered Loader
         run: |
           cd flutter_app
           node -e '
           const fs = require("fs");
           const code = `import "dart:async";
+          import "dart:io";
           import "package:flutter/material.dart";
           import "package:flutter/services.dart";
           import "package:webview_flutter/webview_flutter.dart";
@@ -135,24 +135,74 @@ jobs:
                 statusBarIconBrightness: Brightness.light,
               ),
             );
-            runApp(const MyApp());
+
+            int port = 0;
+            try {
+              final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+              port = server.port;
+              server.listen((HttpRequest request) async {
+                String path = Uri.decodeComponent(request.uri.path);
+                if (path == "/" || path.isEmpty) path = "/index.html";
+                if (path.startsWith("/")) path = path.substring(1);
+
+                String assetPath = "assets/www/" + path;
+                ByteData? data;
+
+                try {
+                  data = await rootBundle.load(assetPath);
+                } catch (_) {
+                  try {
+                    assetPath = "assets/www/index.html";
+                    data = await rootBundle.load(assetPath);
+                  } catch (_) {}
+                }
+
+                if (data != null) {
+                  final bytes = data.buffer.asUint8List();
+                  request.response.statusCode = HttpStatus.ok;
+                  request.response.headers.set("Access-Control-Allow-Origin", "*");
+                  
+                  if (assetPath.endsWith(".html")) request.response.headers.contentType = ContentType("text", "html", charset: "utf-8");
+                  else if (assetPath.endsWith(".js") || assetPath.endsWith(".mjs")) request.response.headers.contentType = ContentType("application", "javascript", charset: "utf-8");
+                  else if (assetPath.endsWith(".css")) request.response.headers.contentType = ContentType("text", "css", charset: "utf-8");
+                  else if (assetPath.endsWith(".png")) request.response.headers.contentType = ContentType("image", "png");
+                  else if (assetPath.endsWith(".jpg") || assetPath.endsWith(".jpeg")) request.response.headers.contentType = ContentType("image", "jpeg");
+                  else if (assetPath.endsWith(".svg")) request.response.headers.contentType = ContentType("image", "svg+xml");
+                  else if (assetPath.endsWith(".json")) request.response.headers.contentType = ContentType("application", "json", charset: "utf-8");
+                  else if (assetPath.endsWith(".ico")) request.response.headers.contentType = ContentType("image", "x-icon");
+                  else if (assetPath.endsWith(".woff2")) request.response.headers.contentType = ContentType("font", "woff2");
+                  else if (assetPath.endsWith(".woff")) request.response.headers.contentType = ContentType("font", "woff");
+
+                  request.response.add(bytes);
+                } else {
+                  request.response.statusCode = HttpStatus.notFound;
+                }
+                await request.response.close();
+              });
+            } catch (_) {}
+
+            runApp(MyApp(port: port));
           }
 
           class MyApp extends StatelessWidget {
-            const MyApp({super.key});
+            final int port;
+            const MyApp({super.key, required this.port});
+
             @override
             Widget build(BuildContext context) {
               return MaterialApp(
                 title: "Salman AI",
                 debugShowCheckedModeBanner: false,
                 theme: ThemeData.dark(),
-                home: const WebViewScreen(),
+                home: WebViewScreen(port: port),
               );
             }
           }
 
           class WebViewScreen extends StatefulWidget {
-            const WebViewScreen({super.key});
+            final int port;
+            const WebViewScreen({super.key, required this.port});
+
             @override
             State<WebViewScreen> createState() => _WebViewScreenState();
           }
@@ -162,38 +212,52 @@ jobs:
             late final StreamSubscription<List<ConnectivityResult>> _connectivitySubscription;
             bool _isLoading = true;
             bool _isOffline = false;
+            Timer? _safetyTimer;
 
             @override
             void initState() {
               super.initState();
+
+              _safetyTimer = Timer(const Duration(milliseconds: 1500), () {
+                _hideLoader();
+              });
+
               _controller = WebViewController()
                 ..setJavaScriptMode(JavaScriptMode.unrestricted)
                 ..setBackgroundColor(const Color(0xFF0B0B0B))
                 ..setNavigationDelegate(
                   NavigationDelegate(
-                    onPageStarted: (String url) {
-                      setState(() => _isLoading = true);
-                    },
-                    onPageFinished: (String url) {
-                      setState(() => _isLoading = false);
-                    },
-                    onWebResourceError: (WebResourceError error) {
-                      setState(() => _isLoading = false);
-                    },
+                    onPageFinished: (String url) => _hideLoader(),
+                    onWebResourceError: (WebResourceError error) => _hideLoader(),
                   ),
-                )
-                ..loadFlutterAsset("assets/www/index.html");
+                );
+
+              if (widget.port > 0) {
+                _controller.loadRequest(Uri.parse("http://127.0.0.1:\${widget.port}"));
+              } else {
+                _controller.loadFlutterAsset("assets/www/index.html");
+              }
 
               Connectivity().checkConnectivity().then((results) => _updateConnectionStatus(results));
               _connectivitySubscription = Connectivity().onConnectivityChanged.listen((results) => _updateConnectionStatus(results));
             }
 
+            void _hideLoader() {
+              if (mounted && _isLoading) {
+                setState(() => _isLoading = false);
+                _safetyTimer?.cancel();
+              }
+            }
+
             void _updateConnectionStatus(List<ConnectivityResult> results) {
-              setState(() => _isOffline = results.contains(ConnectivityResult.none) || results.isEmpty);
+              if (mounted) {
+                setState(() => _isOffline = results.contains(ConnectivityResult.none) || results.isEmpty);
+              }
             }
 
             @override
             void dispose() {
+              _safetyTimer?.cancel();
               _connectivitySubscription.cancel();
               super.dispose();
             }
@@ -207,45 +271,33 @@ jobs:
                     children: [
                       WebViewWidget(controller: _controller),
                       
-                      // شاشة التحميل المؤقتة (تختفي فور وصول الصفحة)
                       if (_isLoading)
                         Container(
                           color: const Color(0xFF0B0B0B),
                           width: double.infinity,
                           height: double.infinity,
-                          child: Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Image.asset(
-                                "assets/icon/app_icon.png",
-                                width: 90,
-                                height: 90,
-                                errorBuilder: (context, error, stackTrace) => const Icon(
-                                  Icons.smart_toy_rounded,
-                                  size: 80,
-                                  color: Colors.blueAccent,
+                          child: Center(
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              crossAxisAlignment: CrossAlignment.center,
+                              children: [
+                                Image.asset(
+                                  "assets/icon/app_icon.png",
+                                  width: 110,
+                                  height: 110,
+                                  errorBuilder: (context, error, stackTrace) => const Icon(
+                                    Icons.smart_toy_rounded,
+                                    size: 100,
+                                    color: Colors.blueAccent,
+                                  ),
                                 ),
-                              ),
-                              const SizedBox(height: 24),
-                              const CircularProgressIndicator(
-                                color: Colors.blueAccent,
-                                strokeWidth: 3,
-                              ),
-                              const SizedBox(height: 16),
-                              const Text(
-                                "جاري تحميل التطبيق...",
-                                style: TextStyle(
-                                  color: Colors.white70,
-                                  fontSize: 14,
-                                  fontWeight: FontWeight.bold,
-                                  fontFamily: "sans-serif",
-                                ),
-                              ),
-                            ],
+                                const SizedBox(height: 20),
+                                const AnimatedWaitText(),
+                              ],
+                            ),
                           ),
                         ),
 
-                      // شريط تنبيه الأوفلاين
                       if (_isOffline)
                         Positioned(
                           top: 0, left: 0, right: 0,
@@ -268,6 +320,53 @@ jobs:
                 ),
               );
             }
+          }
+
+          class AnimatedWaitText extends StatefulWidget {
+            const AnimatedWaitText({super.key});
+
+            @override
+            State<AnimatedWaitText> createState() => _AnimatedWaitTextState();
+          }
+
+          class _AnimatedWaitTextState extends State<AnimatedWaitText> {
+            int _dotCount = 0;
+            Timer? _timer;
+
+            @override
+            void initState() {
+              super.initState();
+              _timer = Timer.periodic(const Duration(milliseconds: 350), (timer) {
+                if (mounted) {
+                  setState(() {
+                    _dotCount = (_dotCount + 1) % 4;
+                  });
+                }
+              });
+            }
+
+            @override
+            void dispose() {
+              _timer?.cancel();
+              super.dispose();
+            }
+
+            @override
+            Widget build(BuildContext context) {
+              String dots = "";
+              for (int i = 0; i < _dotCount; i++) {
+                dots += ".";
+              }
+              return Text(
+                "يرجى الانتظار" + dots,
+                style: const TextStyle(
+                  color: Colors.white70,
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                  fontFamily: "sans-serif",
+                ),
+              );
+            }
           }`;
           fs.writeFileSync("lib/main.dart", code);
           '
@@ -277,6 +376,7 @@ jobs:
           cd flutter_app
           
           sed -i '/<application/i \    <uses-permission android:name="android.permission.INTERNET"/>\n    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>' android/app/src/main/AndroidManifest.xml
+          sed -i 's/<application/& android:usesCleartextTraffic="true"/' android/app/src/main/AndroidManifest.xml
           sed -i 's/android:label="[^"]*"/android:label="@string\/app_name"/g' android/app/src/main/AndroidManifest.xml
 
           node -e '
@@ -308,6 +408,6 @@ jobs:
         uses: softprops/action-gh-release@v2
         if: success()
         with:
-          tag_name: v4.9.${{ github.run_number }}
-          name: Salman AI Final App v4.9.${{ github.run_number }}
+          tag_name: v5.1.${{ github.run_number }}
+          name: Salman AI Final App v5.1.${{ github.run_number }}
           files: flutter_app/build/app/outputs/flutter-apk/app-release.apk

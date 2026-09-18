@@ -266,10 +266,8 @@ jobs:
         run: |
           MANIFEST="android/app/src/main/AndroidManifest.xml"
           if [ -f "$MANIFEST" ]; then
-            # إضافة أذونات الإنترنت
             sed -i '/<application/i \    <uses-permission android:name="android.permission.INTERNET"/>\n    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>' "$MANIFEST"
             
-            # إضافة Intent Filters لربط الدخول مع Google وإعادة التوجيه إلى التطبيق مباشرة
             INTENT_FILTER='<intent-filter android:autoVerify="true"><action android:name="android.intent.action.VIEW"/><category android:name="android.intent.category.DEFAULT"/><category android:name="android.intent.category.BROWSABLE"/><data android:scheme="https" android:host="salman-ai.lovable.app"/><data android:scheme="com.salman.ai"/></intent-filter>'
             sed -i "/<\/activity>/i \        $INTENT_FILTER" "$MANIFEST"
           fi
@@ -285,19 +283,27 @@ jobs:
         run: |
           mkdir -p output_apk
           RAW_APK=$(find android/app/build/outputs/apk/release/ -name "*.apk" | head -n 1)
+          
           keytool -genkeypair -v -keystore release.keystore -storepass salman123 -alias salman -keypass salman123 -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=SalmanAI"
           
-          # استخراج أدوات البناء بشكل مضمون ومستقر
-          ZIPALIGN_PATH=$(find$ANDROID_HOME/build-tools/ -name zipalign | sort -V | tail -n 1)
-          APKSIGNER_PATH=$(find$ANDROID_HOME/build-tools/ -name apksigner | sort -V | tail -n 1)
-
-          "$ZIPALIGN_PATH" -v -p 4 "$RAW_APK" output_apk/Salman_AI.apk
-          "$APKSIGNER_PATH" sign --ks release.keystore --ks-pass pass:salman123 --ks-key-alias salman --key-pass pass:salman123 output_apk/Salman_AI.apk
+          # تثبيت zipalign بشكل مباشر وسريع في النظام لضمان التوافق وعدم حدوث خطأ في المسارات
+          sudo apt-get update && sudo apt-get install -y zipalign
+          
+          zipalign -v -p 4 "$RAW_APK" output_apk/Salman_AI.apk
+          
+          # توقيع التطبيق باستخدام apksigner أو jarsigner
+          APKSIGNER=$(find /usr/local/lib/android/sdk/build-tools/ $ANDROID_HOME/build-tools/ -name apksigner 2>/dev/null | sort -V | tail -n 1)
+          
+          if [ -n "$APKSIGNER" ]; then
+            "$APKSIGNER" sign --ks release.keystore --ks-pass pass:salman123 --ks-key-alias salman --key-pass pass:salman123 output_apk/Salman_AI.apk
+          else
+            jarsigner -verbose -sigalg SHA256withRSA -digestalg SHA-256 -keystore release.keystore -storepass salman123 -keypass salman123 output_apk/Salman_AI.apk salman
+          fi
 
       - name: Upload Final Signed APK to Release
         uses: softprops/action-gh-release@v2
         if: success()
         with:
-          tag_name: v38.0.${{ github.run_number }}
-          name: Salman AI Official Release v38.0.${{ github.run_number }}
+          tag_name: v39.0.${{ github.run_number }}
+          name: Salman AI Official Release v39.0.${{ github.run_number }}
           files: output_apk/Salman_AI.apk

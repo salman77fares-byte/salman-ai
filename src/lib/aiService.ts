@@ -23,7 +23,6 @@ function baseSystemPrompt(): string {
   ].join("\n");
 }
 
-
 /** يطلب نتائج بحث حية من نقطة البحث في التطبيق (تعمل من المتصفح والسيرفر). */
 async function fetchLiveContext(query: string): Promise<string> {
   const base =
@@ -63,7 +62,7 @@ const FALLBACK_KEYS = {
   groq: "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",
 };
 
-const GEMINI_MODELS = ["gemini-3.6-flash", "gemini-flash-latest"];
+const GEMINI_MODELS = ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-1.5-flash"];
 const OPENROUTER_MODELS = [
   "meta-llama/llama-3.3-70b-instruct:free",
   "deepseek/deepseek-chat-v3.1:free",
@@ -73,7 +72,7 @@ const OPENROUTER_VISION_MODELS = [
   "google/gemini-2.0-flash-exp:free",
   "meta-llama/llama-3.2-11b-vision-instruct:free",
 ];
-const GROQ_MODELS = ["openai/gpt-oss-120b", "openai/gpt-oss-20b"];
+const GROQ_MODELS = ["llama-3.3-70b-versatile", "llama-3.1-8b-instant"];
 const GATEWAY_MODEL = "openai/gpt-5.6-sol";
 
 type ImagePart = { mimeType: string; data: string };
@@ -215,7 +214,7 @@ async function tryGemini(history: Msg[], systemPrompt: string, grounded: boolean
   for (const model of GEMINI_MODELS) {
     try {
       const res = await postJson(
-        `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${encodeURIComponent(key)}`,
+        `[https://generativelanguage.googleapis.com/v1beta/models/$](https://generativelanguage.googleapis.com/v1beta/models/$){model}:generateContent?key=${encodeURIComponent(key)}`,
         {},
         {
           systemInstruction: { parts: [{ text: systemPrompt }] },
@@ -228,7 +227,6 @@ async function tryGemini(history: Msg[], systemPrompt: string, grounded: boolean
               })),
             ],
           })),
-          // أداة البحث الحي المدمجة في Gemini (Google Search Grounding) — تُعطّل مع الصور
           ...(vision ? {} : { tools: [{ google_search: {} }] }),
           generationConfig: { temperature: 0.6, topP: 0.9, maxOutputTokens: 1400 },
         },
@@ -284,17 +282,17 @@ async function tryOpenAICompatible(
 
 const tryOpenRouter = (history: Msg[], systemPrompt: string, _grounded = false) =>
   tryOpenAICompatible(
-    "https://openrouter.ai/api/v1/chat/completions",
+    "[https://openrouter.ai/api/v1/chat/completions](https://openrouter.ai/api/v1/chat/completions)",
     keyFor("openrouter"),
     hasImages(history) ? OPENROUTER_VISION_MODELS : OPENROUTER_MODELS,
     history,
     systemPrompt,
-    { "HTTP-Referer": "https://salman-ai.lovable.app", "X-Title": "Salman AI" },
+    { "HTTP-Referer": "[https://salman-ai.lovable.app](https://salman-ai.lovable.app)", "X-Title": "Salman AI" },
   );
 
 const tryGroq = (history: Msg[], systemPrompt: string, _grounded = false) =>
   tryOpenAICompatible(
-    "https://api.groq.com/openai/v1/chat/completions",
+    "[https://api.groq.com/openai/v1/chat/completions](https://api.groq.com/openai/v1/chat/completions)",
     keyFor("groq"),
     GROQ_MODELS,
     history,
@@ -307,7 +305,7 @@ async function tryGateway(history: Msg[], systemPrompt: string, _grounded = fals
   if (!key) return null;
   try {
     const res = await postJson(
-      "https://ai.gateway.lovable.dev/v1/chat/completions",
+      "[https://ai.gateway.lovable.dev/v1/chat/completions](https://ai.gateway.lovable.dev/v1/chat/completions)",
       { "Lovable-API-Key": key },
       {
         model: GATEWAY_MODEL,
@@ -393,4 +391,4 @@ export async function askSalmanAI(messages: unknown[]): Promise<string> {
   return vision
     ? "تعذّر تحليل الصورة حالياً، جرّب صورة أصغر حجماً أو أعد المحاولة بعد قليل."
     : "تعذر الاتصال بأي من المحركات حالياً، يرجى المحاولة مرة أخرى بعد قليل.";
-    }
+}

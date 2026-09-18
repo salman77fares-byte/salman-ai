@@ -2,7 +2,7 @@ import { defineConfig } from "@lovable.dev/vite-tanstack-config";
 
 export default defineConfig({
   vite: {
-    base: "/", // تغيير المسار إلى / ليعمل بشكل صحيح مع سيرفر Capacitor المحالي (https://localhost)
+    base: "./", // تم التغيير إلى مسار نسبي ليعمل أوفلاين داخل الـ APK
     build: {
       outDir: "dist",
       emptyOutDir: true,

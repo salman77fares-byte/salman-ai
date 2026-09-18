@@ -24,14 +24,12 @@ function baseSystemPrompt(): string {
 }
 
 
-/** يطلب نتائج بحث حية من نقطة البحث في التطبيق (تعمل من المتصفح والسيرفر وتطبيق الهاتف). */
+/** يطلب نتائج بحث حية من نقطة البحث في التطبيق (تعمل من المتصفح والسيرفر). */
 async function fetchLiveContext(query: string): Promise<string> {
-  const defaultOrigin = "[https://salman-ai.lovable.app](https://salman-ai.lovable.app)";
   const base =
-    typeof window !== "undefined" && (window.location.origin.includes("localhost") || window.location.protocol === "file:")
-      ? defaultOrigin
-      : (env("APP_ORIGIN") || env("VITE_APP_ORIGIN") || defaultOrigin);
-
+    typeof window !== "undefined"
+      ? ""
+      : (env("APP_ORIGIN") || env("VITE_APP_ORIGIN") || "http://localhost:8080");
   try {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), 14_000);
@@ -217,7 +215,7 @@ async function tryGemini(history: Msg[], systemPrompt: string, grounded: boolean
   for (const model of GEMINI_MODELS) {
     try {
       const res = await postJson(
-        `[https://generativelanguage.googleapis.com/v1beta/models/$](https://generativelanguage.googleapis.com/v1beta/models/$){model}:generateContent?key=${encodeURIComponent(key)}`,
+        `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${encodeURIComponent(key)}`,
         {},
         {
           systemInstruction: { parts: [{ text: systemPrompt }] },
@@ -286,17 +284,17 @@ async function tryOpenAICompatible(
 
 const tryOpenRouter = (history: Msg[], systemPrompt: string, _grounded = false) =>
   tryOpenAICompatible(
-    "[https://openrouter.ai/api/v1/chat/completions](https://openrouter.ai/api/v1/chat/completions)",
+    "https://openrouter.ai/api/v1/chat/completions",
     keyFor("openrouter"),
     hasImages(history) ? OPENROUTER_VISION_MODELS : OPENROUTER_MODELS,
     history,
     systemPrompt,
-    { "HTTP-Referer": "[https://salman-ai.lovable.app](https://salman-ai.lovable.app)", "X-Title": "Salman AI" },
+    { "HTTP-Referer": "https://salman-ai.lovable.app", "X-Title": "Salman AI" },
   );
 
 const tryGroq = (history: Msg[], systemPrompt: string, _grounded = false) =>
   tryOpenAICompatible(
-    "[https://api.groq.com/openai/v1/chat/completions](https://api.groq.com/openai/v1/chat/completions)",
+    "https://api.groq.com/openai/v1/chat/completions",
     keyFor("groq"),
     GROQ_MODELS,
     history,
@@ -309,7 +307,7 @@ async function tryGateway(history: Msg[], systemPrompt: string, _grounded = fals
   if (!key) return null;
   try {
     const res = await postJson(
-      "[https://ai.gateway.lovable.dev/v1/chat/completions](https://ai.gateway.lovable.dev/v1/chat/completions)",
+      "https://ai.gateway.lovable.dev/v1/chat/completions",
       { "Lovable-API-Key": key },
       {
         model: GATEWAY_MODEL,
@@ -325,7 +323,7 @@ async function tryGateway(history: Msg[], systemPrompt: string, _grounded = fals
   }
 }
 
-/** المحركات المتاحة للااختيار من الإعدادات. */
+/** المحركات المتاحة للاختيار من الإعدادات. */
 export const ENGINE_OPTIONS = [
   { id: "gemini", label: "Google Gemini Flash (سريع + بحث حي)" },
   { id: "groq", label: "Groq GPT-OSS (أسرع استجابة)" },
@@ -395,4 +393,4 @@ export async function askSalmanAI(messages: unknown[]): Promise<string> {
   return vision
     ? "تعذّر تحليل الصورة حالياً، جرّب صورة أصغر حجماً أو أعد المحاولة بعد قليل."
     : "تعذر الاتصال بأي من المحركات حالياً، يرجى المحاولة مرة أخرى بعد قليل.";
-}
+    }

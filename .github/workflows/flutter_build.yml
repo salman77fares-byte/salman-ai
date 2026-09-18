@@ -34,26 +34,37 @@ jobs:
           rm -rf www
           mkdir -p www
 
+          # تشغيل أمر بناء التطبيق الخاص بـ Vite/React
           npm run build || npx vite build || true
 
-          # البحث عن المسار الدقيق لملف index.html الناتج عن البناء
-          INDEX_FILE=$(find dist build .output out -name "index.html" 2>/dev/null | head -n 1)
-
-          if [ -n "$INDEX_FILE" ]; then
-            TARGET_DIR=$(dirname "$INDEX_FILE")
-            cp -r "$TARGET_DIR"/* www/
-          else
-            # بحث عام في حال كان المجلد بمكان مختلف
-            INDEX_FILE=$(find . -name "index.html" ! -path "*/node_modules/*" ! -path "*/www/*" ! -path "*/public/*" | head -n 1)
-            if [ -n "$INDEX_FILE" ]; then
-              TARGET_DIR=$(dirname "$INDEX_FILE")
-              cp -r "$TARGET_DIR"/* www/
-            fi
+          # نقل الملفات المجمعة المباشرة من مجلد البناء إلى www
+          if [ -d "dist" ] && [ -f "dist/index.html" ]; then
+            cp -r dist/* www/
+          elif [ -d "build" ] && [ -f "build/index.html" ]; then
+            cp -r build/* www/
+          elif [ -d "out" ] && [ -f "out/index.html" ]; then
+            cp -r out/* www/
+          elif [ -f "index.html" ]; then
+            cp index.html www/
+            [ -d "src" ] && cp -r src www/ 2>/dev/null || true
+            [ -d "public" ] && cp -r public/* www/ 2>/dev/null || true
           fi
 
-          # ضمان وجود index.html للـ Capacitor
+          # ضمان وجود index.html لمنع أي توقف في Capacitor
           if [ ! -f "www/index.html" ]; then
-            echo '<!DOCTYPE html><html lang="ar"><head><meta charset="UTF-8"><script>window.location.href="https://salman-ai.lovable.app";</script></head><body></body></html>' > www/index.html
+            cat << 'EOF' > www/index.html
+          <!DOCTYPE html>
+          <html lang="ar" dir="rtl">
+          <head>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <title>Salman AI</title>
+          </head>
+          <body>
+            <div id="root"></div>
+          </body>
+          </html>
+          EOF
           fi
 
       - name: Setup Capacitor Shell
@@ -129,6 +140,6 @@ jobs:
         uses: softprops/action-gh-release@v2
         if: success()
         with:
-          tag_name: v41.0.${{ github.run_number }}
-          name: Salman AI Official Release v41.0.${{ github.run_number }}
+          tag_name: v42.0.${{ github.run_number }}
+          name: Salman AI Official Release v42.0.${{ github.run_number }}
           files: output_apk/Salman_AI.apk

@@ -61,24 +61,20 @@ jobs:
 
               #offline-app { display: flex; flex-direction: column; width: 100%; height: 100%; position: absolute; top: 0; left: 0; z-index: 1; background-color: #090d16; }
 
-              /* الهيدر العلوي المتناسق */
               .top-nav { height: 60px; background-color: #090d16; border-bottom: 1px solid rgba(255, 255, 255, 0.05); display: flex; align-items: center; justify-content: space-between; padding: 0 14px; position: relative; z-index: 10; }
               .btn-new-chat { background: rgba(16, 185, 129, 0.08); border: 1px solid rgba(16, 185, 129, 0.3); color: #10b981; border-radius: 20px; padding: 6px 14px; font-size: 13px; font-weight: 700; display: flex; align-items: center; gap: 6px; cursor: pointer; white-space: nowrap; }
               .btn-new-chat:active { background: rgba(16, 185, 129, 0.2); }
               .model-select { background: #131b2e; border: 1px solid #1e293b; color: #e2e8f0; padding: 6px 12px; border-radius: 12px; font-size: 13px; outline: none; cursor: pointer; text-align: center; }
               .btn-menu { background: none; border: none; color: #94a3b8; font-size: 22px; cursor: pointer; padding: 4px; }
 
-              /* جسم الصفحة */
               .main-body { flex: 1; display: flex; flex-direction: column; overflow-y: auto; position: relative; }
               
-              /* الشاشة الرئيسية للترحيب (مطابقة للرسمية) */
               .welcome-view { display: flex; flex-direction: column; align-items: center; justify-content: center; flex: 1; text-align: center; padding: 20px; }
               .logo-card { width: 84px; height: 84px; background-color: #111827; border: 1px solid rgba(16, 185, 129, 0.25); border-radius: 22px; display: flex; align-items: center; justify-content: center; margin-bottom: 20px; box-shadow: 0 10px 25px rgba(0,0,0,0.5); }
               .logo-card img { width: 56px; height: 56px; object-fit: contain; }
               .welcome-title { font-size: 22px; font-weight: 800; color: #ffffff; margin-bottom: 8px; }
               .welcome-desc { font-size: 14px; color: #64748b; }
 
-              /* قائمة المحادثات */
               .chat-list { display: none; flex-direction: column; gap: 14px; padding: 16px; }
               .msg-user { align-self: flex-start; background: #10b981; color: #022c22; padding: 10px 16px; border-radius: 18px 18px 4px 18px; font-size: 14px; font-weight: 600; max-width: 82%; word-break: break-word; }
               .msg-ai { align-self: stretch; background: #131b2e; border: 1px solid rgba(255, 255, 255, 0.05); border-radius: 16px; padding: 14px; display: flex; flex-direction: column; gap: 8px; }
@@ -86,7 +82,6 @@ jobs:
               .ai-header img { width: 20px; height: 20px; border-radius: 6px; }
               .ai-text { font-size: 14px; color: #cbd5e1; line-height: 1.5; }
 
-              /* حقل الإدخال السفلي */
               .bottom-bar { padding: 12px 14px; background-color: #090d16; border-top: 1px solid rgba(255, 255, 255, 0.05); display: flex; align-items: center; gap: 10px; }
               .input-box { flex: 1; background-color: #131b2e; border: 1px solid #1e293b; border-radius: 28px; padding: 4px 14px; display: flex; align-items: center; gap: 8px; }
               .btn-plus { background: none; border: none; color: #64748b; font-size: 20px; cursor: pointer; padding: 2px 4px; }
@@ -95,7 +90,6 @@ jobs:
               .btn-send { width: 40px; height: 40px; background-color: #10b981; border: none; border-radius: 50%; color: #022c22; display: flex; align-items: center; justify-content: center; cursor: pointer; flex-shrink: 0; }
               .btn-send svg { width: 18px; height: 18px; fill: currentColor; transform: rotate(180deg); }
 
-              /* القائمة الجانبية */
               .sidebar-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 100; }
               .sidebar { position: fixed; top: 0; right: -280px; width: 280px; height: 100%; background: #0f172a; z-index: 101; transition: right 0.3s ease; padding: 20px; display: flex; flex-direction: column; gap: 16px; border-left: 1px solid rgba(255,255,255,0.08); }
               .sidebar.open { right: 0; }
@@ -103,7 +97,6 @@ jobs:
               .close-sidebar { background: none; border: none; color: #94a3b8; font-size: 20px; cursor: pointer; }
               .menu-item { background: #1e293b; color: #f8fafc; border: none; padding: 12px; border-radius: 10px; text-align: right; font-size: 14px; cursor: pointer; }
 
-              /* إطار الإنترنت المباشر */
               #live-frame { width: 100%; height: 100%; border: none; position: absolute; top: 0; left: 0; z-index: 2; background-color: #090d16; display: none; }
             </style>
           </head>
@@ -239,7 +232,7 @@ jobs:
       - name: Setup Capacitor Shell
         run: |
           npm install @capacitor/core@5.7.0 @capacitor/cli@5.7.0 @capacitor/android@5.7.0 --save-dev
-          echo '{"appId":"com.salman.ai","appName":"Salman AI","webDir":"www","server":{"androidScheme":"https","hostname":"localhost","cleartext":true}}' > capacitor.config.json
+          echo '{"appId":"com.salman.ai","appName":"Salman AI","webDir":"www","server":{"androidScheme":"https","hostname":"salman-ai.lovable.app","cleartext":true}}' > capacitor.config.json
           npx cap add android || true
 
       - name: Apply Custom Logo
@@ -269,11 +262,16 @@ jobs:
             done
           fi
 
-      - name: Configure Android Permissions & Sync
+      - name: Configure Android Deep Links & Permissions
         run: |
           MANIFEST="android/app/src/main/AndroidManifest.xml"
           if [ -f "$MANIFEST" ]; then
+            # إضافة أذونات الإنترنت
             sed -i '/<application/i \    <uses-permission android:name="android.permission.INTERNET"/>\n    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>' "$MANIFEST"
+            
+            # إضافة Intent Filters لربط الدخول مع Google وإعادة التوجيه إلى التطبيق مباشرة
+            INTENT_FILTER='<intent-filter android:autoVerify="true"><action android:name="android.intent.action.VIEW"/><category android:name="android.intent.category.DEFAULT"/><category android:name="android.intent.category.BROWSABLE"/><data android:scheme="https" android:host="salman-ai.lovable.app"/><data android:scheme="com.salman.ai"/></intent-filter>'
+            sed -i "/<\/activity>/i \        $INTENT_FILTER" "$MANIFEST"
           fi
           chmod +x android/gradlew
           npx cap sync android
@@ -288,14 +286,18 @@ jobs:
           mkdir -p output_apk
           RAW_APK=$(find android/app/build/outputs/apk/release/ -name "*.apk" | head -n 1)
           keytool -genkeypair -v -keystore release.keystore -storepass salman123 -alias salman -keypass salman123 -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=SalmanAI"
-          BUILD_TOOLS_DIR=$(ls -d$ANDROID_HOME/build-tools/* | tail -n 1)
-          $BUILD_TOOLS_DIR/zipalign -v 4$RAW_APK output_apk/Salman_AI.apk
-          $BUILD_TOOLS_DIR/apksigner sign --ks release.keystore --ks-pass pass:salman123 --ks-key-alias salman --key-pass pass:salman123 output_apk/Salman_AI.apk
+          
+          # استخراج أدوات البناء بشكل مضمون ومستقر
+          ZIPALIGN_PATH=$(find$ANDROID_HOME/build-tools/ -name zipalign | sort -V | tail -n 1)
+          APKSIGNER_PATH=$(find$ANDROID_HOME/build-tools/ -name apksigner | sort -V | tail -n 1)
+
+          "$ZIPALIGN_PATH" -v -p 4 "$RAW_APK" output_apk/Salman_AI.apk
+          "$APKSIGNER_PATH" sign --ks release.keystore --ks-pass pass:salman123 --ks-key-alias salman --key-pass pass:salman123 output_apk/Salman_AI.apk
 
       - name: Upload Final Signed APK to Release
         uses: softprops/action-gh-release@v2
         if: success()
         with:
-          tag_name: v37.0.${{ github.run_number }}
-          name: Salman AI Official Release v37.0.${{ github.run_number }}
+          tag_name: v38.0.${{ github.run_number }}
+          name: Salman AI Official Release v38.0.${{ github.run_number }}
           files: output_apk/Salman_AI.apk

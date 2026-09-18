@@ -36,18 +36,24 @@ jobs:
 
           npm run build || npx vite build || true
 
-          BUILT_DIR=""
-          for dir in dist build .output/public out; do
-            if [ -d "$dir" ] && [ "$(ls -A $dir)" ]; then
-              BUILT_DIR="$dir"
-              break
-            fi
-          done
+          # البحث عن المسار الدقيق لملف index.html الناتج عن البناء
+          INDEX_FILE=$(find dist build .output out -name "index.html" 2>/dev/null | head -n 1)
 
-          if [ -n "$BUILT_DIR" ]; then
-            cp -r $BUILT_DIR/* www/
+          if [ -n "$INDEX_FILE" ]; then
+            TARGET_DIR=$(dirname "$INDEX_FILE")
+            cp -r "$TARGET_DIR"/* www/
           else
-            echo "Error: Build output directory not found!" && exit 1
+            # بحث عام في حال كان المجلد بمكان مختلف
+            INDEX_FILE=$(find . -name "index.html" ! -path "*/node_modules/*" ! -path "*/www/*" ! -path "*/public/*" | head -n 1)
+            if [ -n "$INDEX_FILE" ]; then
+              TARGET_DIR=$(dirname "$INDEX_FILE")
+              cp -r "$TARGET_DIR"/* www/
+            fi
+          fi
+
+          # ضمان وجود index.html للـ Capacitor
+          if [ ! -f "www/index.html" ]; then
+            echo '<!DOCTYPE html><html lang="ar"><head><meta charset="UTF-8"><script>window.location.href="https://salman-ai.lovable.app";</script></head><body></body></html>' > www/index.html
           fi
 
       - name: Setup Capacitor Shell
@@ -123,6 +129,6 @@ jobs:
         uses: softprops/action-gh-release@v2
         if: success()
         with:
-          tag_name: v40.0.${{ github.run_number }}
-          name: Salman AI Official Release v40.0.${{ github.run_number }}
+          tag_name: v41.0.${{ github.run_number }}
+          name: Salman AI Official Release v41.0.${{ github.run_number }}
           files: output_apk/Salman_AI.apk

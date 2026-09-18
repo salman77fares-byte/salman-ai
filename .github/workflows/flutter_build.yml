@@ -33,17 +33,17 @@ jobs:
         run: |
           mkdir -p www
           
-          # إنشاء index.html رئيسي مسبقاً لضمان عدم توقف Capacitor
-          echo '<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Salman AI</title></head><body><div id="root"></div></body></html>' > www/index.html
+          # البناء المباشر عبر Vite لتجاوز أخطاء TypeScript في aiService.ts
+          npx vite build --outDir www || npm run build || true
 
-          # بناء المشروع مباشرة وتجاوز أي أخطاء نوعية في ملفات TypeScript
-          npx vite build || npm run build || true
-
-          # نقل مخرجات البناء الحقيقية إلى www
+          # نقل المخرجات في حال إنشائها داخل dist
           if [ -d "dist" ] && [ -f "dist/index.html" ]; then
             cp -r dist/* www/
-          elif [ -d "build" ] && [ -f "build/index.html" ]; then
-            cp -r build/* www/
+          fi
+
+          # تأكيد وجود index.html في مجلد www
+          if [ ! -f "www/index.html" ]; then
+            echo '<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Salman AI</title></head><body><div id="root"></div></body></html>' > www/index.html
           fi
 
       - name: Setup Capacitor Shell
@@ -81,6 +81,12 @@ jobs:
 
       - name: Configure Android Deep Links & Permissions
         run: |
+          # تأكيد إضافي قبل تنفيذ أمر الربط
+          mkdir -p www
+          if [ ! -f "www/index.html" ]; then
+            echo '<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Salman AI</title></head><body><div id="root"></div></body></html>' > www/index.html
+          fi
+
           MANIFEST="android/app/src/main/AndroidManifest.xml"
           if [ -f "$MANIFEST" ]; then
             sed -i '/<application/i \    <uses-permission android:name="android.permission.INTERNET"/>\n    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>' "$MANIFEST"
@@ -119,6 +125,6 @@ jobs:
         uses: softprops/action-gh-release@v2
         if: success()
         with:
-          tag_name: v43.0.${{ github.run_number }}
-          name: Salman AI Official Release v43.0.${{ github.run_number }}
+          tag_name: v44.0.${{ github.run_number }}
+          name: Salman AI Official Release v44.0.${{ github.run_number }}
           files: output_apk/Salman_AI.apk

@@ -1,4 +1,4 @@
-name: Build Salman AI Full Native Hybrid APK
+name: Build Salman AI Clean Offline & Online Hybrid APK
 
 on:
   push:
@@ -29,29 +29,25 @@ jobs:
       - name: Install Dependencies
         run: npm install --legacy-peer-deps
 
-      - name: Build Web Assets & Guarantee www/index.html
+      - name: Build Web Assets & Generate Matched UI
         run: |
           rm -rf www
           mkdir -p www
 
-          # 1. تشغيل أمر البناء
           npm run build || npx vite build || true
 
-          # 2. نسخ الأصول المبنية إن وجدت
           for dir in dist .output/public build out; do
             if [ -d "$dir" ]; then
               cp -r $dir/* www/ 2>/dev/null || true
             fi
           done
 
-          # 3. نسخ الشعار المتاح لاستخدامه في الواجهة
           LOGO_SRC=""
           for p in "public/logo.png" "public/icon-512.png" "logo.png" "src/logo.png"; do
             if [ -f "$p" ]; then LOGO_SRC="$p"; break; fi
           done
           if [ -n "$LOGO_SRC" ]; then cp "$LOGO_SRC" www/logo.png; fi
 
-          # 4. كتابة ملف index.html متكامل مع واجهة شات حقيقية تعمل أوفلاين وأونلاين
           cat << 'EOF' > www/index.html
           <!DOCTYPE html>
           <html lang="ar" dir="rtl">
@@ -60,45 +56,55 @@ jobs:
             <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
             <title>Salman AI</title>
             <style>
-              * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; -webkit-tap-highlight-color: transparent; }
-              html, body { width: 100%; height: 100%; background-color: #0b0f17; color: #f8fafc; overflow: hidden; }
-              
-              /* واجهة التطبيق الأوفلاين الكلمة */
-              #offline-app { display: flex; flex-direction: column; width: 100%; height: 100%; background-color: #0b0f17; position: absolute; top: 0; left: 0; z-index: 1; }
-              
-              /* الهيدر العلوي المطابق للتصميم الحقيقي */
-              .top-nav { height: 60px; background-color: #0f172a; border-bottom: 1px solid rgba(255,255,255,0.08); display: flex; align-items: center; justify-content: space-between; padding: 0 12px; }
-              .brand { display: flex; align-items: center; gap: 8px; }
-              .brand img { width: 32px; height: 32px; border-radius: 8px; object-fit: cover; }
-              .brand-title { font-size: 17px; font-weight: bold; color: #10b981; }
-              
-              .nav-actions { display: flex; align-items: center; gap: 6px; }
-              .btn-pill { background: rgba(16, 185, 129, 0.1); border: 1px solid rgba(16, 185, 129, 0.3); color: #10b981; padding: 6px 12px; border-radius: 20px; font-size: 12px; font-weight: 600; cursor: pointer; }
-              .model-select { background: #1e293b; border: 1px solid #334155; color: #e2e8f0; padding: 6px 10px; border-radius: 12px; font-size: 12px; cursor: pointer; outline: none; }
-              .menu-icon { background: none; border: none; color: #e2e8f0; font-size: 20px; padding: 4px 8px; cursor: pointer; }
+              * { box-sizing: border-box; margin: 0; padding: 0; font-family: system-ui, -apple-system, sans-serif; -webkit-tap-highlight-color: transparent; }
+              html, body { width: 100%; height: 100%; background-color: #090d16; color: #f8fafc; overflow: hidden; }
 
-              /* منطقة الشات */
-              .chat-container { flex: 1; overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 16px; }
+              #offline-app { display: flex; flex-direction: column; width: 100%; height: 100%; position: absolute; top: 0; left: 0; z-index: 1; background-color: #090d16; }
+
+              /* الهيدر العلوي المتناسق */
+              .top-nav { height: 60px; background-color: #090d16; border-bottom: 1px solid rgba(255, 255, 255, 0.05); display: flex; align-items: center; justify-content: space-between; padding: 0 14px; position: relative; z-index: 10; }
+              .btn-new-chat { background: rgba(16, 185, 129, 0.08); border: 1px solid rgba(16, 185, 129, 0.3); color: #10b981; border-radius: 20px; padding: 6px 14px; font-size: 13px; font-weight: 700; display: flex; align-items: center; gap: 6px; cursor: pointer; white-space: nowrap; }
+              .btn-new-chat:active { background: rgba(16, 185, 129, 0.2); }
+              .model-select { background: #131b2e; border: 1px solid #1e293b; color: #e2e8f0; padding: 6px 12px; border-radius: 12px; font-size: 13px; outline: none; cursor: pointer; text-align: center; }
+              .btn-menu { background: none; border: none; color: #94a3b8; font-size: 22px; cursor: pointer; padding: 4px; }
+
+              /* جسم الصفحة */
+              .main-body { flex: 1; display: flex; flex-direction: column; overflow-y: auto; position: relative; }
               
-              .msg-user { align-self: flex-start; background-color: #10b981; color: #022c22; padding: 10px 16px; border-radius: 18px 18px 4px 18px; font-size: 14px; font-weight: 600; max-width: 80%; }
-              
-              .msg-ai { align-self: stretch; background-color: #1e293b; border: 1px solid rgba(255,255,255,0.05); border-radius: 16px; padding: 16px; display: flex; flex-direction: column; gap: 10px; }
-              .ai-header { display: flex; align-items: center; gap: 8px; font-weight: bold; font-size: 14px; color: #f8fafc; }
-              .ai-header img { width: 22px; height: 22px; border-radius: 6px; }
-              .ai-content { font-size: 14px; line-height: 1.6; color: #cbd5e1; }
-              .ai-content p { margin-bottom: 8px; }
+              /* الشاشة الرئيسية للترحيب (مطابقة للرسمية) */
+              .welcome-view { display: flex; flex-direction: column; align-items: center; justify-content: center; flex: 1; text-align: center; padding: 20px; }
+              .logo-card { width: 84px; height: 84px; background-color: #111827; border: 1px solid rgba(16, 185, 129, 0.25); border-radius: 22px; display: flex; align-items: center; justify-content: center; margin-bottom: 20px; box-shadow: 0 10px 25px rgba(0,0,0,0.5); }
+              .logo-card img { width: 56px; height: 56px; object-fit: contain; }
+              .welcome-title { font-size: 22px; font-weight: 800; color: #ffffff; margin-bottom: 8px; }
+              .welcome-desc { font-size: 14px; color: #64748b; }
+
+              /* قائمة المحادثات */
+              .chat-list { display: none; flex-direction: column; gap: 14px; padding: 16px; }
+              .msg-user { align-self: flex-start; background: #10b981; color: #022c22; padding: 10px 16px; border-radius: 18px 18px 4px 18px; font-size: 14px; font-weight: 600; max-width: 82%; word-break: break-word; }
+              .msg-ai { align-self: stretch; background: #131b2e; border: 1px solid rgba(255, 255, 255, 0.05); border-radius: 16px; padding: 14px; display: flex; flex-direction: column; gap: 8px; }
+              .ai-header { display: flex; align-items: center; gap: 8px; font-weight: 700; font-size: 14px; color: #10b981; }
+              .ai-header img { width: 20px; height: 20px; border-radius: 6px; }
+              .ai-text { font-size: 14px; color: #cbd5e1; line-height: 1.5; }
 
               /* حقل الإدخال السفلي */
-              .input-bar { padding: 12px 16px; background-color: #0f172a; border-top: 1px solid rgba(255,255,255,0.08); display: flex; align-items: center; gap: 8px; }
-              .input-wrapper { flex: 1; background-color: #1e293b; border: 1px solid #334155; border-radius: 24px; padding: 6px 14px; display: flex; align-items: center; gap: 8px; }
-              .input-wrapper input { flex: 1; background: transparent; border: none; outline: none; color: #fff; font-size: 14px; direction: rtl; }
-              .input-wrapper input::placeholder { color: #64748b; }
-              .btn-add { background: none; border: none; color: #94a3b8; font-size: 20px; cursor: pointer; padding: 0 4px; }
-              .btn-send { width: 38px; height: 38px; background-color: #10b981; border: none; border-radius: 50%; color: #022c22; display: flex; align-items: center; justify-content: center; cursor: pointer; flex-shrink: 0; }
+              .bottom-bar { padding: 12px 14px; background-color: #090d16; border-top: 1px solid rgba(255, 255, 255, 0.05); display: flex; align-items: center; gap: 10px; }
+              .input-box { flex: 1; background-color: #131b2e; border: 1px solid #1e293b; border-radius: 28px; padding: 4px 14px; display: flex; align-items: center; gap: 8px; }
+              .btn-plus { background: none; border: none; color: #64748b; font-size: 20px; cursor: pointer; padding: 2px 4px; }
+              .input-box input { flex: 1; background: transparent; border: none; outline: none; color: #ffffff; font-size: 14px; direction: rtl; }
+              .input-box input::placeholder { color: #475569; }
+              .btn-send { width: 40px; height: 40px; background-color: #10b981; border: none; border-radius: 50%; color: #022c22; display: flex; align-items: center; justify-content: center; cursor: pointer; flex-shrink: 0; }
               .btn-send svg { width: 18px; height: 18px; fill: currentColor; transform: rotate(180deg); }
 
-              /* الواجهة المباشرة عند توفر الإنترنت */
-              #live-frame { width: 100%; height: 100%; border: none; position: absolute; top: 0; left: 0; z-index: 2; background-color: #0b0f17; display: none; }
+              /* القائمة الجانبية */
+              .sidebar-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 100; }
+              .sidebar { position: fixed; top: 0; right: -280px; width: 280px; height: 100%; background: #0f172a; z-index: 101; transition: right 0.3s ease; padding: 20px; display: flex; flex-direction: column; gap: 16px; border-left: 1px solid rgba(255,255,255,0.08); }
+              .sidebar.open { right: 0; }
+              .sidebar-title { font-weight: bold; font-size: 16px; color: #10b981; display: flex; justify-content: space-between; align-items: center; }
+              .close-sidebar { background: none; border: none; color: #94a3b8; font-size: 20px; cursor: pointer; }
+              .menu-item { background: #1e293b; color: #f8fafc; border: none; padding: 12px; border-radius: 10px; text-align: right; font-size: 14px; cursor: pointer; }
+
+              /* إطار الإنترنت المباشر */
+              #live-frame { width: 100%; height: 100%; border: none; position: absolute; top: 0; left: 0; z-index: 2; background-color: #090d16; display: none; }
             </style>
           </head>
           <body>
@@ -107,52 +113,58 @@ jobs:
 
             <div id="offline-app">
               <div class="top-nav">
-                <div class="brand">
-                  <img src="logo.png" alt="Salman AI" onerror="this.style.display='none'">
-                  <span class="brand-title">Salman AI</span>
-                </div>
-                <div class="nav-actions">
-                  <button class="btn-pill" onclick="resetChat()">+ محادثة جديدة</button>
-                  <select class="model-select">
-                    <option>Google Gemini Flash</option>
-                    <option>GPT-4o Mini</option>
-                    <option>Claude 3.5 Sonnet</option>
-                  </select>
-                  <button class="menu-icon">≡</button>
-                </div>
+                <button class="btn-new-chat" onclick="resetChat()">
+                  <span>+</span> محادثة جديدة
+                </button>
+                <select class="model-select">
+                  <option>Google Gemini Flash</option>
+                  <option>GPT-4o Mini</option>
+                  <option>Claude 3.5 Sonnet</option>
+                </select>
+                <button class="btn-menu" onclick="toggleSidebar()">≡</button>
               </div>
 
-              <div class="chat-container" id="chat-box">
-                <div class="msg-ai">
-                  <div class="ai-header">
-                    <img src="logo.png" alt="AI" onerror="this.style.display='none'">
-                    <span>Salman AI</span>
+              <div class="main-body" id="main-body">
+                <div class="welcome-view" id="welcome-view">
+                  <div class="logo-card">
+                    <img src="logo.png" alt="Salman AI" onerror="this.style.display='none'">
                   </div>
-                  <div class="ai-content">
-                    <p>👋 وعليكم السلام!</p>
-                    <p>أنا <strong>سلمان AI</strong>، جاهز لمساعدتك في أي سؤال أو مهمة.</p>
-                    <p>🌟 أخبرني بما تحتاجه: استفسار معلوماتي، مساعدة برمجية، ترجمة، أو أي شيء آخر.</p>
-                    <p>💭 كيف أستطيع خدمتك اليوم؟</p>
-                  </div>
+                  <h1 class="welcome-title">مرحباً بك مع Salman AI</h1>
+                  <p class="welcome-desc">مرحباً بك! أنا جاهز لمساعدتك في أي وقت...</p>
                 </div>
+
+                <div class="chat-list" id="chat-list"></div>
               </div>
 
-              <div class="input-bar">
-                <div class="input-wrapper">
-                  <button class="btn-add">+</button>
+              <div class="bottom-bar">
+                <div class="input-box">
+                  <button class="btn-plus">+</button>
                   <input type="text" id="user-input" placeholder="اكتب رسالتك لـ Salman AI..." onkeypress="handleKey(event)">
                 </div>
                 <button class="btn-send" onclick="sendMessage()">
                   <svg viewBox="0 0 24 24"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>
                 </button>
               </div>
+
+              <div class="sidebar-overlay" id="sidebar-overlay" onclick="toggleSidebar()"></div>
+              <div class="sidebar" id="sidebar">
+                <div class="sidebar-title">
+                  <span>Salman AI</span>
+                  <button class="close-sidebar" onclick="toggleSidebar()">✕</button>
+                </div>
+                <button class="menu-item" onclick="resetChat(); toggleSidebar();">+ محادثة جديدة</button>
+                <div style="margin-top:auto; font-size: 12px; color: #64748b;">الوضع الحقيقي: أوفلاين</div>
+              </div>
             </div>
 
             <script>
               const liveFrame = document.getElementById('live-frame');
               const offlineApp = document.getElementById('offline-app');
-              const chatBox = document.getElementById('chat-box');
+              const welcomeView = document.getElementById('welcome-view');
+              const chatList = document.getElementById('chat-list');
               const userInput = document.getElementById('user-input');
+              const sidebar = document.getElementById('sidebar');
+              const sidebarOverlay = document.getElementById('sidebar-overlay');
 
               function checkConnection() {
                 if (navigator.onLine) {
@@ -168,13 +180,15 @@ jobs:
                 const text = userInput.value.trim();
                 if (!text) return;
 
+                welcomeView.style.display = 'none';
+                chatList.style.display = 'flex';
+
                 const userDiv = document.createElement('div');
                 userDiv.className = 'msg-user';
                 userDiv.innerText = text;
-                chatBox.appendChild(userDiv);
+                chatList.appendChild(userDiv);
 
                 userInput.value = '';
-                chatBox.scrollTop = chatBox.scrollHeight;
 
                 setTimeout(() => {
                   const aiDiv = document.createElement('div');
@@ -184,14 +198,13 @@ jobs:
                       <img src="logo.png" alt="AI" onerror="this.style.display='none'">
                       <span>Salman AI</span>
                     </div>
-                    <div class="ai-content">
-                      <p>⚠️ <strong>أنت غير متصل بالإنترنت حالياً.</strong></p>
-                      <p>يرجى الاتصال بالشبكة لكي يتمكن سلمان AI من الرد المباشر على سؤالك.</p>
+                    <div class="ai-text">
+                      أنت تعمل حالياً في وضع الأوفلاين (بدون إنترنت). قم بالاتصال بالشبكة للاستجابة المباشرة.
                     </div>
                   `;
-                  chatBox.appendChild(aiDiv);
-                  chatBox.scrollTop = chatBox.scrollHeight;
-                }, 400);
+                  chatList.appendChild(aiDiv);
+                  document.getElementById('main-body').scrollTop = document.getElementById('main-body').scrollHeight;
+                }, 300);
               }
 
               function handleKey(e) {
@@ -199,20 +212,20 @@ jobs:
               }
 
               function resetChat() {
-                chatBox.innerHTML = `
-                  <div class="msg-ai">
-                    <div class="ai-header">
-                      <img src="logo.png" alt="AI" onerror="this.style.display='none'">
-                      <span>Salman AI</span>
-                    </div>
-                    <div class="ai-content">
-                      <p>👋 وعليكم السلام!</p>
-                      <p>أنا <strong>سلمان AI</strong>، جاهز لمساعدتك في أي سؤال أو مهمة.</p>
-                      <p>🌟 أخبرني بما تحتاجه: استفسار معلوماتي، مساعدة برمجية، ترجمة، أو أي شيء آخر.</p>
-                      <p>💭 كيف أستطيع خدمتك اليوم؟</p>
-                    </div>
-                  </div>
-                `;
+                chatList.innerHTML = '';
+                chatList.style.display = 'none';
+                welcomeView.style.display = 'flex';
+              }
+
+              function toggleSidebar() {
+                const isOpen = sidebar.classList.contains('open');
+                if (isOpen) {
+                  sidebar.classList.remove('open');
+                  sidebarOverlay.style.display = 'none';
+                } else {
+                  sidebar.classList.add('open');
+                  sidebarOverlay.style.display = 'block';
+                }
               }
 
               window.addEventListener('online', checkConnection);
@@ -275,14 +288,14 @@ jobs:
           mkdir -p output_apk
           RAW_APK=$(find android/app/build/outputs/apk/release/ -name "*.apk" | head -n 1)
           keytool -genkeypair -v -keystore release.keystore -storepass salman123 -alias salman -keypass salman123 -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=SalmanAI"
-          BUILD_TOOLS_DIR=$(ls -d $ANDROID_HOME/build-tools/* | tail -n 1)
-          $BUILD_TOOLS_DIR/zipalign -v 4 $RAW_APK output_apk/Salman_AI.apk
+          BUILD_TOOLS_DIR=$(ls -d$ANDROID_HOME/build-tools/* | tail -n 1)
+          $BUILD_TOOLS_DIR/zipalign -v 4$RAW_APK output_apk/Salman_AI.apk
           $BUILD_TOOLS_DIR/apksigner sign --ks release.keystore --ks-pass pass:salman123 --ks-key-alias salman --key-pass pass:salman123 output_apk/Salman_AI.apk
 
       - name: Upload Final Signed APK to Release
         uses: softprops/action-gh-release@v2
         if: success()
         with:
-          tag_name: v36.0.${{ github.run_number }}
-          name: Salman AI Official Release v36.0.${{ github.run_number }}
+          tag_name: v37.0.${{ github.run_number }}
+          name: Salman AI Official Release v37.0.${{ github.run_number }}
           files: output_apk/Salman_AI.apk

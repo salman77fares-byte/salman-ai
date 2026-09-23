@@ -7,14 +7,13 @@ import {
   HeadContent,
   Scripts,
 } from "@tanstack/react-router";
-import { useEffect, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 
 import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
 import { ThemeProvider } from "../lib/theme";
 import { Toaster } from "@/components/ui/sonner";
 import { supabase } from "@/integrations/supabase/client";
-import { OfflineBanner } from "@/components/OfflineBanner";
 
 function NotFoundComponent() {
   return (
@@ -89,7 +88,7 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { title: "Salman AI" },
       {
         name: "description",
-        content: "Salman AI | منصتك الذكية المتكاملة لتوليد الصور، برمجة الأكواد، كتابة النصوص، وغيرها من الخدمات المتطورة بسرعة ودقة متناهية.",
+        content: "Salman AI | منصتك الذكية المتكاملة",
       },
     ],
     links: [
@@ -112,7 +111,7 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
 
 function RootShell({ children }: { children: ReactNode }) {
   return (
-    <html lang="ar" dir="rtl" suppressHydrationWarning class="dark">
+    <html lang="ar" dir="rtl" suppressHydrationWarning className="dark">
       <head>
         <HeadContent />
         <style>{`
@@ -144,7 +143,7 @@ function RootShell({ children }: { children: ReactNode }) {
           }}
         />
       </head>
-      <body class="bg-background text-foreground antialiased">
+      <body className="bg-background text-foreground antialiased">
         {children}
         <Scripts />
       </body>
@@ -152,9 +151,62 @@ function RootShell({ children }: { children: ReactNode }) {
   );
 }
 
+/* شاشة عدم وجود اتصال بالإنترنت */
+function OfflineScreen() {
+  return (
+    <div className="flex min-h-screen flex-col items-center justify-center bg-[#0b1220] px-4 text-center">
+      <div className="flex flex-col items-center">
+        {/* شعار التطبيق داخل مربع منحني الزوايا */}
+        <div className="mb-6 flex h-28 w-28 items-center justify-center rounded-3xl bg-slate-900/90 p-4 shadow-2xl ring-1 ring-white/10 backdrop-blur-xl">
+          <img
+            src="/favicon.png"
+            alt="Salman AI Logo"
+            className="h-full w-full object-contain rounded-2xl"
+          />
+        </div>
+
+        {/* نص طلب الاتصال بالإنترنت */}
+        <h2 className="text-xl font-bold tracking-wide text-white">
+          يرجى الاتصال بالإنترنت
+        </h2>
+        <p className="mt-2 text-xs text-slate-400">
+          تأكد من وجود اتصال فعّال بالشبكة لاستخدام Salman AI
+        </p>
+
+        {/* مؤشر جاري انتظار الاتصال */}
+        <div className="mt-8 flex items-center gap-2 rounded-full bg-slate-800/60 px-4 py-1.5 text-xs text-slate-300 ring-1 ring-white/5">
+          <span className="relative flex h-2 w-2">
+            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-amber-400 opacity-75"></span>
+            <span className="relative inline-flex h-2 w-2 rounded-full bg-amber-500"></span>
+          </span>
+          بانتظار الاتصال...
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function RootComponent() {
   const { queryClient } = Route.useRouteContext();
   const router = useRouter();
+
+  // فحص حالة الاتصال بالإنترنت بشكل ديناميكي
+  const [isOnline, setIsOnline] = useState<boolean>(() =>
+    typeof window !== "undefined" ? navigator.onLine : true
+  );
+
+  useEffect(() => {
+    const handleOnline = () => setIsOnline(true);
+    const handleOffline = () => setIsOnline(false);
+
+    window.addEventListener("online", handleOnline);
+    window.addEventListener("offline", handleOffline);
+
+    return () => {
+      window.removeEventListener("online", handleOnline);
+      window.removeEventListener("offline", handleOffline);
+    };
+  }, []);
 
   useEffect(() => {
     const purgeBadge = () => {
@@ -209,10 +261,15 @@ function RootComponent() {
     return () => data.subscription.unsubscribe();
   }, [router, queryClient]);
 
+  // إذا لم يكن هناك إنترنت، يتم عرض شاشة الشعار والنص
+  if (!isOnline) {
+    return <OfflineScreen />;
+  }
+
+  // عند توفر الإنترنت، يتم فتح التطبيق كالمعتاد
   return (
     <QueryClientProvider client={queryClient}>
       <ThemeProvider>
-        <OfflineBanner />
         <Outlet />
         <Toaster position="top-center" />
       </ThemeProvider>

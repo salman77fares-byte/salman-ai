@@ -1,4 +1,4 @@
-name: Build Salman AI Native APK
+name: Build Android APK
 
 on:
   push:
@@ -29,102 +29,20 @@ jobs:
       - name: Install Dependencies
         run: npm install --legacy-peer-deps
 
-      - name: Build Actual App Assets
-        run: |
-          mkdir -p www
-          
-          # البناء المباشر عبر Vite لتجاوز أخطاء TypeScript في aiService.ts
-          npx vite build --outDir www || npm run build || true
+      - name: Build Web Assets
+        run: npm run build
 
-          # نقل المخرجات في حال إنشائها داخل dist
-          if [ -d "dist" ] && [ -f "dist/index.html" ]; then
-            cp -r dist/* www/
-          fi
+      - name: Sync Capacitor Android
+        run: npx cap sync android
 
-          # تأكيد وجود index.html في مجلد www
-          if [ ! -f "www/index.html" ]; then
-            echo '<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Salman AI</title></head><body><div id="root"></div></body></html>' > www/index.html
-          fi
-
-      - name: Setup Capacitor Shell
-        run: |
-          npm install @capacitor/core@5.7.0 @capacitor/cli@5.7.0 @capacitor/android@5.7.0 --save-dev
-          echo '{"appId":"com.salman.ai","appName":"Salman AI","webDir":"www","server":{"androidScheme":"https","cleartext":true}}' > capacitor.config.json
-          npx cap add android || true
-
-      - name: Apply Custom Logo
-        run: |
-          sudo apt-get update && sudo apt-get install -y imagemagick
-          
-          LOGO=""
-          for p in "public/logo.png" "public/icon-512.png" "logo.png" "src/logo.png"; do
-            if [ -f "$p" ]; then LOGO="$p"; break; fi
-          done
-
-          if [ -n "$LOGO" ]; then
-            rm -rf android/app/src/main/res/mipmap-anydpi-v26
-            
-            convert "$LOGO" -resize 48x48! android/app/src/main/res/mipmap-mdpi/ic_launcher.png
-            convert "$LOGO" -resize 72x72! android/app/src/main/res/mipmap-hdpi/ic_launcher.png
-            convert "$LOGO" -resize 96x96! android/app/src/main/res/mipmap-xhdpi/ic_launcher.png
-            convert "$LOGO" -resize 144x144! android/app/src/main/res/mipmap-xxhdpi/ic_launcher.png
-            convert "$LOGO" -resize 192x192! android/app/src/main/res/mipmap-xxxhdpi/ic_launcher.png
-
-            for DPI in mdpi hdpi xhdpi xxhdpi xxxhdpi; do
-              DIR="android/app/src/main/res/mipmap-$DPI"
-              if [ -d "$DIR" ]; then
-                cp "$DIR/ic_launcher.png" "$DIR/ic_launcher_round.png" || true
-                cp "$DIR/ic_launcher.png" "$DIR/ic_launcher_foreground.png" || true
-              fi
-            done
-          fi
-
-      - name: Configure Android Deep Links & Permissions
-        run: |
-          # تأكيد إضافي قبل تنفيذ أمر الربط
-          mkdir -p www
-          if [ ! -f "www/index.html" ]; then
-            echo '<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Salman AI</title></head><body><div id="root"></div></body></html>' > www/index.html
-          fi
-
-          MANIFEST="android/app/src/main/AndroidManifest.xml"
-          if [ -f "$MANIFEST" ]; then
-            sed -i '/<application/i \    <uses-permission android:name="android.permission.INTERNET"/>\n    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>' "$MANIFEST"
-            
-            INTENT_FILTER='<intent-filter android:autoVerify="true"><action android:name="android.intent.action.VIEW"/><category android:name="android.intent.category.DEFAULT"/><category android:name="android.intent.category.BROWSABLE"/><data android:scheme="https" android:host="salman-ai.lovable.app"/><data android:scheme="com.salman.ai"/></intent-filter>'
-            sed -i "/<\/activity>/i \        $INTENT_FILTER" "$MANIFEST"
-          fi
-          chmod +x android/gradlew
-          npx cap sync android
-
-      - name: Build Android Release APK
+      - name: Build Android APK
         run: |
           cd android
+          chmod +x gradlew
           ./gradlew assembleRelease --no-daemon
 
-      - name: Sign & ZipAlign APK
-        run: |
-          mkdir -p output_apk
-          RAW_APK=$(find android/app/build/outputs/apk/release/ -name "*.apk" | head -n 1)
-          
-          keytool -genkeypair -v -keystore release.keystore -storepass salman123 -alias salman -keypass salman123 -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=SalmanAI"
-          
-          sudo apt-get update && sudo apt-get install -y zipalign
-          
-          zipalign -v -p 4 "$RAW_APK" output_apk/Salman_AI.apk
-          
-          APKSIGNER=$(find /usr/local/lib/android/sdk/build-tools/ $ANDROID_HOME/build-tools/ -name apksigner 2>/dev/null | sort -V | tail -n 1)
-          
-          if [ -n "$APKSIGNER" ]; then
-            "$APKSIGNER" sign --ks release.keystore --ks-pass pass:salman123 --ks-key-alias salman --key-pass pass:salman123 output_apk/Salman_AI.apk
-          else
-            jarsigner -verbose -sigalg SHA256withRSA -digestalg SHA-256 -keystore release.keystore -storepass salman123 -keypass salman123 output_apk/Salman_AI.apk salman
-          fi
-
-      - name: Upload Final Signed APK to Release
-        uses: softprops/action-gh-release@v2
-        if: success()
+      - name: Upload Release Artifact
+        uses: actions/upload-artifact@v4
         with:
-          tag_name: v44.0.${{ github.run_number }}
-          name: Salman AI Official Release v44.0.${{ github.run_number }}
-          files: output_apk/Salman_AI.apk
+          name: app-release
+          path: android/app/build/outputs/apk/release/

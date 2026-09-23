@@ -3,10 +3,6 @@
   "appName": "Salman AI",
   "webDir": "dist",
   "server": {
-    "androidScheme": "https",
-    "cleartext": true
-  },
-  "android": {
-    "backgroundColor": "#0B0B0B"
+    "androidScheme": "https"
   }
 }

@@ -47,7 +47,7 @@ jobs:
 
       - name: 🛠️ Inject Offline Overlay & Embedded Base64 Logo
         run: |
-          cat << 'EOF' > inject_offline.js
+          cat << 'EOF' > inject_offline.cjs
           const fs = require("fs");
           const path = require("path");
 
@@ -166,7 +166,7 @@ jobs:
           console.log("Successfully injected offline overlay & Base64 logo into index.html!");
           EOF
 
-          node inject_offline.js
+          node inject_offline.cjs
 
       - name: Sync Capacitor Shell
         run: |

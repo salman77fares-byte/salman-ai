@@ -198,9 +198,11 @@ jobs:
           
           keytool -genkeypair -v -keystore release.keystore -storepass salman123 -alias salman -keypass salman123 -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=SalmanAI"
           
-          BUILD_TOOLS_DIR=$(ls -d$ANDROID_HOME/build-tools/* | tail -n 1)
-          $BUILD_TOOLS_DIR/zipalign -v 4$RAW_APK output_apk/Salman-AI-Signed.apk
-          $BUILD_TOOLS_DIR/apksigner sign --ks release.keystore --ks-pass pass:salman123 --ks-key-alias salman --key-pass pass:salman123 output_apk/Salman-AI-Signed.apk
+          ZIPALIGN_PATH=$(find$ANDROID_HOME/build-tools -name zipalign | tail -n 1)
+          APKSIGNER_PATH=$(find$ANDROID_HOME/build-tools -name apksigner | tail -n 1)
+          
+          "$ZIPALIGN_PATH" -v 4 "$RAW_APK" output_apk/Salman-AI-Signed.apk
+          "$APKSIGNER_PATH" sign --ks release.keystore --ks-pass pass:salman123 --ks-key-alias salman --key-pass pass:salman123 output_apk/Salman-AI-Signed.apk
 
       - name: Upload Dual-Interface Signed APK
         uses: actions/upload-artifact@v4

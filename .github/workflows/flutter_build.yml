@@ -32,12 +32,11 @@ jobs:
         run: |
           npm ci || npm install --legacy-peer-deps || npm install --force
 
-      - name: Build Web Assets & Inject Dual-Interface Engine
+      - name: Build Web Assets & Bundle Application
         run: |
-          # 1. تجميع الويب الحقيقي
+          # 1. تجميع التطبيق الأساسي
           npm run build || npx vite build --base=./ || true
           
-          # تحديد مجلد المخرجات
           OUT_DIR="dist"
           if [ -d ".output/public" ]; then OUT_DIR=".output/public";
           elif [ -d "build" ]; then OUT_DIR="build";
@@ -47,154 +46,126 @@ jobs:
           mkdir -p www
           cp -r $OUT_DIR/* www/ || true
 
-          # 2. البحث عن شعار التطبيق
-          LOGO_SRC="logo.png"
-          for p in "public/logo.png" "public/icon.png" "src/logo.png" "logo.png"; do
-            if [ -f "$p" ]; then LOGO_SRC="$p"; break; fi
-          done
-          if [ -f "$LOGO_SRC" ]; then cp "$LOGO_SRC" www/app-logo.png; fi
+      - name: 🛠️ Inject Offline Overlay & Embedded Base64 Logo
+        run: |
+          node -e '
+          const fs = require("fs");
+          const path = require("path");
 
-          # 3. إعادة كتابة index.html لنظام الواجهتين المتكامل
-          cat << 'EOF' > www/index.html
-          <!DOCTYPE html>
-          <html lang="ar" dir="rtl">
-          <head>
-            <meta charset="UTF-8" />
-            <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-            <title>Salman AI</title>
-            <style>
-              * { box-sizing: border-box; margin: 0; padding: 0; font-family: system-ui, -apple-system, sans-serif; }
-              body, html { width: 100%; height: 100%; background-color: #0b0b0b; color: #ffffff; overflow: hidden; }
+          // 1. البحث عن الشعار وتحويله إلى Base64 لمنع أي خطأ بالمسار
+          let logoBase64 = "";
+          const logoPaths = ["public/logo.png", "public/icon.png", "public/favicon.png", "src/logo.png", "logo.png"];
+          for (const p of logoPaths) {
+            if (fs.existsSync(p)) {
+              const buf = fs.readFileSync(p);
+              logoBase64 = "data:image/png;base64," + buf.toString("base64");
+              break;
+            }
+          }
 
-              /* الواجهة الأولى: الأوفلاين */
-              #offline-interface {
-                position: fixed;
-                top: 0; left: 0; width: 100%; height: 100%;
-                background: radial-gradient(circle at center, #1a1a2e 0%, #0b0b0b 100%);
-                display: flex;
-                flex-direction: column;
-                align-items: center;
-                justify-content: center;
-                padding: 24px;
-                text-align: center;
-                z-index: 9999;
-                transition: opacity 0.4s ease, visibility 0.4s ease;
-              }
+          // 2. قراءة ملف index.html المولد من بناء المشروع للحفاظ على جافاسكريبت التطبيق الأصلي
+          const indexPath = "www/index.html";
+          if (!fs.existsSync(indexPath)) {
+            fs.writeFileSync(indexPath, "<!DOCTYPE html><html lang=\"ar\" dir=\"rtl\"><head><meta charset=\"UTF-8\"><title>Salman AI</title></head><body><div id=\"root\"></div></body></html>");
+          }
 
-              .logo-container {
-                width: 110px; height: 110px;
-                background: rgba(255, 255, 255, 0.05);
-                border: 1px solid rgba(255, 255, 255, 0.1);
-                border-radius: 28px;
-                display: flex;
-                align-items: center;
-                justify-content: center;
-                margin-bottom: 24px;
-                box-shadow: 0 20px 40px rgba(0, 0, 0, 0.5);
-              }
+          let html = fs.readFileSync(indexPath, "utf8");
 
-              .logo-container img { width: 75px; height: 75px; object-fit: contain; }
+          // 3. كود واجهة الأوفلاين الشفافة والمنبثقة فوق التطبيق الأساسي
+          const overlayHtml = `
+          <style>
+            #salman-offline-overlay {
+              position: fixed;
+              top: 0; left: 0; width: 100vw; height: 100vh;
+              background: radial-gradient(circle at center, #1a1a2e 0%, #0b0b0b 100%);
+              color: #ffffff;
+              display: flex;
+              flex-direction: column;
+              align-items: center;
+              justify-content: center;
+              padding: 24px;
+              text-align: center;
+              z-index: 999999;
+              transition: opacity 0.35s ease, visibility 0.35s ease;
+              box-sizing: border-box;
+              font-family: system-ui, -apple-system, sans-serif;
+            }
+            #salman-offline-overlay.hidden {
+              opacity: 0;
+              visibility: hidden;
+              pointer-events: none;
+            }
+            .salman-logo-box {
+              width: 100px; height: 100px;
+              background: rgba(255, 255, 255, 0.06);
+              border: 1px solid rgba(255, 255, 255, 0.12);
+              border-radius: 26px;
+              display: flex;
+              align-items: center;
+              justify-content: center;
+              margin-bottom: 20px;
+              box-shadow: 0 15px 35px rgba(0,0,0,0.6);
+            }
+            .salman-logo-box img {
+              width: 70px; height: 70px; object-fit: contain;
+            }
+            .salman-title { font-size: 20px; font-weight: 700; margin-bottom: 8px; color: #ffffff; }
+            .salman-desc { font-size: 14px; color: #a0a0a0; margin-bottom: 24px; max-width: 280px; line-height: 1.5; }
+            .salman-btn {
+              background: #6366f1; color: #ffffff; border: none;
+              padding: 12px 28px; font-size: 14px; font-weight: 600;
+              border-radius: 12px; cursor: pointer;
+              box-shadow: 0 8px 20px rgba(99, 102, 241, 0.35);
+            }
+            .salman-btn:active { transform: scale(0.95); }
+          </style>
 
-              .offline-title {
-                font-size: 20px;
-                font-weight: 700;
-                color: #ffffff;
-                margin-bottom: 8px;
-              }
-
-              .offline-desc {
-                font-size: 14px;
-                color: #a0a0a0;
-                margin-bottom: 28px;
-                max-width: 280px;
-                line-height: 1.5;
-              }
-
-              .retry-btn {
-                background: #6366f1;
-                color: #ffffff;
-                border: none;
-                padding: 12px 28px;
-                font-size: 14px;
-                font-weight: 600;
-                border-radius: 12px;
-                cursor: pointer;
-                box-shadow: 0 8px 20px rgba(99, 102, 241, 0.3);
-                transition: transform 0.2s;
-              }
-              .retry-btn:active { transform: scale(0.95); }
-
-              /* الواجهة الثانية: تطبيق الأونلاين الحقيقي */
-              #online-interface {
-                width: 100%; height: 100%;
-                display: none;
-              }
-
-              /* حالة الإخفاء للواجهة الأولى */
-              .hidden { opacity: 0; visibility: hidden; pointer-events: none; }
-            </style>
-          </head>
-          <body>
-
-            <!-- الواجهة 1: واجهة الأوفلاين -->
-            <div id="offline-interface">
-              <div class="logo-container">
-                <img src="app-logo.png" alt="Salman AI Logo" onerror="this.src='data:image/svg+xml;utf8,<svg xmlns=\'http://www.w3.org/2000/svg\' viewBox=\'0 0 24 24\' fill=\'%236366f1\'><path d=\'M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5\'/></svg>'" />
-              </div>
-              <div class="offline-title">لا يوجد اتصال بالإنترنت</div>
-              <div class="offline-desc">يرجى الاتصال بالشبكة للوصول إلى كافة مميزات وخدمات تطبيق Salman AI</div>
-              <button class="retry-btn" onclick="checkConnection()">إعادة المحاولة</button>
+          <div id="salman-offline-overlay">
+            <div class="salman-logo-box">
+              <img src="${logoBase64}" alt="Salman AI Logo" onerror="this.parentElement.style.display=\'none\'" />
             </div>
+            <div class="salman-title">لا يوجد اتصال بالإنترنت</div>
+            <div class="salman-desc">يرجى الاتصال بالشبكة للوصول إلى كافة مميزات وخدمات تطبيق Salman AI</div>
+            <button class="salman-btn" onclick="checkSalmanNetwork()">إعادة المحاولة</button>
+          </div>
 
-            <!-- الواجهة 2: تطبيق الأونلاين -->
-            <div id="online-interface">
-              <div id="root"></div>
-            </div>
-
-            <script>
-              const offlineUI = document.getElementById('offline-interface');
-              const onlineUI = document.getElementById('online-interface');
-
-              function showOnline() {
-                offlineUI.classList.add('hidden');
-                onlineUI.style.display = 'block';
-              }
-
-              function showOffline() {
-                offlineUI.classList.remove('hidden');
-                onlineUI.style.display = 'none';
-              }
-
-              async function checkConnection() {
-                if (!navigator.onLine) {
-                  showOffline();
-                  return;
-                }
-                
-                try {
-                  // فحص أعمق للإنترنت للتأكد من وصول الخدمة
-                  const res = await fetch('https://httpbin.org/ping', { method: 'HEAD', cache: 'no-store', mode: 'no-cors' });
-                  showOnline();
-                } catch (e) {
-                  // في حال الاتصال بشركة المحمول/الواي فاي بدون إنترنت حقيقي
-                  if (navigator.onLine) {
-                    showOnline(); 
-                  } else {
-                    showOffline();
-                  }
+          <script>
+            (function() {
+              const overlay = document.getElementById("salman-offline-overlay");
+              
+              function updateNetStatus() {
+                if (navigator.onLine) {
+                  overlay.classList.add("hidden");
+                } else {
+                  overlay.classList.remove("hidden");
                 }
               }
 
-              // الاستماع الفوري لإنعاش وتغير الشبكة
-              window.addEventListener('online', checkConnection);
-              window.addEventListener('offline', showOffline);
+              window.checkSalmanNetwork = function() {
+                updateNetStatus();
+              };
 
-              // الفحص الابتدائي فور تشغيل التطبيق
-              checkConnection();
-            </script>
-          </body>
-          </html>
-          EOF
+              window.addEventListener("online", updateNetStatus);
+              window.addEventListener("offline", updateNetStatus);
+              if (document.readyState === "complete" || document.readyState === "interactive") {
+                updateNetStatus();
+              } else {
+                document.addEventListener("DOMContentLoaded", updateNetStatus);
+              }
+              setTimeout(updateNetStatus, 300);
+            })();
+          </script>
+          `;
+
+          if (html.includes("</body>")) {
+            html = html.replace("</body>", overlayHtml + "\n</body>");
+          } else {
+            html += overlayHtml;
+          }
+
+          fs.writeFileSync(indexPath, html, "utf8");
+          console.log("Successfully injected offline overlay & Base64 logo into index.html!");
+          '
 
       - name: Sync Capacitor Shell
         run: |
@@ -226,8 +197,8 @@ jobs:
           
           keytool -genkeypair -v -keystore release.keystore -storepass salman123 -alias salman -keypass salman123 -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=SalmanAI"
           
-          BUILD_TOOLS_DIR=$(ls -d $ANDROID_HOME/build-tools/* | tail -n 1)
-          $BUILD_TOOLS_DIR/zipalign -v 4 $RAW_APK output_apk/Salman-AI-Signed.apk
+          BUILD_TOOLS_DIR=$(ls -d$ANDROID_HOME/build-tools/* | tail -n 1)
+          $BUILD_TOOLS_DIR/zipalign -v 4$RAW_APK output_apk/Salman-AI-Signed.apk
           $BUILD_TOOLS_DIR/apksigner sign --ks release.keystore --ks-pass pass:salman123 --ks-key-alias salman --key-pass pass:salman123 output_apk/Salman-AI-Signed.apk
 
       - name: Upload Dual-Interface Signed APK

@@ -34,7 +34,6 @@ jobs:
 
       - name: Build Web Assets & Bundle Application
         run: |
-          # 1. تجميع التطبيق الأساسي
           npm run build || npx vite build --base=./ || true
           
           OUT_DIR="dist"
@@ -48,11 +47,11 @@ jobs:
 
       - name: 🛠️ Inject Offline Overlay & Embedded Base64 Logo
         run: |
-          node -e '
+          cat << 'EOF' > inject_offline.js
           const fs = require("fs");
           const path = require("path");
 
-          // 1. البحث عن الشعار وتحويله إلى Base64 لمنع أي خطأ بالمسار
+          // 1. البحث عن الشعار وتحويله إلى Base64
           let logoBase64 = "";
           const logoPaths = ["public/logo.png", "public/icon.png", "public/favicon.png", "src/logo.png", "logo.png"];
           for (const p of logoPaths) {
@@ -63,10 +62,10 @@ jobs:
             }
           }
 
-          // 2. قراءة ملف index.html المولد من بناء المشروع للحفاظ على جافاسكريبت التطبيق الأصلي
+          // 2. قراءة ملف index.html
           const indexPath = "www/index.html";
           if (!fs.existsSync(indexPath)) {
-            fs.writeFileSync(indexPath, "<!DOCTYPE html><html lang=\"ar\" dir=\"rtl\"><head><meta charset=\"UTF-8\"><title>Salman AI</title></head><body><div id=\"root\"></div></body></html>");
+            fs.writeFileSync(indexPath, '<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="UTF-8"><title>Salman AI</title></head><body><div id="root"></div></body></html>');
           }
 
           let html = fs.readFileSync(indexPath, "utf8");
@@ -122,7 +121,7 @@ jobs:
 
           <div id="salman-offline-overlay">
             <div class="salman-logo-box">
-              <img src="${logoBase64}" alt="Salman AI Logo" onerror="this.parentElement.style.display=\'none\'" />
+              <img src="${logoBase64}" alt="Salman AI Logo" onerror="this.parentElement.style.display='none'" />
             </div>
             <div class="salman-title">لا يوجد اتصال بالإنترنت</div>
             <div class="salman-desc">يرجى الاتصال بالشبكة للوصول إلى كافة مميزات وخدمات تطبيق Salman AI</div>
@@ -165,7 +164,9 @@ jobs:
 
           fs.writeFileSync(indexPath, html, "utf8");
           console.log("Successfully injected offline overlay & Base64 logo into index.html!");
-          '
+          EOF
+
+          node inject_offline.js
 
       - name: Sync Capacitor Shell
         run: |

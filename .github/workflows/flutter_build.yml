@@ -36,19 +36,26 @@ jobs:
       - name: Build Web Application
         env:
           CI: false
+          NODE_OPTIONS: "--max-old-space-size=4096"
         run: |
-          npm run build || npx vite build --base=./
+          npx vite build --base=./ || npm run build -- --base=./ || true
+          
+          # التحقق من إنشاء مجلد مخرجات الويب
+          if [ -d "dist" ]; then
+            echo "Build successful: dist folder created."
+          elif [ -d "build" ]; then
+            mkdir -p dist
+            cp -r build/* dist/
+          else
+            echo "Error: Failed to generate build assets!"
+            exit 1
+          fi
 
       - name: Sync Capacitor Shell
         run: |
           npm install @capacitor/core@5.7.0 @capacitor/cli@5.7.0 @capacitor/android@5.7.0 --save-dev
           
-          # تحديد مجلد المخرجات البنائية النظيفة (dist)
-          OUT_DIR="dist"
-          if [ -d "build" ]; then OUT_DIR="build"; fi
-          if [ -d "www" ]; then OUT_DIR="www"; fi
-
-          echo "{\"appId\":\"com.salman.ai\",\"appName\":\"Salman AI\",\"webDir\":\"$OUT_DIR\",\"server\":{\"androidScheme\":\"https\",\"cleartext\":true}}" > capacitor.config.json
+          echo '{"appId":"com.salman.ai","appName":"Salman AI","webDir":"dist","server":{"androidScheme":"https","cleartext":true}}' > capacitor.config.json
           
           if [ ! -d "android" ]; then
             npx cap add android
@@ -80,16 +87,16 @@ jobs:
           "$BUILD_TOOLS_DIR/zipalign" -v 4 "$RAW_APK" output_apk/Salman-AI-v1.0.${{ github.run_number }}.apk
           "$BUILD_TOOLS_DIR/apksigner" sign --ks release.keystore --ks-pass pass:salman123 --ks-key-alias salman --key-pass pass:salman123 output_apk/Salman-AI-v1.0.${{ github.run_number }}.apk
 
-      - name: 📦 Publish APK directly to GitHub Releases
+      - name: 📦 Publish APK to GitHub Releases
         uses: softprops/action-gh-release@v2
         with:
           tag_name: "v1.0.${{ github.run_number }}"
           name: "Salman AI Release v1.0.${{ github.run_number }}"
           body: |
-            📱 **تطبيق Salman AI - إصدار جاهز للتثبيت**
+            📱 **تطبيق Salman AI - إصدار APK جاهز للتثبيت**
             
-            - تم بناء التطبيق ونظامه بشكل مستقر تماماً وبدون أخطاء.
-            - تم توقيع ومحاذاة ملف APK بنجاح.
+            - بناء متوافق ومستقر لواجهة الويب وتطبيق الأندرويد.
+            - تم التوقيع والمحاذاة بنجاح.
           draft: false
           prerelease: false
           files: output_apk/*.apk

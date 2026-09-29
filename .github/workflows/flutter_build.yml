@@ -33,6 +33,9 @@ jobs:
           npm ci || npm install --legacy-peer-deps || npm install --force
 
       - name: Build Web Assets & Bundle Application
+        env:
+          VITE_BASE_URL: "./"
+          CI: false
         run: |
           npm run build || npx vite build --base=./ || true
           
@@ -45,33 +48,44 @@ jobs:
           mkdir -p www
           cp -r $OUT_DIR/* www/ || true
 
-      - name: 🛠️ Inject Offline Overlay & Embedded Base64 Logo
+      - name: 🛠️ Inject Offline Overlay & Fallback Smart Logo
         run: |
           cat << 'EOF' > inject_offline.cjs
           const fs = require("fs");
           const path = require("path");
 
-          // 1. البحث عن الشعار وتحويله إلى Base64
+          // 1. البحث الشامل عن الشعار بكافة الامتدادات
           let logoBase64 = "";
-          const logoPaths = ["public/logo.png", "public/icon.png", "public/favicon.png", "src/logo.png", "logo.png"];
-          for (const p of logoPaths) {
+          const possiblePaths = [
+            "public/logo.png", "public/logo.svg", "public/icon.png", "public/favicon.ico", "public/favicon.png",
+            "src/assets/logo.png", "src/assets/logo.svg", "src/logo.png", "src/logo.svg", "logo.png", "www/favicon.ico"
+          ];
+          
+          for (const p of possiblePaths) {
             if (fs.existsSync(p)) {
+              const ext = path.extname(p).replace('.', '').toLowerCase();
+              const mime = ext === 'svg' ? 'image/svg+xml' : (ext === 'ico' ? 'image/x-icon' : `image/${ext}`);
               const buf = fs.readFileSync(p);
-              logoBase64 = "data:image/png;base64," + buf.toString("base64");
+              logoBase64 = `data:${mime};base64,` + buf.toString("base64");
               break;
             }
+          }
+
+          // شعار افتراضي متوافق ومصمم بدقة في حال عدم وجود صورة للمشروع
+          if (!logoBase64) {
+            logoBase64 = "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='25' fill='%236366f1'/><path d='M30 50 L50 30 L70 50 L50 70 Z' fill='%23ffffff'/></svg>";
           }
 
           // 2. قراءة ملف index.html
           const indexPath = "www/index.html";
           if (!fs.existsSync(indexPath)) {
-            fs.writeFileSync(indexPath, '<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="UTF-8"><title>Salman AI</title></head><body><div id="root"></div></body></html>');
+            fs.writeFileSync(indexPath, '<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Salman AI</title></head><body><div id="root"></div></body></html>');
           }
 
           let html = fs.readFileSync(indexPath, "utf8");
 
-          // 3. كود واجهة الأوفلاين الشفافة والمنبثقة فوق التطبيق الأساسي
-          const overlayHtml = `
+          // 3. كود واجهة الأوفلاين وحماية الشاشة البيضاء
+          const injectedCode = `
           <style>
             #salman-offline-overlay {
               position: fixed;
@@ -117,11 +131,25 @@ jobs:
               box-shadow: 0 8px 20px rgba(99, 102, 241, 0.35);
             }
             .salman-btn:active { transform: scale(0.95); }
+            #salman-error-box {
+              display: none;
+              position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
+              background: #0f172a; color: #f87171; z-index: 999998;
+              padding: 24px; box-sizing: border-box; text-align: center;
+              flex-direction: column; align-items: center; justify-content: center;
+              font-family: system-ui, -apple-system, sans-serif;
+            }
           </style>
+
+          <div id="salman-error-box">
+            <h3 style="color:#ef4444;margin-bottom:10px;">حدث خطأ في تحميل واجهة التطبيق</h3>
+            <p id="salman-error-msg" style="color:#cbd5e1;font-size:13px;max-width:320px;margin-bottom:20px;word-break:break-word;"></p>
+            <button class="salman-btn" onclick="location.reload()">إعادة تحميل التطبيق</button>
+          </div>
 
           <div id="salman-offline-overlay">
             <div class="salman-logo-box">
-              <img src="${logoBase64}" alt="Salman AI Logo" onerror="this.parentElement.style.display='none'" />
+              <img src="${logoBase64}" alt="Salman AI Logo" />
             </div>
             <div class="salman-title">لا يوجد اتصال بالإنترنت</div>
             <div class="salman-desc">يرجى الاتصال بالشبكة للوصول إلى كافة مميزات وخدمات تطبيق Salman AI</div>
@@ -129,6 +157,16 @@ jobs:
           </div>
 
           <script>
+            // معالجة الأخطاء ومنع الشاشة البيضاء
+            window.addEventListener('error', function(e) {
+              const errBox = document.getElementById('salman-error-box');
+              const errMsg = document.getElementById('salman-error-msg');
+              if (errBox && errMsg) {
+                errMsg.innerText = e.message || 'خطأ في تشغيل ملفات النص البرمجي';
+                errBox.style.display = 'flex';
+              }
+            });
+
             (function() {
               const overlay = document.getElementById("salman-offline-overlay");
               
@@ -157,13 +195,13 @@ jobs:
           `;
 
           if (html.includes("</body>")) {
-            html = html.replace("</body>", overlayHtml + "\n</body>");
+            html = html.replace("</body>", injectedCode + "\n</body>");
           } else {
-            html += overlayHtml;
+            html += injectedCode;
           }
 
           fs.writeFileSync(indexPath, html, "utf8");
-          console.log("Successfully injected offline overlay & Base64 logo into index.html!");
+          console.log("Successfully updated index.html!");
           EOF
 
           node inject_offline.cjs
@@ -171,7 +209,7 @@ jobs:
       - name: Sync Capacitor Shell
         run: |
           npm install @capacitor/core@5.7.0 @capacitor/cli@5.7.0 @capacitor/android@5.7.0 --save-dev
-          echo '{"appId":"com.salman.ai","appName":"Salman AI","webDir":"www","server":{"androidScheme":"https","cleartext":true}}' > capacitor.config.json
+          echo '{"appId":"com.salman.ai","appName":"Salman AI","webDir":"www","server":{"androidScheme":"https","cleartext":true,"allowNavigation":["*"]}}' > capacitor.config.json
           
           if [ ! -d "android" ]; then
             npx cap add android

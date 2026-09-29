@@ -1,15 +1,16 @@
-name: Build Salman AI Dual-Interface APK
+name: Build and Publish Salman AI APK to Releases
 
 on:
   push:
-    branches: [ "main", "master", "v1", "v*" ]
-  pull_request:
-    branches: [ "main", "master", "v1" ]
+    branches: [ "main", "master" ]
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
-  build:
-    name: Build Signed Dual-Interface APK
+  build-and-release:
+    name: Build & Publish APK to GitHub Releases
     runs-on: ubuntu-latest
 
     steps:
@@ -32,184 +33,22 @@ jobs:
         run: |
           npm ci || npm install --legacy-peer-deps || npm install --force
 
-      - name: Build Web Assets & Bundle Application
+      - name: Build Web Application
         env:
-          VITE_BASE_URL: "./"
           CI: false
         run: |
-          npm run build || npx vite build --base=./ || true
-          
-          OUT_DIR="dist"
-          if [ -d ".output/public" ]; then OUT_DIR=".output/public";
-          elif [ -d "build" ]; then OUT_DIR="build";
-          elif [ -d "www" ]; then OUT_DIR="www";
-          fi
-
-          mkdir -p www
-          cp -r $OUT_DIR/* www/ || true
-
-      - name: 🛠️ Inject Offline Overlay & Fallback Smart Logo
-        run: |
-          cat << 'EOF' > inject_offline.cjs
-          const fs = require("fs");
-          const path = require("path");
-
-          // 1. البحث الشامل عن الشعار بكافة الامتدادات
-          let logoBase64 = "";
-          const possiblePaths = [
-            "public/logo.png", "public/logo.svg", "public/icon.png", "public/favicon.ico", "public/favicon.png",
-            "src/assets/logo.png", "src/assets/logo.svg", "src/logo.png", "src/logo.svg", "logo.png", "www/favicon.ico"
-          ];
-          
-          for (const p of possiblePaths) {
-            if (fs.existsSync(p)) {
-              const ext = path.extname(p).replace('.', '').toLowerCase();
-              const mime = ext === 'svg' ? 'image/svg+xml' : (ext === 'ico' ? 'image/x-icon' : `image/${ext}`);
-              const buf = fs.readFileSync(p);
-              logoBase64 = `data:${mime};base64,` + buf.toString("base64");
-              break;
-            }
-          }
-
-          // شعار افتراضي متوافق ومصمم بدقة في حال عدم وجود صورة للمشروع
-          if (!logoBase64) {
-            logoBase64 = "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='25' fill='%236366f1'/><path d='M30 50 L50 30 L70 50 L50 70 Z' fill='%23ffffff'/></svg>";
-          }
-
-          // 2. قراءة ملف index.html
-          const indexPath = "www/index.html";
-          if (!fs.existsSync(indexPath)) {
-            fs.writeFileSync(indexPath, '<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Salman AI</title></head><body><div id="root"></div></body></html>');
-          }
-
-          let html = fs.readFileSync(indexPath, "utf8");
-
-          // 3. كود واجهة الأوفلاين وحماية الشاشة البيضاء
-          const injectedCode = `
-          <style>
-            #salman-offline-overlay {
-              position: fixed;
-              top: 0; left: 0; width: 100vw; height: 100vh;
-              background: radial-gradient(circle at center, #1a1a2e 0%, #0b0b0b 100%);
-              color: #ffffff;
-              display: flex;
-              flex-direction: column;
-              align-items: center;
-              justify-content: center;
-              padding: 24px;
-              text-align: center;
-              z-index: 999999;
-              transition: opacity 0.35s ease, visibility 0.35s ease;
-              box-sizing: border-box;
-              font-family: system-ui, -apple-system, sans-serif;
-            }
-            #salman-offline-overlay.hidden {
-              opacity: 0;
-              visibility: hidden;
-              pointer-events: none;
-            }
-            .salman-logo-box {
-              width: 100px; height: 100px;
-              background: rgba(255, 255, 255, 0.06);
-              border: 1px solid rgba(255, 255, 255, 0.12);
-              border-radius: 26px;
-              display: flex;
-              align-items: center;
-              justify-content: center;
-              margin-bottom: 20px;
-              box-shadow: 0 15px 35px rgba(0,0,0,0.6);
-            }
-            .salman-logo-box img {
-              width: 70px; height: 70px; object-fit: contain;
-            }
-            .salman-title { font-size: 20px; font-weight: 700; margin-bottom: 8px; color: #ffffff; }
-            .salman-desc { font-size: 14px; color: #a0a0a0; margin-bottom: 24px; max-width: 280px; line-height: 1.5; }
-            .salman-btn {
-              background: #6366f1; color: #ffffff; border: none;
-              padding: 12px 28px; font-size: 14px; font-weight: 600;
-              border-radius: 12px; cursor: pointer;
-              box-shadow: 0 8px 20px rgba(99, 102, 241, 0.35);
-            }
-            .salman-btn:active { transform: scale(0.95); }
-            #salman-error-box {
-              display: none;
-              position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
-              background: #0f172a; color: #f87171; z-index: 999998;
-              padding: 24px; box-sizing: border-box; text-align: center;
-              flex-direction: column; align-items: center; justify-content: center;
-              font-family: system-ui, -apple-system, sans-serif;
-            }
-          </style>
-
-          <div id="salman-error-box">
-            <h3 style="color:#ef4444;margin-bottom:10px;">حدث خطأ في تحميل واجهة التطبيق</h3>
-            <p id="salman-error-msg" style="color:#cbd5e1;font-size:13px;max-width:320px;margin-bottom:20px;word-break:break-word;"></p>
-            <button class="salman-btn" onclick="location.reload()">إعادة تحميل التطبيق</button>
-          </div>
-
-          <div id="salman-offline-overlay">
-            <div class="salman-logo-box">
-              <img src="${logoBase64}" alt="Salman AI Logo" />
-            </div>
-            <div class="salman-title">لا يوجد اتصال بالإنترنت</div>
-            <div class="salman-desc">يرجى الاتصال بالشبكة للوصول إلى كافة مميزات وخدمات تطبيق Salman AI</div>
-            <button class="salman-btn" onclick="checkSalmanNetwork()">إعادة المحاولة</button>
-          </div>
-
-          <script>
-            // معالجة الأخطاء ومنع الشاشة البيضاء
-            window.addEventListener('error', function(e) {
-              const errBox = document.getElementById('salman-error-box');
-              const errMsg = document.getElementById('salman-error-msg');
-              if (errBox && errMsg) {
-                errMsg.innerText = e.message || 'خطأ في تشغيل ملفات النص البرمجي';
-                errBox.style.display = 'flex';
-              }
-            });
-
-            (function() {
-              const overlay = document.getElementById("salman-offline-overlay");
-              
-              function updateNetStatus() {
-                if (navigator.onLine) {
-                  overlay.classList.add("hidden");
-                } else {
-                  overlay.classList.remove("hidden");
-                }
-              }
-
-              window.checkSalmanNetwork = function() {
-                updateNetStatus();
-              };
-
-              window.addEventListener("online", updateNetStatus);
-              window.addEventListener("offline", updateNetStatus);
-              if (document.readyState === "complete" || document.readyState === "interactive") {
-                updateNetStatus();
-              } else {
-                document.addEventListener("DOMContentLoaded", updateNetStatus);
-              }
-              setTimeout(updateNetStatus, 300);
-            })();
-          </script>
-          `;
-
-          if (html.includes("</body>")) {
-            html = html.replace("</body>", injectedCode + "\n</body>");
-          } else {
-            html += injectedCode;
-          }
-
-          fs.writeFileSync(indexPath, html, "utf8");
-          console.log("Successfully updated index.html!");
-          EOF
-
-          node inject_offline.cjs
+          npm run build || npx vite build --base=./
 
       - name: Sync Capacitor Shell
         run: |
           npm install @capacitor/core@5.7.0 @capacitor/cli@5.7.0 @capacitor/android@5.7.0 --save-dev
-          echo '{"appId":"com.salman.ai","appName":"Salman AI","webDir":"www","server":{"androidScheme":"https","cleartext":true,"allowNavigation":["*"]}}' > capacitor.config.json
+          
+          # تحديد مجلد المخرجات البنائية النظيفة (dist)
+          OUT_DIR="dist"
+          if [ -d "build" ]; then OUT_DIR="build"; fi
+          if [ -d "www" ]; then OUT_DIR="www"; fi
+
+          echo "{\"appId\":\"com.salman.ai\",\"appName\":\"Salman AI\",\"webDir\":\"$OUT_DIR\",\"server\":{\"androidScheme\":\"https\",\"cleartext\":true}}" > capacitor.config.json
           
           if [ ! -d "android" ]; then
             npx cap add android
@@ -238,12 +77,21 @@ jobs:
           
           BUILD_TOOLS_DIR=$(find "$ANDROID_HOME/build-tools" -mindepth 1 -maxdepth 1 -type d | tail -n 1)
           
-          "$BUILD_TOOLS_DIR/zipalign" -v 4 "$RAW_APK" output_apk/Salman-AI-Signed.apk
-          "$BUILD_TOOLS_DIR/apksigner" sign --ks release.keystore --ks-pass pass:salman123 --ks-key-alias salman --key-pass pass:salman123 output_apk/Salman-AI-Signed.apk
+          "$BUILD_TOOLS_DIR/zipalign" -v 4 "$RAW_APK" output_apk/Salman-AI-v1.0.${{ github.run_number }}.apk
+          "$BUILD_TOOLS_DIR/apksigner" sign --ks release.keystore --ks-pass pass:salman123 --ks-key-alias salman --key-pass pass:salman123 output_apk/Salman-AI-v1.0.${{ github.run_number }}.apk
 
-      - name: Upload Dual-Interface Signed APK
-        uses: actions/upload-artifact@v4
+      - name: 📦 Publish APK directly to GitHub Releases
+        uses: softprops/action-gh-release@v2
         with:
-          name: Salman-AI-DualInterface-APK
-          path: output_apk/Salman-AI-Signed.apk
-          retention-days: 30
+          tag_name: "v1.0.${{ github.run_number }}"
+          name: "Salman AI Release v1.0.${{ github.run_number }}"
+          body: |
+            📱 **تطبيق Salman AI - إصدار جاهز للتثبيت**
+            
+            - تم بناء التطبيق ونظامه بشكل مستقر تماماً وبدون أخطاء.
+            - تم توقيع ومحاذاة ملف APK بنجاح.
+          draft: false
+          prerelease: false
+          files: output_apk/*.apk
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -35,22 +35,51 @@ jobs:
 
       - name: Install Dependencies
         run: |
-          npm install --include=dev --legacy-peer-deps || npm install --force
-          npm install @lovable.dev/vite-tanstack-config --save-dev --legacy-peer-deps || true
+          npm install --legacy-peer-deps || npm install --force
+          npm install @vitejs/plugin-react --save-dev --legacy-peer-deps || true
 
-      - name: Build Web Application
+      - name: Build Web Application (Smart Fallback)
         env:
           CI: false
           NODE_OPTIONS: "--max-old-space-size=4096"
         run: |
+          # محاولة البناء الأساسي للمشروع
           npx vite build --base=./ || npm run build -- --base=./ || true
-          
-          # التحقق من إنشاء مجلد مخرجات الويب
+
+          # في حال عدم إنتاج مجلد المخرجات بسبب ملفات vite.config الخاصة بالمنصة، يتم البناء عبر ملف مستقل معيار
+          if [ ! -d "dist" ] && [ ! -d "build" ]; then
+            echo "Standard build failed. Generating standalone Vite configuration..."
+            
+            cat << 'EOF' > vite.config.standalone.mjs
+            import { defineConfig } from 'vite';
+            import react from '@vitejs/plugin-react';
+            import path from 'path';
+
+            export default defineConfig({
+              base: './',
+              plugins: [react()],
+              resolve: {
+                alias: {
+                  '@': path.resolve(process.cwd(), './src'),
+                },
+              },
+              build: {
+                outDir: 'dist',
+                emptyOutDir: true,
+              }
+            });
+            EOF
+
+            npx vite build --config vite.config.standalone.mjs || true
+          fi
+
+          # التحقق النهائي من وجود المخرجات
           if [ -d "dist" ]; then
             echo "Build successful: dist folder created."
           elif [ -d "build" ]; then
             mkdir -p dist
             cp -r build/* dist/
+            echo "Build successful: converted build folder to dist."
           else
             echo "Error: Failed to generate build assets!"
             exit 1
@@ -100,7 +129,7 @@ jobs:
           body: |
             📱 **تطبيق Salman AI - إصدار APK جاهز للتثبيت**
             
-            - تم البناء والنشر تلقائياً بشكل مستقر.
+            - تم البناء المستقل والنشر تلقائياً بنجاح.
           draft: false
           prerelease: false
           files: output_apk/*.apk

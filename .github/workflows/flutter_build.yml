@@ -38,20 +38,21 @@ jobs:
           npm install --legacy-peer-deps || npm install --force
           npm install @vitejs/plugin-react --save-dev --legacy-peer-deps || true
 
-      - name: Build Web Application (Smart Fallback)
+      - name: Build Web Application
         env:
           CI: false
           NODE_OPTIONS: "--max-old-space-size=4096"
         run: |
-          # محاولة البناء الأساسي للمشروع
+          # 1. المحاولة الأساسية لبناء المشروع
           npx vite build --base=./ || npm run build -- --base=./ || true
 
-          # في حال عدم إنتاج مجلد المخرجات بسبب ملفات vite.config الخاصة بالمنصة، يتم البناء عبر ملف مستقل معيار
+          # 2. في حال عدم وجود المخرجات، إنشاء ملف إعداد مستقل عبر Node بدون استخدام EOF
           if [ ! -d "dist" ] && [ ! -d "build" ]; then
-            echo "Standard build failed. Generating standalone Vite configuration..."
+            echo "Standard build failed. Generating standalone Vite configuration via Node..."
             
-            cat << 'EOF' > vite.config.standalone.mjs
-            import { defineConfig } from 'vite';
+            node -e "
+            const fs = require('fs');
+            const config = \`import { defineConfig } from 'vite';
             import react from '@vitejs/plugin-react';
             import path from 'path';
 
@@ -59,21 +60,20 @@ jobs:
               base: './',
               plugins: [react()],
               resolve: {
-                alias: {
-                  '@': path.resolve(process.cwd(), './src'),
-                },
+                alias: { '@': path.resolve(process.cwd(), './src') }
               },
               build: {
                 outDir: 'dist',
-                emptyOutDir: true,
+                emptyOutDir: true
               }
-            });
-            EOF
+            });\`;
+            fs.writeFileSync('vite.config.standalone.mjs', config);
+            "
 
             npx vite build --config vite.config.standalone.mjs || true
           fi
 
-          # التحقق النهائي من وجود المخرجات
+          # 3. التحقق النهائي من وجود المخرجات
           if [ -d "dist" ]; then
             echo "Build successful: dist folder created."
           elif [ -d "build" ]; then
@@ -129,7 +129,7 @@ jobs:
           body: |
             📱 **تطبيق Salman AI - إصدار APK جاهز للتثبيت**
             
-            - تم البناء المستقل والنشر تلقائياً بنجاح.
+            - تم البناء والرفع التلقائي بنجاح.
           draft: false
           prerelease: false
           files: output_apk/*.apk

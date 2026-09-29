@@ -36,44 +36,31 @@ jobs:
       - name: Install Dependencies
         run: |
           npm install --legacy-peer-deps || npm install --force
-          npm install @vitejs/plugin-react --save-dev --legacy-peer-deps || true
+          npm install @vitejs/plugin-react vite typescript --save-dev --legacy-peer-deps || true
 
       - name: Build Web Application
         env:
           CI: false
           NODE_OPTIONS: "--max-old-space-size=4096"
         run: |
-          # 1. المحاولة الأساسية لبناء المشروع
-          npx vite build --base=./ || npm run build -- --base=./ || true
+          # 1. إزالة أي ملفات إعداد قديمة تسبب التعارض
+          rm -f vite.config.ts vite.config.js vite.config.mts vite.config.cts
 
-          # 2. في حال عدم وجود المخرجات، إنشاء ملف إعداد مستقل عبر Node بدون استخدام EOF
-          if [ ! -d "dist" ] && [ ! -d "build" ]; then
-            echo "Standard build failed. Generating standalone Vite configuration via Node..."
-            
-            node -e "
-            const fs = require('fs');
-            const config = \`import { defineConfig } from 'vite';
-            import react from '@vitejs/plugin-react';
-            import path from 'path';
+          # 2. إنشاء ملف vite.config.mjs نظيف ومستقل
+          echo "import { defineConfig } from 'vite';" > vite.config.mjs
+          echo "import react from '@vitejs/plugin-react';" >> vite.config.mjs
+          echo "import path from 'path';" >> vite.config.mjs
+          echo "export default defineConfig({" >> vite.config.mjs
+          echo "  base: './'," >> vite.config.mjs
+          echo "  plugins: [react()]," >> vite.config.mjs
+          echo "  resolve: { alias: { '@': path.resolve(process.cwd(), './src') } }," >> vite.config.mjs
+          echo "  build: { outDir: 'dist', emptyOutDir: true }" >> vite.config.mjs
+          echo "});" >> vite.config.mjs
 
-            export default defineConfig({
-              base: './',
-              plugins: [react()],
-              resolve: {
-                alias: { '@': path.resolve(process.cwd(), './src') }
-              },
-              build: {
-                outDir: 'dist',
-                emptyOutDir: true
-              }
-            });\`;
-            fs.writeFileSync('vite.config.standalone.mjs', config);
-            "
+          # 3. تشغيل البناء المباشر
+          npx vite build --config vite.config.mjs
 
-            npx vite build --config vite.config.standalone.mjs || true
-          fi
-
-          # 3. التحقق النهائي من وجود المخرجات
+          # 4. التحقق من مجلد المخرجات
           if [ -d "dist" ]; then
             echo "Build successful: dist folder created."
           elif [ -d "build" ]; then
@@ -129,7 +116,7 @@ jobs:
           body: |
             📱 **تطبيق Salman AI - إصدار APK جاهز للتثبيت**
             
-            - تم البناء والرفع التلقائي بنجاح.
+            - تم البناء المستقل والرفع تلقائياً بنجاح.
           draft: false
           prerelease: false
           files: output_apk/*.apk

@@ -71,6 +71,9 @@ jobs:
 
       - name: Process Logo & Apply Icon Padding
         run: |
+          # تثبيت مكتبة Pillow للتعامل مع الصور
+          python3 -m pip install Pillow
+
           # البحث عن صورة الشعار وإضافة هامش داخلي (Padding) لتظهر أيقونة متناسقة
           python3 -c "
           from PIL import Image

@@ -37,214 +37,23 @@ jobs:
         run: |
           npm install --legacy-peer-deps || npm install --force
 
-      - name: Generate In-App Web Launcher
+      - name: Prepare Dummy Web Directory
         run: |
           mkdir -p dist
-          
-          # إنشاء صفحة الويب الذكية
-          cat << 'EOF' > dist/index.html
-          <!DOCTYPE html>
-          <html lang="ar" dir="rtl">
-          <head>
-            <meta charset="UTF-8">
-            <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-            <title>Salman AI</title>
-            <style>
-              * { box-sizing: border-box; margin: 0; padding: 0; }
-              body {
-                background-color: #0b0f19;
-                color: #ffffff;
-                font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-                display: flex;
-                flex-direction: column;
-                align-items: center;
-                justify-content: center;
-                height: 100vh;
-                width: 100vw;
-                overflow: hidden;
-                padding: 24px;
-                text-align: center;
-              }
-              .container {
-                display: flex;
-                flex-direction: column;
-                align-items: center;
-                max-width: 360px;
-                width: 100%;
-              }
-              .logo-box {
-                width: 100px;
-                height: 100px;
-                border-radius: 24px;
-                display: flex;
-                align-items: center;
-                justify-content: center;
-                margin-bottom: 24px;
-                overflow: hidden;
-                box-shadow: 0 8px 24px rgba(0,0,0,0.5);
-              }
-              .logo-box img {
-                width: 100%;
-                height: 100%;
-                object-fit: cover;
-                border-radius: 24px;
-              }
-              h1 {
-                font-size: 28px;
-                font-weight: 700;
-                margin-bottom: 12px;
-                color: #ffffff;
-              }
-              p {
-                font-size: 16px;
-                color: #94a3b8;
-                margin-bottom: 32px;
-                line-height: 1.6;
-              }
-              .status-badge {
-                display: inline-flex;
-                align-items: center;
-                gap: 8px;
-                padding: 8px 16px;
-                background: rgba(239, 68, 68, 0.15);
-                border: 1px solid rgba(239, 68, 68, 0.3);
-                color: #f87171;
-                border-radius: 20px;
-                font-size: 14px;
-                margin-bottom: 24px;
-              }
-              .status-dot {
-                width: 8px;
-                height: 8px;
-                background-color: #ef4444;
-                border-radius: 50%;
-              }
-              .btn-retry {
-                background: linear-gradient(135deg, #2563eb, #1d4ed8);
-                color: #ffffff;
-                border: none;
-                padding: 14px 32px;
-                font-size: 16px;
-                font-weight: 600;
-                border-radius: 14px;
-                cursor: pointer;
-                width: 100%;
-                box-shadow: 0 4px 14px rgba(37, 99, 235, 0.4);
-              }
-              .loader {
-                display: none;
-                width: 24px;
-                height: 24px;
-                border: 3px solid rgba(255,255,255,0.3);
-                border-radius: 50%;
-                border-top-color: #fff;
-                animation: spin 1s linear infinite;
-                margin: 0 auto;
-              }
-              @keyframes spin { to { transform: rotate(360deg); } }
-            </style>
-          </head>
-          <body>
-            <div class="container">
-              <div class="logo-box">
-                <img id="app-logo" src="" alt="Salman AI Logo">
-              </div>
+          echo '<html><body>Salman AI</body></html>' > dist/index.html
 
-              <h1>Salman AI</h1>
-              
-              <div class="status-badge">
-                <span class="status-dot"></span>
-                <span>لا يوجد اتصال بالشبكة</span>
-              </div>
-
-              <p>يرجى الاتصال بالإنترنت لفتح التطبيق واستخدامه.</p>
-
-              <button class="btn-retry" onclick="checkConnection()">
-                <span id="btn-text">إعادة المحاولة</span>
-                <div class="loader" id="btn-loader"></div>
-              </button>
-            </div>
-
-            <script>
-              const APP_URL = "https://salman-ai.lovable.app";
-
-              function checkConnection() {
-                const btnText = document.getElementById('btn-text');
-                const btnLoader = document.getElementById('btn-loader');
-                
-                if (btnText && btnLoader) {
-                  btnText.style.display = 'none';
-                  btnLoader.style.display = 'block';
-                }
-
-                if (navigator.onLine) {
-                  window.location.replace(APP_URL);
-                } else {
-                  setTimeout(() => {
-                    if (btnText && btnLoader) {
-                      btnText.style.display = 'inline';
-                      btnLoader.style.display = 'none';
-                    }
-                  }, 800);
-                }
-              }
-
-              window.addEventListener('online', () => {
-                window.location.replace(APP_URL);
-              });
-
-              if (navigator.onLine) {
-                window.location.replace(APP_URL);
-              }
-            </script>
-          </body>
-          </html>
-          EOF
-
-          # معالجة الشعار وتضمينه بأمان بعد تصحيح المتغير fullPath
-          node -e "
-          const fs = require('fs');
-          const path = require('path');
-
-          function findFile(dir, fileName) {
-            const files = fs.readdirSync(dir);
-            for (const file of files) {
-              if (file === 'node_modules' || file === 'android' || file === '.git') continue;
-              const fullPath = path.join(dir, file);
-              if (fs.statSync(fullPath).isDirectory()) {
-                const found = findFile(fullPath, fileName);
-                if (found) return found;
-              } else if (file.toLowerCase() === fileName.toLowerCase()) {
-                return fullPath;
-              }
-            }
-            return null;
-          }
-
-          const logoPath = findFile('.', 'logo.png');
-          let html = fs.readFileSync('dist/index.html', 'utf8');
-
-          if (logoPath) {
-            console.log('Logo found at:', logoPath);
-            const b64 = fs.readFileSync(logoPath).toString('base64');
-            html = html.replace('src=\"\"', 'src=\"data:image/png;base64,' + b64 + '\"');
-          } else {
-            console.log('Logo not found, using fallback icon');
-          }
-          fs.writeFileSync('dist/index.html', html);
-          "
-
-      - name: Sync Capacitor Shell & Configure In-App Navigation
+      - name: Sync Capacitor Shell & Set Direct Web URL
         run: |
           npm install @capacitor/core@5.7.0 @capacitor/cli@5.7.0 @capacitor/android@5.7.0 --save-dev
           
+          # توجيه التطبيق لفتح الموقع مباشرة بدون أي تأخير أو صفحات وسيطة
           cat << 'EOF' > capacitor.config.json
           {
             "appId": "com.salman.ai",
             "appName": "Salman AI",
             "webDir": "dist",
             "server": {
-              "androidScheme": "https",
+              "url": "https://salman-ai.lovable.app",
               "cleartext": true,
               "allowNavigation": [
                 "salman-ai.lovable.app",
@@ -260,44 +69,44 @@ jobs:
           fi
           npx cap sync android
 
-          # استبدال صور الأيقونات فقط بشكل آمن
-          node -e "
-          const fs = require('fs');
-          const path = require('path');
+      - name: Process Logo & Apply Icon Padding
+        run: |
+          # البحث عن صورة الشعار وإضافة هامش داخلي (Padding) لتظهر أيقونة متناسقة
+          python3 -c "
+          from PIL import Image
+          import os, glob
 
-          function findFile(dir, fileName) {
-            const files = fs.readdirSync(dir);
-            for (const file of files) {
-              if (file === 'node_modules' || file === 'android' || file === '.git') continue;
-              const fullPath = path.join(dir, file);
-              if (fs.statSync(fullPath).isDirectory()) {
-                const found = findFile(fullPath, fileName);
-                if (found) return found;
-              } else if (file.toLowerCase() === fileName.toLowerCase()) {
-                return fullPath;
-              }
-            }
-            return null;
-          }
+          def find_logo():
+              for root, dirs, files in os.walk('.'):
+                  if 'node_modules' in root or 'android' in root or '.git' in root:
+                      continue
+                  for f in files:
+                      if f.lower() == 'logo.png':
+                          return os.path.join(root, f)
+              return None
 
-          const logoPath = findFile('.', 'logo.png');
-          if (logoPath && fs.existsSync('android/app/src/main/res')) {
-            const resDir = 'android/app/src/main/res';
-            const folders = fs.readdirSync(resDir);
-            for (const folder of folders) {
-              if (folder.startsWith('mipmap') || folder.startsWith('drawable')) {
-                const targetPath = path.join(resDir, folder);
-                const files = fs.readdirSync(targetPath);
-                for (const f of files) {
-                  const ext = path.extname(f).toLowerCase();
-                  if (f.startsWith('ic_launcher') && (ext === '.png' || ext === '.webp')) {
-                    fs.copyFileSync(logoPath, path.join(targetPath, f));
-                  }
-                }
-              }
-            }
-            console.log('Successfully updated Android launcher image icons safely.');
-          }
+          logo_path = find_logo()
+          if logo_path:
+              print('Found logo at:', logo_path)
+              img = Image.open(logo_path).convert('RGBA')
+              w, h = img.size
+              pad = int(max(w, h) * 0.22)
+              new_img = Image.new('RGBA', (w + pad * 2, h + pad * 2), (0, 0, 0, 0))
+              new_img.paste(img, (pad, pad), img)
+              new_img.save('logo_padded.png')
+              
+              res_dir = 'android/app/src/main/res'
+              if os.path.exists(res_dir):
+                  for root, dirs, files in os.walk(res_dir):
+                      folder = os.path.basename(root)
+                      if folder.startswith('mipmap') or folder.startswith('drawable'):
+                          for f in files:
+                              ext = os.path.splitext(f)[1].lower()
+                              if f.startswith('ic_launcher') and ext in ['.png', '.webp']:
+                                  target = os.path.join(root, f)
+                                  img_scaled = new_img.resize(Image.open(target).size, Image.Resampling.LANCZOS)
+                                  img_scaled.save(target)
+                  print('Successfully updated app launcher icons with balanced padding.')
           "
 
       - name: Configure Android Permissions
@@ -331,10 +140,10 @@ jobs:
           tag_name: "v1.0.${{ github.run_number }}"
           name: "Salman AI Release v1.0.${{ github.run_number }}"
           body: |
-            📱 **تطبيق Salman AI - إصدار جاهز تماماً**
+            📱 **تطبيق Salman AI - التحديث النهائي**
             
-            - التصفح يفتح داخل التطبيق مباشرة دون الانتقال لـ Chrome.
-            - الشعار الأصلي يظهر في شاشة عدم الاتصال وعبر أيقونات التطبيق الرسمية.
+            - **سرعة الفتح**: تحويل مباشر وسريع جداً للموقع فور تشغيل التطبيق.
+            - **تحسين الأيقونة**: ضبط الهامش الشفاف للشعار لتنسيق شكله على الواجهة الرئيسية.
           draft: false
           prerelease: false
           files: output_apk/*.apk

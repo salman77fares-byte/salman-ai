@@ -201,7 +201,7 @@ jobs:
           </html>
           EOF
 
-          # تضمين كود Base64 للصورة داخل HTML بأمان عبر Node.js
+          # معالجة الشعار وتضمينه بأمان بعد تصحيح المتغير fullPath
           node -e "
           const fs = require('fs');
           const path = require('path');
@@ -215,7 +215,7 @@ jobs:
                 const found = findFile(fullPath, fileName);
                 if (found) return found;
               } else if (file.toLowerCase() === fileName.toLowerCase()) {
-                return found;
+                return fullPath;
               }
             }
             return null;
@@ -260,7 +260,7 @@ jobs:
           fi
           npx cap sync android
 
-          # استبدال صور الأيقونات فقط (تجاهل ملفات XML لتفادي خطأ AAPT2)
+          # استبدال صور الأيقونات فقط بشكل آمن
           node -e "
           const fs = require('fs');
           const path = require('path');
@@ -274,7 +274,7 @@ jobs:
                 const found = findFile(fullPath, fileName);
                 if (found) return found;
               } else if (file.toLowerCase() === fileName.toLowerCase()) {
-                return found;
+                return fullPath;
               }
             }
             return null;
@@ -331,10 +331,10 @@ jobs:
           tag_name: "v1.0.${{ github.run_number }}"
           name: "Salman AI Release v1.0.${{ github.run_number }}"
           body: |
-            📱 **تطبيق Salman AI - إصدار APK مصلح ومُختبر**
+            📱 **تطبيق Salman AI - إصدار جاهز تماماً**
             
-            - **تصفح داخلي كامل**: يفتح الموقع داخل WebView التطبيق دون الخروج لـ Chrome.
-            - **إصلاح الأيقونات**: معالجة شاشات الأوفلاين والأيقونات بدون التعارض مع ملفات النظام XML.
+            - التصفح يفتح داخل التطبيق مباشرة دون الانتقال لـ Chrome.
+            - الشعار الأصلي يظهر في شاشة عدم الاتصال وعبر أيقونات التطبيق الرسمية.
           draft: false
           prerelease: false
           files: output_apk/*.apk

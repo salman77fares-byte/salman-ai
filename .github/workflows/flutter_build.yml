@@ -201,7 +201,7 @@ jobs:
           </html>
           EOF
 
-          # معالجة الشعار وتضمينه بأمان باستخدام Node.js لمنع خطأ Argument list too long
+          # تضمين كود Base64 للصورة داخل HTML بأمان عبر Node.js
           node -e "
           const fs = require('fs');
           const path = require('path');
@@ -215,7 +215,7 @@ jobs:
                 const found = findFile(fullPath, fileName);
                 if (found) return found;
               } else if (file.toLowerCase() === fileName.toLowerCase()) {
-                return fullPath;
+                return found;
               }
             }
             return null;
@@ -260,7 +260,7 @@ jobs:
           fi
           npx cap sync android
 
-          # استبدال أيقونات الأندرويد بشعار التطبيق
+          # استبدال صور الأيقونات فقط (تجاهل ملفات XML لتفادي خطأ AAPT2)
           node -e "
           const fs = require('fs');
           const path = require('path');
@@ -274,7 +274,7 @@ jobs:
                 const found = findFile(fullPath, fileName);
                 if (found) return found;
               } else if (file.toLowerCase() === fileName.toLowerCase()) {
-                return fullPath;
+                return found;
               }
             }
             return null;
@@ -285,17 +285,18 @@ jobs:
             const resDir = 'android/app/src/main/res';
             const folders = fs.readdirSync(resDir);
             for (const folder of folders) {
-              if (folder.startsWith('mipmap')) {
+              if (folder.startsWith('mipmap') || folder.startsWith('drawable')) {
                 const targetPath = path.join(resDir, folder);
                 const files = fs.readdirSync(targetPath);
                 for (const f of files) {
-                  if (f.startsWith('ic_launcher')) {
+                  const ext = path.extname(f).toLowerCase();
+                  if (f.startsWith('ic_launcher') && (ext === '.png' || ext === '.webp')) {
                     fs.copyFileSync(logoPath, path.join(targetPath, f));
                   }
                 }
               }
             }
-            console.log('Successfully updated Android launcher icons.');
+            console.log('Successfully updated Android launcher image icons safely.');
           }
           "
 
@@ -330,10 +331,10 @@ jobs:
           tag_name: "v1.0.${{ github.run_number }}"
           name: "Salman AI Release v1.0.${{ github.run_number }}"
           body: |
-            📱 **تطبيق Salman AI - إصدار APK مصلح بالكامل**
+            📱 **تطبيق Salman AI - إصدار APK مصلح ومُختبر**
             
-            - تم التصفح الداخلي كاملاً دون الحاجة لمتصفح Chrome.
-            - تم دمج الشعار الرسمي في شاشة عدم الاتصال وأيقونة التطبيق.
+            - **تصفح داخلي كامل**: يفتح الموقع داخل WebView التطبيق دون الخروج لـ Chrome.
+            - **إصلاح الأيقونات**: معالجة شاشات الأوفلاين والأيقونات بدون التعارض مع ملفات النظام XML.
           draft: false
           prerelease: false
           files: output_apk/*.apk

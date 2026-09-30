@@ -37,34 +37,11 @@ jobs:
         run: |
           npm install --legacy-peer-deps || npm install --force
 
-      - name: Build Web Application & In-App Launcher
-        env:
-          CI: false
-          NODE_OPTIONS: "--max-old-space-size=4096"
+      - name: Generate In-App Web Launcher
         run: |
-          # 1. إزالة الموديلات المعطلة محلياً لتهيئة بيئة البناء
-          node -e "
-          const fs = require('fs');
-          ['vite.config.ts', 'vite.config.js', 'vite.config.mts'].forEach(file => {
-            if (fs.existsSync(file)) {
-              let content = fs.readFileSync(file, 'utf8');
-              content = content.replace(/import.*lovable-tagger.*/g, 'const componentTagger = () => null;');
-              content = content.replace(/import.*@lovable\.dev.*/g, '');
-              fs.writeFileSync(file, content);
-            }
-          });
-          "
-
-          # 2. محاولة بناء التطبيق المحلي
-          npx vite build --base=./ || true
-
-          if [ ! -d "dist" ] && [ -d "build" ]; then
-            mkdir -p dist
-            cp -r build/* dist/
-          fi
-
-          # 3. إنشاء واجهة أوفلاين مع ترميز الشعار
           mkdir -p dist
+          
+          # إنشاء صفحة الويب الذكية
           cat << 'EOF' > dist/index.html
           <!DOCTYPE html>
           <html lang="ar" dir="rtl">
@@ -170,7 +147,7 @@ jobs:
           <body>
             <div class="container">
               <div class="logo-box">
-                <img src="{{LOGO_BASE64}}" alt="Salman AI Logo">
+                <img id="app-logo" src="" alt="Salman AI Logo">
               </div>
 
               <h1>Salman AI</h1>
@@ -195,43 +172,72 @@ jobs:
                 const btnText = document.getElementById('btn-text');
                 const btnLoader = document.getElementById('btn-loader');
                 
-                btnText.style.display = 'none';
-                btnLoader.style.display = 'block';
+                if (btnText && btnLoader) {
+                  btnText.style.display = 'none';
+                  btnLoader.style.display = 'block';
+                }
 
                 if (navigator.onLine) {
-                  window.location.href = APP_URL;
+                  window.location.replace(APP_URL);
                 } else {
                   setTimeout(() => {
-                    btnText.style.display = 'inline';
-                    btnLoader.style.display = 'none';
+                    if (btnText && btnLoader) {
+                      btnText.style.display = 'inline';
+                      btnLoader.style.display = 'none';
+                    }
                   }, 800);
                 }
               }
 
               window.addEventListener('online', () => {
-                window.location.href = APP_URL;
+                window.location.replace(APP_URL);
               });
 
               if (navigator.onLine) {
-                window.location.href = APP_URL;
+                window.location.replace(APP_URL);
               }
             </script>
           </body>
           </html>
           EOF
 
-          # 4. دمج صورة اللوجو الحقيقية داخل صفحة الـ HTML مباشرة باستخدام Base64
-          LOGO_FILE=$(find . -not -path "*/node_modules/*" -not -path "*/android/*" -name "logo.png" | head -n 1)
-          if [ -n "$LOGO_FILE" ]; then
-            LOGO_B64=$(base64 -w 0 "$LOGO_FILE")
-            sed -i "s|{{LOGO_BASE64}}|data:image/png;base64,$LOGO_B64|g" dist/index.html
-          fi
+          # معالجة الشعار وتضمينه بأمان باستخدام Node.js لمنع خطأ Argument list too long
+          node -e "
+          const fs = require('fs');
+          const path = require('path');
+
+          function findFile(dir, fileName) {
+            const files = fs.readdirSync(dir);
+            for (const file of files) {
+              if (file === 'node_modules' || file === 'android' || file === '.git') continue;
+              const fullPath = path.join(dir, file);
+              if (fs.statSync(fullPath).isDirectory()) {
+                const found = findFile(fullPath, fileName);
+                if (found) return found;
+              } else if (file.toLowerCase() === fileName.toLowerCase()) {
+                return fullPath;
+              }
+            }
+            return null;
+          }
+
+          const logoPath = findFile('.', 'logo.png');
+          let html = fs.readFileSync('dist/index.html', 'utf8');
+
+          if (logoPath) {
+            console.log('Logo found at:', logoPath);
+            const b64 = fs.readFileSync(logoPath).toString('base64');
+            html = html.replace('src=\"\"', 'src=\"data:image/png;base64,' + b64 + '\"');
+          } else {
+            console.log('Logo not found, using fallback icon');
+          }
+          fs.writeFileSync('dist/index.html', html);
+          "
 
       - name: Sync Capacitor Shell & Configure In-App Navigation
         run: |
           npm install @capacitor/core@5.7.0 @capacitor/cli@5.7.0 @capacitor/android@5.7.0 --save-dev
           
-          # تثبيت allowNavigation داخل قسم server لإجباره على الفتح داخل التطبيق
           cat << 'EOF' > capacitor.config.json
           {
             "appId": "com.salman.ai",
@@ -254,12 +260,44 @@ jobs:
           fi
           npx cap sync android
 
-          # استبدال أيقونات الأندرويد في مجلد res بالشعار الأصلي
-          LOGO_FILE=$(find . -not -path "*/node_modules/*" -not -path "*/android/*" -name "logo.png" | head -n 1)
-          if [ -n "$LOGO_FILE" ]; then
-            find android/app/src/main/res/ -name "ic_launcher*.png" -exec cp "$LOGO_FILE" {} \;
-            find android/app/src/main/res/ -name "ic_launcher*.webp" -exec cp "$LOGO_FILE" {} \;
-          fi
+          # استبدال أيقونات الأندرويد بشعار التطبيق
+          node -e "
+          const fs = require('fs');
+          const path = require('path');
+
+          function findFile(dir, fileName) {
+            const files = fs.readdirSync(dir);
+            for (const file of files) {
+              if (file === 'node_modules' || file === 'android' || file === '.git') continue;
+              const fullPath = path.join(dir, file);
+              if (fs.statSync(fullPath).isDirectory()) {
+                const found = findFile(fullPath, fileName);
+                if (found) return found;
+              } else if (file.toLowerCase() === fileName.toLowerCase()) {
+                return fullPath;
+              }
+            }
+            return null;
+          }
+
+          const logoPath = findFile('.', 'logo.png');
+          if (logoPath && fs.existsSync('android/app/src/main/res')) {
+            const resDir = 'android/app/src/main/res';
+            const folders = fs.readdirSync(resDir);
+            for (const folder of folders) {
+              if (folder.startsWith('mipmap')) {
+                const targetPath = path.join(resDir, folder);
+                const files = fs.readdirSync(targetPath);
+                for (const f of files) {
+                  if (f.startsWith('ic_launcher')) {
+                    fs.copyFileSync(logoPath, path.join(targetPath, f));
+                  }
+                }
+              }
+            }
+            console.log('Successfully updated Android launcher icons.');
+          }
+          "
 
       - name: Configure Android Permissions
         run: |
@@ -292,10 +330,10 @@ jobs:
           tag_name: "v1.0.${{ github.run_number }}"
           name: "Salman AI Release v1.0.${{ github.run_number }}"
           body: |
-            📱 **تطبيق Salman AI - إصدار يعمل داخلياً بالكامل**
+            📱 **تطبيق Salman AI - إصدار APK مصلح بالكامل**
             
-            - **تصفح داخلي**: يفتح الموقع داخل WebView التطبيق مباشرة دون الخروج لـ Chrome.
-            - **شعار أوفلاين مضمن**: إظهار شعار التطبيق الأصلي أثناء عدم وجود إنترنت.
+            - تم التصفح الداخلي كاملاً دون الحاجة لمتصفح Chrome.
+            - تم دمج الشعار الرسمي في شاشة عدم الاتصال وأيقونة التطبيق.
           draft: false
           prerelease: false
           files: output_apk/*.apk

@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { askSalmanAI } from "@/lib/aiService.server";
+import { askSalmanAI, EngineError } from "@/lib/aiService.server";
 
 export const Route = createFileRoute("/api/chat")({
   server: {
@@ -20,6 +20,12 @@ export const Route = createFileRoute("/api/chat")({
           });
         } catch (error) {
           console.error("Chat API Error:", error);
+          if (error instanceof EngineError) {
+            return new Response(error.message, {
+              status: 502,
+              headers: { "Content-Type": "text/plain; charset=utf-8" },
+            });
+          }
           return new Response("عذراً، تعذّر الاتصال بالخدمة حالياً.", {
             status: 500,
             headers: { "Content-Type": "text/plain; charset=utf-8" },

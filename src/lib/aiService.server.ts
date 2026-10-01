@@ -2,7 +2,6 @@
 // نظام محركات متعاقب: Google Gemini -> OpenRouter -> Groq -> Lovable AI Gateway
 // كل محرك معزول تماماً؛ أي فشل (404/403/CORS/شبكة) ينتقل صامتاً للمحرك التالي.
 
-
 import { ENGINE_OPTIONS, type EngineId } from "@/lib/engines";
 import { buildSearchQuery, needsFreshInfo } from "@/lib/fresh-intent";
 
@@ -24,7 +23,6 @@ function baseSystemPrompt(): string {
     "واذكر المصادر في النهاية كقائمة روابط مختصرة. إن تعارضت معلوماتك مع نتائج البحث فالنتائج هي الصحيحة.",
   ].join("\n");
 }
-
 
 /** يطلب نتائج بحث حية من نقطة البحث في التطبيق (تعمل من المتصفح والسيرفر). */
 async function fetchLiveContext(query: string, origin?: string): Promise<string> {
@@ -144,7 +142,7 @@ export function extractText(m: unknown): string {
   if (Array.isArray(m)) return m.map(extractText).filter(Boolean).join("\n").trim();
 
   const obj = m as Record<string, unknown>;
-  const content = obj['content'] ?? obj['parts'] ?? obj['text'] ?? obj['message'] ?? obj['value'];
+  const content = obj["content"] ?? obj["parts"] ?? obj["text"] ?? obj["message"] ?? obj["value"];
   if (content !== undefined && content !== m) {
     const nested = extractText(content);
     if (nested) return nested;
@@ -191,7 +189,12 @@ function toOpenAIMessages(history: Msg[]) {
 /** مهلة قصيرة لكل محرك: أي تأخر ينقل الطلب فوراً للمحرك التالي. */
 export const ENGINE_TIMEOUT_MS = 25_000;
 
-async function postJson(url: string, headers: Record<string, string>, body: unknown, timeoutMs = ENGINE_TIMEOUT_MS) {
+async function postJson(
+  url: string,
+  headers: Record<string, string>,
+  body: unknown,
+  timeoutMs = ENGINE_TIMEOUT_MS,
+) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
@@ -206,7 +209,11 @@ async function postJson(url: string, headers: Record<string, string>, body: unkn
   }
 }
 
-async function tryGemini(history: Msg[], systemPrompt: string, grounded: boolean): Promise<string | null> {
+async function tryGemini(
+  history: Msg[],
+  systemPrompt: string,
+  grounded: boolean,
+): Promise<string | null> {
   const key = keyFor("gemini");
   if (!key) return null;
   const vision = hasImages(history);
@@ -221,7 +228,9 @@ async function tryGemini(history: Msg[], systemPrompt: string, grounded: boolean
           contents: history.map((m) => ({
             role: m.role === "assistant" ? "model" : "user",
             parts: [
-              { text: m.content || (m.images?.length ? "حلّل هذه الصورة واشرح محتواها بدقة." : "") },
+              {
+                text: m.content || (m.images?.length ? "حلّل هذه الصورة واشرح محتواها بدقة." : ""),
+              },
               ...(m.images ?? []).map((img) => ({
                 inline_data: { mime_type: img.mimeType, data: img.data },
               })),
@@ -301,7 +310,11 @@ const tryGroq = (history: Msg[], systemPrompt: string, _grounded = false) =>
   );
 
 /** محرك أخير مضمون عبر بوابة Lovable AI. */
-async function tryGateway(history: Msg[], systemPrompt: string, _grounded = false): Promise<string | null> {
+async function tryGateway(
+  history: Msg[],
+  systemPrompt: string,
+  _grounded = false,
+): Promise<string | null> {
   const key = env("LOVABLE_API_KEY");
   if (!key) return null;
   try {

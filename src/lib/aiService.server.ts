@@ -25,11 +25,8 @@ function baseSystemPrompt(): string {
 
 
 /** يطلب نتائج بحث حية من نقطة البحث في التطبيق (تعمل من المتصفح والسيرفر). */
-async function fetchLiveContext(query: string): Promise<string> {
-  const base =
-    typeof window !== "undefined"
-      ? ""
-      : (env("APP_ORIGIN") || env("VITE_APP_ORIGIN") || "http://localhost:8080");
+async function fetchLiveContext(query: string, origin?: string): Promise<string> {
+  const base = origin || env("APP_ORIGIN") || "http://localhost:8080";
   try {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), 14_000);
@@ -190,7 +187,7 @@ function toOpenAIMessages(history: Msg[]) {
 }
 
 /** مهلة قصيرة لكل محرك: أي تأخر ينقل الطلب فوراً للمحرك التالي. */
-export const ENGINE_TIMEOUT_MS = 4_000;
+export const ENGINE_TIMEOUT_MS = 25_000;
 
 async function postJson(url: string, headers: Record<string, string>, body: unknown, timeoutMs = ENGINE_TIMEOUT_MS) {
   const controller = new AbortController();
@@ -232,7 +229,7 @@ async function tryGemini(history: Msg[], systemPrompt: string, grounded: boolean
           ...(vision ? {} : { tools: [{ google_search: {} }] }),
           generationConfig: { temperature: 0.6, topP: 0.9, maxOutputTokens: 1400 },
         },
-        vision ? 30_000 : grounded ? 8_000 : ENGINE_TIMEOUT_MS,
+        vision ? 60_000 : ENGINE_TIMEOUT_MS,
       );
       if (!res.ok) continue;
       const data = (await res.json()) as {
@@ -269,7 +266,7 @@ async function tryOpenAICompatible(
           model,
           messages: [{ role: "system", content: systemPrompt }, ...toOpenAIMessages(history)],
         },
-        vision ? 30_000 : ENGINE_TIMEOUT_MS,
+        vision ? 60_000 : ENGINE_TIMEOUT_MS,
       );
       if (!res.ok) continue;
       const data = (await res.json()) as { choices?: { message?: unknown }[] };
@@ -313,7 +310,7 @@ async function tryGateway(history: Msg[], systemPrompt: string, _grounded = fals
         model: GATEWAY_MODEL,
         messages: [{ role: "system", content: systemPrompt }, ...toOpenAIMessages(history)],
       },
-      hasImages(history) ? 40_000 : 20_000,
+      hasImages(history) ? 90_000 : 60_000,
     );
     if (!res.ok) return null;
     const data = (await res.json()) as { choices?: { message?: unknown }[] };
@@ -323,28 +320,16 @@ async function tryGateway(history: Msg[], systemPrompt: string, _grounded = fals
   }
 }
 
-/** المحركات المتاحة للاختيار من الإعدادات. */
-export const ENGINE_OPTIONS = [
-  { id: "gemini", label: "Google Gemini Flash (سريع + بحث حي)" },
-  { id: "groq", label: "Groq GPT-OSS (أسرع استجابة)" },
-  { id: "openrouter", label: "OpenRouter (Llama / DeepSeek)" },
-  { id: "gateway", label: "Salman Cloud (احتياطي مضمون)" },
-] as const;
+import { ENGINE_OPTIONS, type EngineId } from "@/lib/engines";
 
-export type EngineId = (typeof ENGINE_OPTIONS)[number]["id"];
-export const ENGINE_STORAGE_KEY = "salman-ai-engine";
-
-function preferredEngine(): EngineId | null {
-  try {
-    if (typeof localStorage === "undefined") return null;
-    const value = localStorage.getItem(ENGINE_STORAGE_KEY) as EngineId | null;
-    return value && ENGINE_OPTIONS.some((e) => e.id === value) ? value : null;
-  } catch {
-    return null;
-  }
+function preferredEngine(value?: string | null): EngineId | null {
+  return value && ENGINE_OPTIONS.some((e) => e.id === value) ? (value as EngineId) : null;
 }
 
-export async function askSalmanAI(messages: unknown[]): Promise<string> {
+export async function askSalmanAI(
+  messages: unknown[],
+  opts: { engine?: string | null; origin?: string } = {},
+): Promise<string> {
   const history = normalize(messages);
   // آخر 4 رسائل فقط لتقليل حجم الطلب وزمن الاستجابة
   const safeHistory = history.length
@@ -358,7 +343,7 @@ export async function askSalmanAI(messages: unknown[]): Promise<string> {
   let systemPrompt = baseSystemPrompt();
   let grounded = false;
   if (!vision && needsFreshInfo(lastUser)) {
-    const context = await fetchLiveContext(buildSearchQuery(lastUser));
+    const context = await fetchLiveContext(buildSearchQuery(lastUser), opts.origin);
     grounded = true;
     if (context) systemPrompt = `${systemPrompt}\n\n${context}`;
   }
@@ -377,7 +362,7 @@ export async function askSalmanAI(messages: unknown[]): Promise<string> {
   const order: EngineId[] = vision
     ? ["gemini", "openrouter", "gateway"]
     : ["gemini", "openrouter", "groq", "gateway"];
-  const chosen = preferredEngine();
+  const chosen = preferredEngine(opts.engine);
   const chain =
     chosen && order.includes(chosen) ? [chosen, ...order.filter((e) => e !== chosen)] : order;
 

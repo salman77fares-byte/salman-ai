@@ -376,10 +376,24 @@ export async function askSalmanAI(
     ? ["gemini", "openrouter", "gateway"]
     : ["gemini", "openrouter", "groq", "gateway"];
   const chosen = preferredEngine(opts.engine);
-  const chain =
-    chosen && order.includes(chosen) ? [chosen, ...order.filter((e) => e !== chosen)] : order;
 
-  for (const id of chain) {
+  // عند اختيار مزود محدد: نستخدمه وحده بلا تحويل تلقائي لمزود آخر.
+  if (chosen) {
+    const label = ENGINE_OPTIONS.find((e) => e.id === chosen)?.label.split(" (")[0] ?? chosen;
+    if (vision && chosen === "groq") {
+      throw new EngineError(`${label} لا يدعم قراءة الصور. اختر Gemini أو OpenRouter من القائمة.`);
+    }
+    let reply: string | null = null;
+    try {
+      reply = await engines[chosen](safeHistory, systemPrompt, grounded);
+    } catch {
+      reply = null;
+    }
+    if (reply) return reply;
+    throw new EngineError(`تعذّر الحصول على رد من ${label} حالياً. حاول مجدداً أو اختر مزوداً آخر.`);
+  }
+
+  for (const id of order) {
     try {
       const reply = await engines[id](safeHistory, systemPrompt, grounded);
       if (reply) return reply;
@@ -388,7 +402,15 @@ export async function askSalmanAI(
     }
   }
 
-  return vision
-    ? "تعذّر تحليل الصورة حالياً، جرّب صورة أصغر حجماً أو أعد المحاولة بعد قليل."
-    : "تعذر الاتصال بأي من المحركات حالياً، يرجى المحاولة مرة أخرى بعد قليل.";
+  throw new EngineError(
+    vision
+      ? "تعذّر تحليل الصورة حالياً، جرّب صورة أصغر حجماً أو أعد المحاولة بعد قليل."
+      : "تعذر الاتصال بأي من المحركات حالياً، يرجى المحاولة مرة أخرى بعد قليل.",
+  );
+}
+
+export class EngineError extends Error {}
+
+function _unused() {
+  return "";
 }

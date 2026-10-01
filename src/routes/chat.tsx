@@ -242,7 +242,10 @@ function ChatLayout() {
       </Sheet>
 
       <div className="relative flex min-w-0 flex-1 flex-col">
-        <div className="safe-top pointer-events-none absolute inset-x-0 top-0 z-20 flex items-center justify-between gap-2 px-2 py-2 sm:px-4">
+        <div
+          className="pointer-events-none absolute inset-x-0 top-0 z-20 flex items-center justify-between gap-2 px-3 pb-2 sm:px-5"
+          style={{ paddingTop: "calc(env(safe-area-inset-top, 0px) + clamp(12px, 3vw, 20px))" }}
+        >
           <div className="pointer-events-auto flex items-center gap-1">
             <Button
               variant="ghost"

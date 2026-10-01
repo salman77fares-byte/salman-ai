@@ -10,7 +10,7 @@ import { toast } from "sonner";
 import { BrandMark } from "@/components/salman/BrandMark";
 import { Button } from "@/components/ui/button";
 import { useSession } from "@/hooks/useSession";
-import { askSalmanAI } from "@/lib/aiService";
+import { askSalmanAI } from "@/lib/chat-client";
 import { appendMessages, getConversationMessages, type StoredMessage } from "@/lib/chat.functions";
 
 export const Route = createFileRoute("/chat/$conversationId")({

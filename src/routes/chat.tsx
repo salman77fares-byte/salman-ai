@@ -39,7 +39,7 @@ import {
   setConversationPinned,
   type Conversation,
 } from "@/lib/chat.functions";
-import { ENGINE_OPTIONS, ENGINE_STORAGE_KEY, type EngineId } from "@/lib/aiService";
+import { ENGINE_OPTIONS, ENGINE_STORAGE_KEY, type EngineId } from "@/lib/engines";
 import { SettingsProvider } from "@/lib/settings-modal";
 import { GuestChatProvider, NewChatProvider, useGuestChat } from "@/lib/guest-chat";
 import { SALMAN_PROJECTS } from "@/lib/projects";

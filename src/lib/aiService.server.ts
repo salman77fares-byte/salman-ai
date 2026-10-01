@@ -2,6 +2,8 @@
 // نظام محركات متعاقب: Google Gemini -> OpenRouter -> Groq -> Lovable AI Gateway
 // كل محرك معزول تماماً؛ أي فشل (404/403/CORS/شبكة) ينتقل صامتاً للمحرك التالي.
 
+
+import { ENGINE_OPTIONS, type EngineId } from "@/lib/engines";
 import { buildSearchQuery, needsFreshInfo } from "@/lib/fresh-intent";
 
 type SearchResult = { title: string; url: string; snippet: string };
@@ -319,8 +321,6 @@ async function tryGateway(history: Msg[], systemPrompt: string, _grounded = fals
     return null;
   }
 }
-
-import { ENGINE_OPTIONS, type EngineId } from "@/lib/engines";
 
 function preferredEngine(value?: string | null): EngineId | null {
   return value && ENGINE_OPTIONS.some((e) => e.id === value) ? (value as EngineId) : null;

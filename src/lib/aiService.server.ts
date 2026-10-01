@@ -410,7 +410,3 @@ export async function askSalmanAI(
 }
 
 export class EngineError extends Error {}
-
-function _unused() {
-  return "";
-}

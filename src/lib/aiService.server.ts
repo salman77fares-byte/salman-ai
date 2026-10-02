@@ -341,7 +341,7 @@ function preferredEngine(value?: string | null): EngineId | null {
 
 export async function askSalmanAI(
   messages: unknown[],
-  opts: { engine?: string | null; origin?: string } = {},
+  opts: { engine?: string | null; origin?: string; memoryEnabled?: boolean; memories?: string[] } = {},
 ): Promise<string> {
   const history = normalize(messages);
   // آخر 4 رسائل فقط لتقليل حجم الطلب وزمن الاستجابة
@@ -359,6 +359,13 @@ export async function askSalmanAI(
     const context = await fetchLiveContext(buildSearchQuery(lastUser), opts.origin);
     grounded = true;
     if (context) systemPrompt = `${systemPrompt}\n\n${context}`;
+  }
+  if (opts.memoryEnabled) {
+    const mems = (opts.memories ?? []).map((m) => String(m).trim().slice(0, 300)).filter(Boolean).slice(0, 50);
+    const memBlock = mems.length
+      ? `معلومات وحقائق هامة تتذكرها دائمًا عن المستخدم لاستخدامها في الإجابة: ${mems.map((m) => `\n- ${m}`).join("")}\n\n`
+      : "";
+    systemPrompt = `${memBlock}${systemPrompt}\n\nوضع الذاكرة مفعّل: إذا ذكر المستخدم في رسالته الأخيرة معلومة شخصية دائمة جديدة أو تفضيلاً أو اهتماماً (اسمه، عمله، لغته المفضلة، اهتماماته...) غير موجودة في القائمة أعلاه، فأضف في آخر ردك سطراً منفصلاً بالصيغة <memory>الحقيقة باختصار</memory> لكل حقيقة. لا تضف الوسم إن لم توجد معلومة جديدة، ولا تذكر هذا الوسم للمستخدم.`;
   }
   if (vision) {
     systemPrompt = `${systemPrompt}\n\nالمستخدم أرفق صورة: اقرأ محتواها بدقة، واستخرج أي نص مكتوب فيها كما هو، ثم أجب عن سؤاله بناءً على ما تراه فعلياً في الصورة.`;

@@ -6,12 +6,14 @@ export const Route = createFileRoute("/api/chat")({
     handlers: {
       POST: async ({ request }: { request: Request }) => {
         try {
-          const body = (await request.json()) as { messages?: unknown[]; engine?: string | null };
+          const body = (await request.json()) as { messages?: unknown[]; engine?: string | null; memoryEnabled?: boolean; memories?: unknown[] };
           const messages = Array.isArray(body.messages) ? body.messages : [];
 
           const replyText = await askSalmanAI(messages, {
             engine: typeof body.engine === "string" ? body.engine : null,
             origin: new URL(request.url).origin,
+            memoryEnabled: body.memoryEnabled === true,
+            memories: Array.isArray(body.memories) ? body.memories.map(String) : [],
           });
 
           return new Response(replyText, {

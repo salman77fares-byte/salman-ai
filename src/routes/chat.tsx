@@ -12,6 +12,7 @@ import { useEffect, useState } from "react";
 import { toast } from "sonner";
 
 import { AppSidebar } from "@/components/salman/AppSidebar";
+import { MemorySettings } from "@/components/salman/MemorySettings";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -389,6 +390,9 @@ function ChatLayout() {
               </select>
             </div>
           </section>
+
+          <MemorySettings />
+
 
           {!isGuest ? (
             <section className="space-y-2">

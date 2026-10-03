@@ -22,7 +22,6 @@ import { Sheet, SheetContent } from "@/components/ui/sheet";
 import { useSession } from "@/hooks/useSession";
 import { supabase } from "@/integrations/supabase/client";
 import {
-  clearAllConversations,
   createConversation,
   deleteConversation,
   listConversations,
@@ -83,7 +82,6 @@ function ChatLayout() {
   const fetchConversations = useServerFn(listConversations);
   const createFn = useServerFn(createConversation);
   const deleteFn = useServerFn(deleteConversation);
-  const clearFn = useServerFn(clearAllConversations);
   const pinFn = useServerFn(setConversationPinned);
   const renameFn = useServerFn(renameConversation);
 
@@ -147,16 +145,6 @@ function ChatLayout() {
       toast.success("تم تعديل الاسم");
     },
     onError: () => toast.error("تعذّر تعديل الاسم."),
-  });
-
-  const _clearAll = useMutation({
-    mutationFn: () => clearFn(),
-    onSuccess: async () => {
-      await invalidate();
-      toast.success("تم حذف كل المحادثات");
-      void navigate({ to: "/chat" });
-    },
-    onError: () => toast.error("تعذّر حذف المحادثات."),
   });
 
   const signOut = async () => {

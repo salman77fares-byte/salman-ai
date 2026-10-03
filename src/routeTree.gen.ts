@@ -14,6 +14,7 @@ import { Route as AuthRouteImport } from './routes/auth'
 import { Route as ChatRouteImport } from './routes/chat'
 import { Route as DeleteAccountRouteImport } from './routes/delete-account'
 import { Route as PrivacyRouteImport } from './routes/privacy'
+import { Route as SettingsRouteImport } from './routes/settings'
 import { Route as TermsRouteImport } from './routes/terms'
 import { Route as ApiChatRouteImport } from './routes/api/chat'
 import { Route as ChatIndexRouteImport } from './routes/chat.index'
@@ -43,6 +44,11 @@ const DeleteAccountRoute = DeleteAccountRouteImport.update({
 const PrivacyRoute = PrivacyRouteImport.update({
   id: '/privacy',
   path: '/privacy',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SettingsRoute = SettingsRouteImport.update({
+  id: '/settings',
+  path: '/settings',
   getParentRoute: () => rootRouteImport,
 } as any)
 const TermsRoute = TermsRouteImport.update({
@@ -77,6 +83,7 @@ export interface FileRoutesByFullPath {
   '/chat': typeof ChatRouteWithChildren
   '/delete-account': typeof DeleteAccountRoute
   '/privacy': typeof PrivacyRoute
+  '/settings': typeof SettingsRoute
   '/terms': typeof TermsRoute
   '/api/chat': typeof ApiChatRoute
   '/chat/$conversationId': typeof ChatConversationIdRoute
@@ -88,6 +95,7 @@ export interface FileRoutesByTo {
   '/auth': typeof AuthRoute
   '/delete-account': typeof DeleteAccountRoute
   '/privacy': typeof PrivacyRoute
+  '/settings': typeof SettingsRoute
   '/terms': typeof TermsRoute
   '/api/chat': typeof ApiChatRoute
   '/chat/$conversationId': typeof ChatConversationIdRoute
@@ -101,6 +109,7 @@ export interface FileRoutesById {
   '/chat': typeof ChatRouteWithChildren
   '/delete-account': typeof DeleteAccountRoute
   '/privacy': typeof PrivacyRoute
+  '/settings': typeof SettingsRoute
   '/terms': typeof TermsRoute
   '/api/chat': typeof ApiChatRoute
   '/chat/$conversationId': typeof ChatConversationIdRoute
@@ -115,6 +124,7 @@ export interface FileRouteTypes {
     | '/chat'
     | '/delete-account'
     | '/privacy'
+    | '/settings'
     | '/terms'
     | '/api/chat'
     | '/chat/$conversationId'
@@ -126,6 +136,7 @@ export interface FileRouteTypes {
     | '/auth'
     | '/delete-account'
     | '/privacy'
+    | '/settings'
     | '/terms'
     | '/api/chat'
     | '/chat/$conversationId'
@@ -138,6 +149,7 @@ export interface FileRouteTypes {
     | '/chat'
     | '/delete-account'
     | '/privacy'
+    | '/settings'
     | '/terms'
     | '/api/chat'
     | '/chat/$conversationId'
@@ -151,6 +163,7 @@ export interface RootRouteChildren {
   ChatRoute: typeof ChatRouteWithChildren
   DeleteAccountRoute: typeof DeleteAccountRoute
   PrivacyRoute: typeof PrivacyRoute
+  SettingsRoute: typeof SettingsRoute
   TermsRoute: typeof TermsRoute
   ApiChatRoute: typeof ApiChatRoute
   ApiPublicSearchRoute: typeof ApiPublicSearchRoute
@@ -191,6 +204,13 @@ declare module '@tanstack/react-router' {
       path: '/privacy'
       fullPath: '/privacy'
       preLoaderRoute: typeof PrivacyRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/settings': {
+      id: '/settings'
+      path: '/settings'
+      fullPath: '/settings'
+      preLoaderRoute: typeof SettingsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/terms': {
@@ -249,6 +269,7 @@ const rootRouteChildren: RootRouteChildren = {
   ChatRoute: ChatRouteWithChildren,
   DeleteAccountRoute: DeleteAccountRoute,
   PrivacyRoute: PrivacyRoute,
+  SettingsRoute: SettingsRoute,
   TermsRoute: TermsRoute,
   ApiChatRoute: ApiChatRoute,
   ApiPublicSearchRoute: ApiPublicSearchRoute,

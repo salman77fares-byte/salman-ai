@@ -64,16 +64,12 @@ const FALLBACK_KEYS = {
 
 const GEMINI_MODELS = ["gemini-3.6-flash", "gemini-flash-latest"];
 const OPENROUTER_MODELS = [
-  "google/gemma-3-27b-it:free",
-  "deepseek/deepseek-r1-0528:free",
-  "qwen/qwen3-235b-a22b:free",
-  "meta-llama/llama-3.3-70b-instruct:free",
+  "google/gemma-4-31b-it:free",
+  "qwen/qwen3.8-27b:free",
+  "nvidia/nemotron-3-super-120b-a12b:free",
 ];
 // نماذج مجانية تدعم قراءة الصور (Vision) على OpenRouter
-const OPENROUTER_VISION_MODELS = [
-  "google/gemma-3-27b-it:free",
-  "qwen/qwen2.5-vl-72b-instruct:free",
-];
+const OPENROUTER_VISION_MODELS = ["google/gemma-4-31b-it:free"];
 const GROQ_MODELS = ["openai/gpt-oss-120b", "openai/gpt-oss-20b"];
 const GATEWAY_MODEL = "openai/gpt-5.6-sol";
 

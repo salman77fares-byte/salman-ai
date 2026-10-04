@@ -11,7 +11,9 @@ function baseSystemPrompt(): string {
   const now = new Date();
   const date = now.toISOString().slice(0, 10);
   return [
-    "أنت Salman AI، نموذج ذكاء اصطناعي متطور ودقيق جداً طوّره المهندس سلمان فارس.",
+    "أنت Salman AI، المساعد الرقمي الذكي لـ \"موقع سلمان فارس\"، طوّره المهندس سلمان فارس.",
+    "اكتشف لغة المستخدم في رسالته الأخيرة وأجب بنفس اللغة تماماً (عربية، إنجليزية، أو غيرها).",
+    "لديك وصول إلى ذاكرة المستخدم وسجل محادثاته السابقة عند توفيرها أدناه: تذكّرها واستشهد بها بشكل طبيعي، ولا تقل أبداً إنك لا تستطيع الوصول إلى المحادثات السابقة.",
     `نحن حالياً في عام ${now.getUTCFullYear()} (التاريخ بالضبط: ${date}). يجب أن تتوافق جميع الإجابات والمعلومات والأحداث الرياضية والعامة مع هذا السياق الزمني بدقة.`,
     "تجنب التكهن أو إعطاء معلومات قديمة، وقدم إجابات موثوقة ومباشرة وموجزة بدون مقدمات طويلة أو حشو.",
     "قواعد التنسيق الإلزامية:",
@@ -341,7 +343,7 @@ function preferredEngine(value?: string | null): EngineId | null {
 
 export async function askSalmanAI(
   messages: unknown[],
-  opts: { engine?: string | null; origin?: string; memoryEnabled?: boolean; memories?: string[] } = {},
+  opts: { pastHistory?: string; engine?: string | null; origin?: string; memoryEnabled?: boolean; memories?: string[] } = {},
 ): Promise<string> {
   const history = normalize(messages);
   // آخر 4 رسائل فقط لتقليل حجم الطلب وزمن الاستجابة
@@ -363,9 +365,12 @@ export async function askSalmanAI(
   if (opts.memoryEnabled) {
     const mems = (opts.memories ?? []).map((m) => String(m).trim().slice(0, 300)).filter(Boolean).slice(0, 50);
     const memBlock = mems.length
-      ? `معلومات وحقائق هامة تتذكرها دائمًا عن المستخدم لاستخدامها في الإجابة: ${mems.map((m) => `\n- ${m}`).join("")}\n\n`
+      ? `User Profile & Saved Memory Context:${mems.map((m) => `\n- ${m}`).join("")}\n\n`
       : "";
     systemPrompt = `${memBlock}${systemPrompt}\n\nوضع الذاكرة مفعّل: إذا ذكر المستخدم في رسالته الأخيرة معلومة شخصية دائمة جديدة أو تفضيلاً أو اهتماماً (اسمه، عمله، لغته المفضلة، اهتماماته...) غير موجودة في القائمة أعلاه، فأضف في آخر ردك سطراً منفصلاً بالصيغة <memory>الحقيقة باختصار</memory> لكل حقيقة. لا تضف الوسم إن لم توجد معلومة جديدة، ولا تذكر هذا الوسم للمستخدم.`;
+  }
+  if (opts.pastHistory) {
+    systemPrompt = `${systemPrompt}\n\nRecent Conversation History & Context:\n${opts.pastHistory}\n(استخدم هذا السياق لتذكّر النقاشات السابقة والإشارة إليها عند الحاجة.)`;
   }
   if (vision) {
     systemPrompt = `${systemPrompt}\n\nالمستخدم أرفق صورة: اقرأ محتواها بدقة، واستخرج أي نص مكتوب فيها كما هو، ثم أجب عن سؤاله بناءً على ما تراه فعلياً في الصورة.`;

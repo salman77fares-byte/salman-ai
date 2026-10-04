@@ -186,7 +186,7 @@ function ChatLayout() {
   };
 
   return (
-    <div className="flex h-screen w-full overflow-hidden bg-background">
+    <div className="flex h-screen w-full overflow-hidden overscroll-none bg-background">
       {desktopSidebarOpen ? (
         <aside className="hidden w-72 shrink-0 border-e border-sidebar-border md:block">
           {sidebar()}

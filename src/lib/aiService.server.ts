@@ -64,14 +64,12 @@ const FALLBACK_KEYS = {
 
 const GEMINI_MODELS = ["gemini-3.6-flash", "gemini-flash-latest"];
 const OPENROUTER_MODELS = [
-  "meta-llama/llama-3.3-70b-instruct:free",
-  "deepseek/deepseek-chat-v3.1:free",
+  "google/gemma-4-31b-it:free",
+  "qwen/qwen3.8-27b:free",
+  "nvidia/nemotron-3-super-120b-a12b:free",
 ];
 // نماذج مجانية تدعم قراءة الصور (Vision) على OpenRouter
-const OPENROUTER_VISION_MODELS = [
-  "google/gemini-2.0-flash-exp:free",
-  "meta-llama/llama-3.2-11b-vision-instruct:free",
-];
+const OPENROUTER_VISION_MODELS = ["google/gemma-4-31b-it:free"];
 const GROQ_MODELS = ["openai/gpt-oss-120b", "openai/gpt-oss-20b"];
 const GATEWAY_MODEL = "openai/gpt-5.6-sol";
 
@@ -244,7 +242,10 @@ async function tryGemini(
         },
         vision ? 60_000 : ENGINE_TIMEOUT_MS,
       );
-      if (!res.ok) continue;
+      if (!res.ok) {
+        console.error(`[gemini:${model}] HTTP ${res.status}:`, (await res.text()).slice(0, 300));
+        continue;
+      }
       const data = (await res.json()) as {
         candidates?: { content?: { parts?: { text?: string }[] } }[];
       };
@@ -281,7 +282,10 @@ async function tryOpenAICompatible(
         },
         vision ? 60_000 : ENGINE_TIMEOUT_MS,
       );
-      if (!res.ok) continue;
+      if (!res.ok) {
+        console.error(`[openai-compat:${url}:${model}] HTTP ${res.status}:`, (await res.text()).slice(0, 300));
+        continue;
+      }
       const data = (await res.json()) as { choices?: { message?: unknown }[] };
       const reply = extractText(data.choices?.[0]?.message);
       if (reply) return reply;

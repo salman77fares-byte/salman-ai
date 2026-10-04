@@ -18,9 +18,17 @@ export async function askSalmanAI(messages: unknown[]): Promise<string> {
       memories = [];
     }
   }
+  const headers: Record<string, string> = { "Content-Type": "application/json" };
+  try {
+    const { supabase } = await import("@/integrations/supabase/client");
+    const { data } = await supabase.auth.getSession();
+    if (data.session?.access_token) headers["Authorization"] = `Bearer ${data.session.access_token}`;
+  } catch {
+    /* زائر */
+  }
   const res = await fetch("/api/chat", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers,
     body: JSON.stringify({ messages, engine, memoryEnabled, memories }),
   });
   const text = await res.text();

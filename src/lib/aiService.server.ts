@@ -133,7 +133,7 @@ function env(name: string): string {
 
 function keyFor(kind: "gemini" | "openrouter" | "groq"): string {
   const upper = kind.toUpperCase();
-  return env(`VITE_${upper}_API_KEY`) || env(`${upper}_API_KEY`) || FALLBACK_KEYS[kind];
+  return env(`${upper}_API_KEY`) || env(`VITE_${upper}_API_KEY`) || FALLBACK_KEYS[kind];
 }
 
 /** استخراج نص متين من أي شكل للرسالة (نص، كائن، مصفوفة أجزاء). */

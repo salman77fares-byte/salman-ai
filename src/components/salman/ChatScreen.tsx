@@ -194,7 +194,7 @@ export function ChatScreen({ conversationId }: { conversationId?: string }) {
 
   // إعادة المحاولة متاحة لآخر رسالة فقط: يُحذف الرد الأخير ويُولَّد رد جديد بدل تكراره
   const lastUserIdx = (() => {
-    for (let i = messages.length - 1; i >= 0; i--) if (messages[i].role === "user") return i;
+    for (let i = messages.length - 1; i >= 0; i--) if (messages[i]?.role === "user") return i;
     return -1;
   })();
 
@@ -216,7 +216,7 @@ export function ChatScreen({ conversationId }: { conversationId?: string }) {
       return;
     }
     const w = window as unknown as Record<string, unknown>;
-    const SR = (w.SpeechRecognition || w.webkitSpeechRecognition) as
+    const SR = (w["SpeechRecognition"] || w["webkitSpeechRecognition"]) as
       | (new () => {
           lang: string;
           interimResults: boolean;
@@ -239,7 +239,7 @@ export function ChatScreen({ conversationId }: { conversationId?: string }) {
     rec.onresult = (e) => {
       let text = "";
       for (let i = e.resultIndex; i < e.results.length; i++) {
-        if (e.results[i].isFinal) text += e.results[i][0].transcript;
+        const r = e.results[i]; if (r?.isFinal) text += r[0].transcript;
       }
       if (text) setInput((prev) => (prev ? prev.trimEnd() + " " : "") + text.trim());
     };

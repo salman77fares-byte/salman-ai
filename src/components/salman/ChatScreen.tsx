@@ -514,14 +514,16 @@ export function ChatScreen({ conversationId }: { conversationId?: string }) {
                             <Edit2 className="size-3.5" />
                             تعديل
                           </button>
-                          <button
-                            onClick={() => handleRetry(idx)}
-                            className="flex items-center gap-1 rounded-lg px-2 py-1 text-xs text-slate-200 hover:bg-slate-800"
-                          >
-                            <RotateCcw className="size-3.5" />
-                            إعادة المحاولة
-                          </button>
                         </>
+                      )}
+                      {idx >= lastUserIdx && !isSending && lastUserIdx >= 0 && (
+                        <button
+                          onClick={() => handleRetry(lastUserIdx)}
+                          className="flex items-center gap-1 rounded-lg px-2 py-1 text-xs text-slate-200 hover:bg-slate-800"
+                        >
+                          <RotateCcw className="size-3.5" />
+                          إعادة المحاولة
+                        </button>
                       )}
                       <button
                         onClick={() => setActiveActionIndex(null)}
@@ -605,15 +607,24 @@ export function ChatScreen({ conversationId }: { conversationId?: string }) {
                 ref={textareaRef}
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
-                placeholder="اكتب رسالتك لـ Salman AI..."
+                placeholder={listening ? "جاري الاستماع..." : "اكتب رسالتك لـ Salman AI..."}
                 rows={1}
                 dir="auto"
                 autoComplete="on"
                 autoCorrect="on"
                 autoCapitalize="sentences"
                 spellCheck={true}
-                className="max-h-32 min-h-[44px] w-full resize-none bg-transparent py-3 pl-3 pr-11 text-right text-xs text-white placeholder:text-slate-500 focus:outline-none"
+                className="max-h-32 min-h-[44px] w-full resize-none bg-transparent py-3 pl-11 pr-11 text-right text-xs text-white placeholder:text-slate-500 focus:outline-none"
               />
+              <button
+                type="button"
+                onClick={toggleMic}
+                aria-label={listening ? "إيقاف الإملاء الصوتي" : "الإملاء الصوتي"}
+                title={listening ? "إيقاف الإملاء الصوتي" : "الإملاء الصوتي"}
+                className={`absolute left-1 rounded-full p-2 transition hover:bg-slate-800 ${listening ? "animate-pulse text-red-400" : "text-slate-400 hover:text-white"}`}
+              >
+                {listening ? <MicOff className="size-4" /> : <Mic className="size-4" />}
+              </button>
             </div>
 
             {isSending ? (

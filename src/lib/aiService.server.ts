@@ -242,10 +242,7 @@ async function tryGemini(
         },
         vision ? 60_000 : ENGINE_TIMEOUT_MS,
       );
-      if (!res.ok) {
-        console.error(`[gemini:${model}] HTTP ${res.status}:`, (await res.text()).slice(0, 300));
-        continue;
-      }
+      if (!res.ok) continue;
       const data = (await res.json()) as {
         candidates?: { content?: { parts?: { text?: string }[] } }[];
       };
@@ -282,10 +279,7 @@ async function tryOpenAICompatible(
         },
         vision ? 60_000 : ENGINE_TIMEOUT_MS,
       );
-      if (!res.ok) {
-        console.error(`[openai-compat:${url}:${model}] HTTP ${res.status}:`, (await res.text()).slice(0, 300));
-        continue;
-      }
+      if (!res.ok) continue;
       const data = (await res.json()) as { choices?: { message?: unknown }[] };
       const reply = extractText(data.choices?.[0]?.message);
       if (reply) return reply;

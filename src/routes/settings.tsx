@@ -117,7 +117,7 @@ function SettingsPage() {
   });
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="h-dvh overflow-y-auto overscroll-contain touch-pan-y bg-background">
       <header
         className="sticky top-0 z-10 flex items-center gap-2 border-b border-border bg-background/80 px-3 pb-3 backdrop-blur"
         style={{ paddingTop: "calc(env(safe-area-inset-top, 0px) + 12px)" }}

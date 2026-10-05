@@ -340,7 +340,12 @@ export function ChatScreen({ conversationId }: { conversationId?: string }) {
             data: {
               conversationId: convId,
               messages: [
-                { sender: "user", content: userQuery || "صورة/ملف مرفق" },
+                { sender: "user", content: (() => {
+                  const att = chatHistory[chatHistory.length - 1]?.attachment;
+                  return att?.textContent
+                    ? `${userQuery ? userQuery + "\n\n" : ""}[محتوى الملف المرفق: ${att.name}]\n\`\`\`\n${att.textContent}\n\`\`\``
+                    : userQuery || "صورة/ملف مرفق";
+                })() },
                 { sender: "assistant", content: cleanedResponse },
               ],
               title: userQuery.slice(0, 40) || "محادثة جديدة",

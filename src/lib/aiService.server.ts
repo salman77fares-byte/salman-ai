@@ -346,7 +346,7 @@ export async function askSalmanAI(
   const history = normalize(messages);
   // آخر 4 رسائل فقط لتقليل حجم الطلب وزمن الاستجابة
   const safeHistory = history.length
-    ? history.slice(-4)
+    ? history.slice(-8)
     : [{ role: "user" as const, content: "مرحباً" }];
 
   const vision = hasImages(safeHistory);
@@ -354,6 +354,14 @@ export async function askSalmanAI(
   // بحث حي تلقائي للأسئلة التي تحتاج معلومات محدّثة زمنياً (يُتجاهل مع الصور)
   const lastUser = [...safeHistory].reverse().find((m) => m.role === "user")?.content ?? "";
   let systemPrompt = baseSystemPrompt();
+  // مستندات أُرفقت سابقاً في هذه المحادثة: تبقى في ذاكرة المحادثة حتى لو خرجت من آخر الرسائل
+  const olderDocs = history
+    .slice(0, Math.max(0, history.length - safeHistory.length))
+    .filter((m) => m.role === "user" && m.content.includes("[محتوى الملف المرفق"))
+    .map((m) => m.content);
+  if (olderDocs.length) {
+    systemPrompt += `\n\nمستندات أرفقها المستخدم سابقاً في هذه المحادثة (اعتمد عليها عند سؤاله عنها):\n${olderDocs.join("\n\n").slice(-40000)}`;
+  }
   let grounded = false;
   if (!vision && needsFreshInfo(lastUser)) {
     const context = await fetchLiveContext(buildSearchQuery(lastUser), opts.origin);

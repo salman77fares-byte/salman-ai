@@ -1,7 +1,8 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { useNavigate } from "@tanstack/react-router";
-import { Loader2, Send, Plus, Paperclip, X, Copy, Edit2, RotateCcw, Check, Square } from "lucide-react";
+import { Loader2, Send, Plus, Paperclip, X, Copy, Edit2, RotateCcw, Check, Square, Mic, MicOff } from "lucide-react";
+import { extractPdfText } from "@/lib/pdf-text";
 import { useEffect, useState, useRef } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -191,13 +192,62 @@ export function ChatScreen({ conversationId }: { conversationId?: string }) {
     }
   };
 
+  // إعادة المحاولة متاحة لآخر رسالة فقط: يُحذف الرد الأخير ويُولَّد رد جديد بدل تكراره
+  const lastUserIdx = (() => {
+    for (let i = messages.length - 1; i >= 0; i--) if (messages[i].role === "user") return i;
+    return -1;
+  })();
+
   const handleRetry = (index: number) => {
     setActiveActionIndex(null);
+    if (index !== lastUserIdx || isSending) return;
     const historyToRetry = messages.slice(0, index + 1);
     const lastUserMessage = historyToRetry[historyToRetry.length - 1];
     if (lastUserMessage && lastUserMessage.role === "user") {
       executeSend(historyToRetry, lastUserMessage.content);
     }
+  };
+
+  const [listening, setListening] = useState(false);
+  const recognitionRef = useRef<{ stop: () => void } | null>(null);
+  const toggleMic = () => {
+    if (listening) {
+      recognitionRef.current?.stop();
+      return;
+    }
+    const w = window as unknown as Record<string, unknown>;
+    const SR = (w.SpeechRecognition || w.webkitSpeechRecognition) as
+      | (new () => {
+          lang: string;
+          interimResults: boolean;
+          continuous: boolean;
+          onresult: (e: { resultIndex: number; results: ArrayLike<{ isFinal: boolean; 0: { transcript: string } }> }) => void;
+          onend: () => void;
+          onerror: () => void;
+          start: () => void;
+          stop: () => void;
+        })
+      | undefined;
+    if (!SR) {
+      toast.error("المتصفح لا يدعم الإملاء الصوتي");
+      return;
+    }
+    const rec = new SR();
+    rec.lang = "ar-SA";
+    rec.interimResults = false;
+    rec.continuous = true;
+    rec.onresult = (e) => {
+      let text = "";
+      for (let i = e.resultIndex; i < e.results.length; i++) {
+        if (e.results[i].isFinal) text += e.results[i][0].transcript;
+      }
+      if (text) setInput((prev) => (prev ? prev.trimEnd() + " " : "") + text.trim());
+    };
+    rec.onend = () => setListening(false);
+    rec.onerror = () => setListening(false);
+    recognitionRef.current = rec;
+    rec.start();
+    setListening(true);
   };
 
   const handleStop = () => {
@@ -352,6 +402,31 @@ export function ChatScreen({ conversationId }: { conversationId?: string }) {
 
     if (file.size > 8 * 1024 * 1024) {
       toast.error("حجم الملف يجب ألا يتجاوز 8 ميجابايت");
+      return;
+    }
+
+    if (file.type === "application/pdf" || /\.pdf$/i.test(file.name)) {
+      const toastId = toast.loading("جارٍ قراءة ملف PDF...");
+      extractPdfText(file)
+        .then((text) => {
+          toast.dismiss(toastId);
+          if (!text.replace(/--- صفحة \d+ ---/g, "").trim()) {
+            toast.error("هذا الملف لا يحتوي نصاً قابلاً للقراءة (ربما صور ممسوحة ضوئياً)");
+            return;
+          }
+          setSelectedFile({
+            name: file.name,
+            type: "application/pdf",
+            url: URL.createObjectURL(file),
+            base64: "",
+            textContent: text,
+          });
+        })
+        .catch((err) => {
+          console.error(err);
+          toast.dismiss(toastId);
+          toast.error("تعذّرت قراءة ملف PDF");
+        });
       return;
     }
 
@@ -514,14 +589,16 @@ export function ChatScreen({ conversationId }: { conversationId?: string }) {
                             <Edit2 className="size-3.5" />
                             تعديل
                           </button>
-                          <button
-                            onClick={() => handleRetry(idx)}
-                            className="flex items-center gap-1 rounded-lg px-2 py-1 text-xs text-slate-200 hover:bg-slate-800"
-                          >
-                            <RotateCcw className="size-3.5" />
-                            إعادة المحاولة
-                          </button>
                         </>
+                      )}
+                      {idx >= lastUserIdx && !isSending && lastUserIdx >= 0 && (
+                        <button
+                          onClick={() => handleRetry(lastUserIdx)}
+                          className="flex items-center gap-1 rounded-lg px-2 py-1 text-xs text-slate-200 hover:bg-slate-800"
+                        >
+                          <RotateCcw className="size-3.5" />
+                          إعادة المحاولة
+                        </button>
                       )}
                       <button
                         onClick={() => setActiveActionIndex(null)}
@@ -605,15 +682,24 @@ export function ChatScreen({ conversationId }: { conversationId?: string }) {
                 ref={textareaRef}
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
-                placeholder="اكتب رسالتك لـ Salman AI..."
+                placeholder={listening ? "جاري الاستماع..." : "اكتب رسالتك لـ Salman AI..."}
                 rows={1}
                 dir="auto"
                 autoComplete="on"
                 autoCorrect="on"
                 autoCapitalize="sentences"
                 spellCheck={true}
-                className="max-h-32 min-h-[44px] w-full resize-none bg-transparent py-3 pl-3 pr-11 text-right text-xs text-white placeholder:text-slate-500 focus:outline-none"
+                className="max-h-32 min-h-[44px] w-full resize-none bg-transparent py-3 pl-11 pr-11 text-right text-xs text-white placeholder:text-slate-500 focus:outline-none"
               />
+              <button
+                type="button"
+                onClick={toggleMic}
+                aria-label={listening ? "إيقاف الإملاء الصوتي" : "الإملاء الصوتي"}
+                title={listening ? "إيقاف الإملاء الصوتي" : "الإملاء الصوتي"}
+                className={`absolute left-1 rounded-full p-2 transition hover:bg-slate-800 ${listening ? "animate-pulse text-red-400" : "text-slate-400 hover:text-white"}`}
+              >
+                {listening ? <MicOff className="size-4" /> : <Mic className="size-4" />}
+              </button>
             </div>
 
             {isSending ? (

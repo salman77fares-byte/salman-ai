@@ -1,7 +1,8 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { useNavigate } from "@tanstack/react-router";
-import { Loader2, Send, Plus, Paperclip, X, Copy, Edit2, RotateCcw, Check, Square } from "lucide-react";
+import { Loader2, Send, Plus, Paperclip, X, Copy, Edit2, RotateCcw, Check, Square, Mic, MicOff } from "lucide-react";
+import { extractPdfText } from "@/lib/pdf-text";
 import { useEffect, useState, useRef } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -191,13 +192,62 @@ export function ChatScreen({ conversationId }: { conversationId?: string }) {
     }
   };
 
+  // إعادة المحاولة متاحة لآخر رسالة فقط: يُحذف الرد الأخير ويُولَّد رد جديد بدل تكراره
+  const lastUserIdx = (() => {
+    for (let i = messages.length - 1; i >= 0; i--) if (messages[i].role === "user") return i;
+    return -1;
+  })();
+
   const handleRetry = (index: number) => {
     setActiveActionIndex(null);
+    if (index !== lastUserIdx || isSending) return;
     const historyToRetry = messages.slice(0, index + 1);
     const lastUserMessage = historyToRetry[historyToRetry.length - 1];
     if (lastUserMessage && lastUserMessage.role === "user") {
       executeSend(historyToRetry, lastUserMessage.content);
     }
+  };
+
+  const [listening, setListening] = useState(false);
+  const recognitionRef = useRef<{ stop: () => void } | null>(null);
+  const toggleMic = () => {
+    if (listening) {
+      recognitionRef.current?.stop();
+      return;
+    }
+    const w = window as unknown as Record<string, unknown>;
+    const SR = (w.SpeechRecognition || w.webkitSpeechRecognition) as
+      | (new () => {
+          lang: string;
+          interimResults: boolean;
+          continuous: boolean;
+          onresult: (e: { resultIndex: number; results: ArrayLike<{ isFinal: boolean; 0: { transcript: string } }> }) => void;
+          onend: () => void;
+          onerror: () => void;
+          start: () => void;
+          stop: () => void;
+        })
+      | undefined;
+    if (!SR) {
+      toast.error("المتصفح لا يدعم الإملاء الصوتي");
+      return;
+    }
+    const rec = new SR();
+    rec.lang = "ar-SA";
+    rec.interimResults = false;
+    rec.continuous = true;
+    rec.onresult = (e) => {
+      let text = "";
+      for (let i = e.resultIndex; i < e.results.length; i++) {
+        if (e.results[i].isFinal) text += e.results[i][0].transcript;
+      }
+      if (text) setInput((prev) => (prev ? prev.trimEnd() + " " : "") + text.trim());
+    };
+    rec.onend = () => setListening(false);
+    rec.onerror = () => setListening(false);
+    recognitionRef.current = rec;
+    rec.start();
+    setListening(true);
   };
 
   const handleStop = () => {

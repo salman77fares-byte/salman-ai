@@ -405,6 +405,31 @@ export function ChatScreen({ conversationId }: { conversationId?: string }) {
       return;
     }
 
+    if (file.type === "application/pdf" || /\.pdf$/i.test(file.name)) {
+      const toastId = toast.loading("جارٍ قراءة ملف PDF...");
+      extractPdfText(file)
+        .then((text) => {
+          toast.dismiss(toastId);
+          if (!text.replace(/--- صفحة \d+ ---/g, "").trim()) {
+            toast.error("هذا الملف لا يحتوي نصاً قابلاً للقراءة (ربما صور ممسوحة ضوئياً)");
+            return;
+          }
+          setSelectedFile({
+            name: file.name,
+            type: "application/pdf",
+            url: URL.createObjectURL(file),
+            base64: "",
+            textContent: text,
+          });
+        })
+        .catch((err) => {
+          console.error(err);
+          toast.dismiss(toastId);
+          toast.error("تعذّرت قراءة ملف PDF");
+        });
+      return;
+    }
+
     const isTextFile =
       file.type.startsWith("text/") ||
       /\.(txt|json|js|ts|tsx|jsx|py|md|html|css|csv|xml|json)$/i.test(file.name);

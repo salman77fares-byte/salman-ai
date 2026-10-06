@@ -208,13 +208,27 @@ export function ChatScreen({ conversationId }: { conversationId?: string }) {
     }
   };
 
+  // نافذة التسجيل الصوتي: يستمر التسجيل حتى يضغط المستخدم ✓ أو ✗ أو إرسال
   const [listening, setListening] = useState(false);
-  const recognitionRef = useRef<{ stop: () => void } | null>(null);
-  const toggleMic = () => {
-    if (listening) {
-      recognitionRef.current?.stop();
-      return;
-    }
+  const [voiceText, setVoiceText] = useState("");
+  const [voiceSeconds, setVoiceSeconds] = useState(0);
+  const recognitionRef = useRef<{ stop: () => void; abort?: () => void } | null>(null);
+  const keepListeningRef = useRef(false);
+  const finalTextRef = useRef("");
+
+  useEffect(() => {
+    if (!listening) return;
+    setVoiceSeconds(0);
+    const t = setInterval(() => setVoiceSeconds((s) => s + 1), 1000);
+    return () => clearInterval(t);
+  }, [listening]);
+
+  useEffect(() => () => {
+    keepListeningRef.current = false;
+    recognitionRef.current?.stop();
+  }, []);
+
+  const startMic = () => {
     const w = window as unknown as Record<string, unknown>;
     const SR = (w["SpeechRecognition"] || w["webkitSpeechRecognition"]) as
       | (new () => {
@@ -223,7 +237,7 @@ export function ChatScreen({ conversationId }: { conversationId?: string }) {
           continuous: boolean;
           onresult: (e: { resultIndex: number; results: ArrayLike<{ isFinal: boolean; 0: { transcript: string } }> }) => void;
           onend: () => void;
-          onerror: () => void;
+          onerror: (e: { error?: string }) => void;
           start: () => void;
           stop: () => void;
         })
@@ -232,23 +246,67 @@ export function ChatScreen({ conversationId }: { conversationId?: string }) {
       toast.error("المتصفح لا يدعم الإملاء الصوتي");
       return;
     }
-    const rec = new SR();
-    rec.lang = "ar-SA";
-    rec.interimResults = false;
-    rec.continuous = true;
-    rec.onresult = (e) => {
-      let text = "";
-      for (let i = e.resultIndex; i < e.results.length; i++) {
-        const r = e.results[i]; if (r?.isFinal) text += r[0].transcript;
-      }
-      if (text) setInput((prev) => (prev ? prev.trimEnd() + " " : "") + text.trim());
+    finalTextRef.current = "";
+    setVoiceText("");
+    keepListeningRef.current = true;
+
+    const launch = () => {
+      const rec = new SR();
+      rec.lang = "ar-SA";
+      rec.interimResults = true;
+      rec.continuous = true;
+      rec.onresult = (e) => {
+        let interim = "";
+        for (let i = e.resultIndex; i < e.results.length; i++) {
+          const r = e.results[i];
+          if (!r) continue;
+          if (r.isFinal) finalTextRef.current = (finalTextRef.current + " " + r[0].transcript).trim();
+          else interim += r[0].transcript;
+        }
+        setVoiceText((finalTextRef.current + " " + interim).trim());
+      };
+      rec.onerror = (e) => {
+        if (e?.error === "not-allowed" || e?.error === "service-not-allowed") {
+          keepListeningRef.current = false;
+          setListening(false);
+          toast.error("يرجى السماح بالوصول إلى الميكروفون");
+        }
+      };
+      // بعض المتصفحات توقف التعرف عند الصمت؛ نعيد التشغيل تلقائياً ما دامت النافذة مفتوحة
+      rec.onend = () => {
+        if (keepListeningRef.current) {
+          try { launch(); } catch { /* تجاهل */ }
+        }
+      };
+      recognitionRef.current = rec;
+      rec.start();
     };
-    rec.onend = () => setListening(false);
-    rec.onerror = () => setListening(false);
-    recognitionRef.current = rec;
-    rec.start();
-    setListening(true);
+    try {
+      launch();
+      setListening(true);
+    } catch {
+      toast.error("تعذّر تشغيل الميكروفون");
+    }
   };
+
+  const finishMic = (mode: "cancel" | "accept" | "send") => {
+    keepListeningRef.current = false;
+    recognitionRef.current?.stop();
+    setListening(false);
+    const text = (voiceText || finalTextRef.current).trim();
+    setVoiceText("");
+    if (mode === "cancel" || !text) return;
+    const merged = (input ? input.trimEnd() + " " : "") + text;
+    setInput(merged);
+    if (mode === "send") {
+      if (textareaRef.current) textareaRef.current.value = merged;
+      setTimeout(() => void handleSend(), 30);
+    } else {
+      setTimeout(() => textareaRef.current?.focus(), 30);
+    }
+  };
+
+  const toggleMic = () => (listening ? finishMic("accept") : startMic());
 
   const handleStop = () => {
     stopGenerationRef.current = true;

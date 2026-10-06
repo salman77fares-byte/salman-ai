@@ -215,6 +215,44 @@ export function ChatScreen({ conversationId }: { conversationId?: string }) {
   const recognitionRef = useRef<{ stop: () => void; abort?: () => void } | null>(null);
   const keepListeningRef = useRef(false);
   const finalTextRef = useRef("");
+  const committedRef = useRef(""); // نص الجلسات السابقة (بعد إعادة التشغيل التلقائي)
+  const barsRef = useRef<Array<HTMLSpanElement | null>>([]);
+  const audioCleanupRef = useRef<(() => void) | null>(null);
+
+  // موجة صوتية حيّة من الميكروفون عبر Web Audio API
+  const startWaveform = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const Ctx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+      const ctx = new Ctx();
+      const analyser = ctx.createAnalyser();
+      analyser.fftSize = 64;
+      ctx.createMediaStreamSource(stream).connect(analyser);
+      const data = new Uint8Array(analyser.frequencyBinCount);
+      let raf = 0;
+      const tick = () => {
+        analyser.getByteFrequencyData(data);
+        barsRef.current.forEach((bar, i) => {
+          if (!bar) return;
+          const v = data[(i + 1) % data.length] ?? 0;
+          bar.style.height = `${Math.max(12, Math.min(100, (v / 255) * 130))}%`;
+        });
+        raf = requestAnimationFrame(tick);
+      };
+      tick();
+      audioCleanupRef.current = () => {
+        cancelAnimationFrame(raf);
+        stream.getTracks().forEach((t) => t.stop());
+        void ctx.close();
+      };
+    } catch {
+      /* الموجة اختيارية؛ التعرف على الكلام يستمر */
+    }
+  };
+  const stopWaveform = () => {
+    audioCleanupRef.current?.();
+    audioCleanupRef.current = null;
+  };
 
   useEffect(() => {
     if (!listening) return;
@@ -226,6 +264,7 @@ export function ChatScreen({ conversationId }: { conversationId?: string }) {
   useEffect(() => () => {
     keepListeningRef.current = false;
     recognitionRef.current?.stop();
+    audioCleanupRef.current?.();
   }, []);
 
   const startMic = () => {
@@ -247,6 +286,7 @@ export function ChatScreen({ conversationId }: { conversationId?: string }) {
       return;
     }
     finalTextRef.current = "";
+    committedRef.current = "";
     setVoiceText("");
     keepListeningRef.current = true;
 
@@ -255,15 +295,30 @@ export function ChatScreen({ conversationId }: { conversationId?: string }) {
       rec.lang = "ar-SA";
       rec.interimResults = true;
       rec.continuous = true;
+      // نعيد بناء نص الجلسة كاملاً من جميع النتائج في كل مرة (بدل الإلحاق) لمنع التكرار،
+      // مع دمج المقاطع التراكمية التي يرسلها Android (كل مقطع يحتوي سابقه)
       rec.onresult = (e) => {
+        const finals: string[] = [];
         let interim = "";
-        for (let i = e.resultIndex; i < e.results.length; i++) {
+        for (let i = 0; i < e.results.length; i++) {
           const r = e.results[i];
           if (!r) continue;
-          if (r.isFinal) finalTextRef.current = (finalTextRef.current + " " + r[0].transcript).trim();
-          else interim += r[0].transcript;
+          const t = r[0].transcript.trim();
+          if (!t) continue;
+          if (r.isFinal) {
+            const last = finals[finals.length - 1];
+            if (last && t.startsWith(last)) finals[finals.length - 1] = t;
+            else if (!last || !last.endsWith(t)) finals.push(t);
+          } else {
+            interim = t;
+          }
         }
-        setVoiceText((finalTextRef.current + " " + interim).trim());
+        let session = finals.join(" ");
+        if (interim && !session.endsWith(interim)) {
+          session = interim.startsWith(session) ? interim : `${session} ${interim}`;
+        }
+        finalTextRef.current = [committedRef.current, finals.join(" ")].filter(Boolean).join(" ");
+        setVoiceText([committedRef.current, session.trim()].filter(Boolean).join(" "));
       };
       rec.onerror = (e) => {
         if (e?.error === "not-allowed" || e?.error === "service-not-allowed") {
@@ -275,6 +330,7 @@ export function ChatScreen({ conversationId }: { conversationId?: string }) {
       // بعض المتصفحات توقف التعرف عند الصمت؛ نعيد التشغيل تلقائياً ما دامت النافذة مفتوحة
       rec.onend = () => {
         if (keepListeningRef.current) {
+          committedRef.current = finalTextRef.current;
           try { launch(); } catch { /* تجاهل */ }
         }
       };
@@ -284,6 +340,7 @@ export function ChatScreen({ conversationId }: { conversationId?: string }) {
     try {
       launch();
       setListening(true);
+      void startWaveform();
     } catch {
       toast.error("تعذّر تشغيل الميكروفون");
     }
@@ -292,6 +349,7 @@ export function ChatScreen({ conversationId }: { conversationId?: string }) {
   const finishMic = (mode: "cancel" | "accept" | "send") => {
     keepListeningRef.current = false;
     recognitionRef.current?.stop();
+    stopWaveform();
     setListening(false);
     const text = (voiceText || finalTextRef.current).trim();
     setVoiceText("");
@@ -738,8 +796,9 @@ export function ChatScreen({ conversationId }: { conversationId?: string }) {
                   {Array.from({ length: 18 }).map((_, i) => (
                     <span
                       key={i}
-                      className="w-1 animate-pulse rounded-full bg-[#2dd4bf]"
-                      style={{ height: `${30 + ((i * 37) % 70)}%`, animationDelay: `${(i % 6) * 120}ms` }}
+                      ref={(el) => { barsRef.current[i] = el; }}
+                      className="w-1 rounded-full bg-[#2dd4bf] transition-[height] duration-75"
+                      style={{ height: "12%" }}
                     />
                   ))}
                 </div>

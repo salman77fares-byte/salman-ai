@@ -1,7 +1,7 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { useNavigate } from "@tanstack/react-router";
-import { Loader2, Send, Plus, Paperclip, X, Copy, Edit2, RotateCcw, Check, Square, Mic, MicOff } from "lucide-react";
+import { Loader2, Send, Plus, Paperclip, X, Copy, Edit2, RotateCcw, Check, Square, Mic, MicOff, Camera, ImageIcon, FileText } from "lucide-react";
 import { extractPdfText } from "@/lib/pdf-text";
 import { useEffect, useState, useRef } from "react";
 import ReactMarkdown from "react-markdown";
@@ -127,6 +127,22 @@ export function ChatScreen({ conversationId }: { conversationId?: string }) {
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const cameraInputRef = useRef<HTMLInputElement>(null);
+  const galleryInputRef = useRef<HTMLInputElement>(null);
+  const [attachMenuOpen, setAttachMenuOpen] = useState(false);
+  const [isProcessingFile, setIsProcessingFile] = useState(false);
+  const [processingLabel, setProcessingLabel] = useState("");
+  const [isOnline, setIsOnline] = useState(true);
+  useEffect(() => {
+    const update = () => setIsOnline(navigator.onLine);
+    update();
+    window.addEventListener("online", update);
+    window.addEventListener("offline", update);
+    return () => {
+      window.removeEventListener("online", update);
+      window.removeEventListener("offline", update);
+    };
+  }, []);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const pressTimerRef = useRef<NodeJS.Timeout | null>(null);
   const stopGenerationRef = useRef(false);
@@ -499,7 +515,11 @@ export function ChatScreen({ conversationId }: { conversationId?: string }) {
       const rawText = textareaRef.current?.value || input;
       const userText = rawText.trim();
 
-      if ((!userText && !selectedFile) || isSending) return;
+      if ((!userText && !selectedFile) || isSending || isProcessingFile) return;
+      if (!navigator.onLine) {
+        toast.error("لا يوجد اتصال بالإنترنت. يرجى الاتصال بالإنترنت لتلقي إجابات الذكاء الاصطناعي.");
+        return;
+      }
 
       const currentAttachment = selectedFile;
       const userMessage: Message = {
@@ -519,6 +539,8 @@ export function ChatScreen({ conversationId }: { conversationId?: string }) {
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
+    e.target.value = "";
+    setAttachMenuOpen(false);
     if (!file) return;
 
     if (file.size > 8 * 1024 * 1024) {
@@ -527,10 +549,10 @@ export function ChatScreen({ conversationId }: { conversationId?: string }) {
     }
 
     if (file.type === "application/pdf" || /\.pdf$/i.test(file.name)) {
-      const toastId = toast.loading("جارٍ قراءة ملف PDF...");
+      setIsProcessingFile(true);
+      setProcessingLabel(`جارِ قراءة ملف PDF... (${file.name})`);
       extractPdfText(file)
         .then((text) => {
-          toast.dismiss(toastId);
           if (!text.replace(/--- صفحة \d+ ---/g, "").trim()) {
             toast.error("هذا الملف لا يحتوي نصاً قابلاً للقراءة (ربما صور ممسوحة ضوئياً)");
             return;
@@ -545,9 +567,9 @@ export function ChatScreen({ conversationId }: { conversationId?: string }) {
         })
         .catch((err) => {
           console.error(err);
-          toast.dismiss(toastId);
           toast.error("تعذّرت قراءة ملف PDF");
-        });
+        })
+        .finally(() => setIsProcessingFile(false));
       return;
     }
 
@@ -557,7 +579,14 @@ export function ChatScreen({ conversationId }: { conversationId?: string }) {
 
     if (isTextFile) {
       const reader = new FileReader();
+      setIsProcessingFile(true);
+      setProcessingLabel(`جارِ قراءة الملف... (${file.name})`);
+      reader.onerror = () => {
+        setIsProcessingFile(false);
+        toast.error("تعذّرت قراءة الملف");
+      };
       reader.onload = () => {
+        setIsProcessingFile(false);
         setSelectedFile({
           name: file.name,
           type: file.type || "text/plain",
@@ -569,7 +598,14 @@ export function ChatScreen({ conversationId }: { conversationId?: string }) {
       reader.readAsText(file);
     } else {
       const reader = new FileReader();
+      setIsProcessingFile(true);
+      setProcessingLabel(`جارِ قراءة الملف... (${file.name})`);
+      reader.onerror = () => {
+        setIsProcessingFile(false);
+        toast.error("تعذّرت قراءة الملف");
+      };
       reader.onload = () => {
+        setIsProcessingFile(false);
         setSelectedFile({
           name: file.name,
           type: file.type || "image/jpeg",
@@ -752,7 +788,18 @@ export function ChatScreen({ conversationId }: { conversationId?: string }) {
       {/* مربع الإرسال العائم */}
       <div className="shrink-0 w-full max-w-full px-3 pb-4 pt-2">
         <div className="mx-auto w-full max-w-3xl rounded-3xl border border-slate-700/50 bg-slate-900/70 p-2 shadow-[0_8px_30px_rgba(0,0,0,0.45)] backdrop-blur-xl">
-          {selectedFile && (
+          {!isOnline && (
+            <div className="mb-2 rounded-2xl border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-center text-[11px] text-amber-200">
+              لا يوجد اتصال بالإنترنت. يرجى الاتصال بالإنترنت لتلقي إجابات الذكاء الاصطناعي.
+            </div>
+          )}
+          {isProcessingFile && (
+            <div className="mb-2 flex items-center gap-2 rounded-2xl border border-slate-700 bg-slate-800/80 px-3 py-2 text-xs text-slate-200">
+              <Loader2 className="size-4 shrink-0 animate-spin text-[#2dd4bf]" />
+              <span className="truncate">{processingLabel}</span>
+            </div>
+          )}
+          {selectedFile && !isProcessingFile && (
             <div className="mb-2 flex flex-wrap gap-2 px-1">
               <div className="relative">
                 {selectedFile.type.startsWith("image/") ? (
@@ -762,11 +809,12 @@ export function ChatScreen({ conversationId }: { conversationId?: string }) {
                     className="size-16 rounded-2xl border border-slate-700 object-cover"
                   />
                 ) : (
-                  <div className="flex size-16 flex-col items-center justify-center gap-1 rounded-2xl border border-slate-700 bg-slate-800/80 px-1">
-                    <Paperclip className="size-4 text-[#2dd4bf]" />
-                    <span className="w-full truncate text-center text-[9px] text-slate-300">
-                      {selectedFile.name}
-                    </span>
+                  <div className="flex max-w-[240px] items-center gap-2 rounded-2xl border border-slate-700 bg-slate-800/80 py-2 pl-7 pr-3">
+                    <FileText className="size-5 shrink-0 text-[#2dd4bf]" />
+                    <div className="min-w-0">
+                      <p className="truncate text-xs text-slate-200" dir="auto">{selectedFile.name}</p>
+                      <p className="text-[10px] text-slate-500">جاهز للإرسال</p>
+                    </div>
                   </div>
                 )}
                 <button
@@ -827,16 +875,38 @@ export function ChatScreen({ conversationId }: { conversationId?: string }) {
 
           <div className={`flex items-end gap-2 w-full ${listening ? "hidden" : ""}`}>
             <div className="relative flex flex-1 items-center">
-              <input
-                type="file"
-                ref={fileInputRef}
-                onChange={handleFileChange}
-                className="hidden"
-                accept="image/*,.pdf,.doc,.docx,.txt,.json,.js,.ts,.tsx,.py,.md,.csv"
-              />
+              <input type="file" ref={cameraInputRef} onChange={handleFileChange} className="hidden" accept="image/*" capture="environment" />
+              <input type="file" ref={galleryInputRef} onChange={handleFileChange} className="hidden" accept="image/*,video/*" />
+              <input type="file" ref={fileInputRef} onChange={handleFileChange} className="hidden" accept="*/*" />
+              {attachMenuOpen && (
+                <>
+                  <div className="fixed inset-0 z-20" onClick={() => setAttachMenuOpen(false)} />
+                  <div className="absolute bottom-full right-0 z-30 mb-3 w-44 overflow-hidden rounded-2xl border border-slate-700 bg-slate-900 p-1 shadow-xl">
+                    {[
+                      { label: "الكاميرا", icon: Camera, ref: cameraInputRef },
+                      { label: "الاستديو", icon: ImageIcon, ref: galleryInputRef },
+                      { label: "الملفات", icon: FileText, ref: fileInputRef },
+                    ].map(({ label, icon: Icon, ref }) => (
+                      <button
+                        key={label}
+                        type="button"
+                        onClick={() => {
+                          setAttachMenuOpen(false);
+                          ref.current?.click();
+                        }}
+                        className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm text-slate-200 hover:bg-slate-800"
+                      >
+                        <Icon className="size-4 text-[#2dd4bf]" />
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                </>
+              )}
               <button
                 type="button"
-                onClick={() => fileInputRef.current?.click()}
+                onClick={() => setAttachMenuOpen((v) => !v)}
+                aria-expanded={attachMenuOpen}
                 className="absolute right-1 rounded-full p-2 text-slate-400 transition hover:bg-slate-800 hover:text-white"
                 title="إرفاق صورة أو ملف"
               >
@@ -881,7 +951,7 @@ export function ChatScreen({ conversationId }: { conversationId?: string }) {
               <Button
                 type="button"
                 onClick={() => handleSend()}
-                disabled={!input.trim() && !selectedFile}
+                disabled={isProcessingFile || (!input.trim() && !selectedFile)}
                 size="icon"
                 className="size-10 shrink-0 rounded-full bg-[#2dd4bf] text-slate-950 transition-all hover:bg-[#26b8a5]"
               >

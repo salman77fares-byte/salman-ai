@@ -1,7 +1,7 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
-import { Mail, Loader2, X } from "lucide-react";
+import { Mail, Loader2, X, Eye, EyeOff } from "lucide-react";
 
 import { BrandMark } from "@/components/salman/BrandMark";
 import { Button } from "@/components/ui/button";
@@ -31,6 +31,7 @@ function AuthPage() {
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [sentEmail, setSentEmail] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
 
   useEffect(() => {
     void supabase.auth.getSession().then(({ data }) => {
@@ -40,22 +41,32 @@ function AuthPage() {
 
   const arabicAuthError = (message: string): string => {
     const text = message.toLowerCase();
-    if (text.includes("invalid login credentials")) return "بيانات الدخول غير صحيحة.";
+    if (text.includes("invalid login credentials")) return "البريد الإلكتروني أو كلمة المرور غير صحيحة.";
     if (text.includes("email not confirmed")) return "لم يتم تأكيد البريد الإلكتروني بعد.";
     if (text.includes("already registered") || text.includes("already been registered"))
-      return "هذا البريد مسجّل مسبقاً، سجّل الدخول بدلاً من ذلك.";
+      return "البريد الإلكتروني مستخدم بالفعل.";
     if (text.includes("password")) return "كلمة المرور غير صالحة (٦ أحرف على الأقل).";
     if (text.includes("rate limit") || text.includes("too many"))
       return "محاولات كثيرة، حاول بعد قليل.";
     if (text.includes("network") || text.includes("fetch"))
-      return "تعذّر الاتصال بالخدمة، تحقّق من الإنترنت.";
+      return "خطأ في الاتصال، تحقّق من الإنترنت.";
     return "تعذّر إكمال العملية، حاول مرة أخرى.";
   };
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
-    if (!email.trim() || password.length < 6) {
-      toast.error("أدخل بريداً صحيحاً وكلمة مرور من ٦ أحرف على الأقل.");
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email.trim())) {
+      toast.error("أدخل بريداً إلكترونياً صحيحاً.");
+      return;
+    }
+    if (password.length < 8 || (mode === "signup" && !(/[A-Za-z]/.test(password) && /\d/.test(password)))) {
+      toast.error(mode === "signup"
+        ? "كلمة المرور يجب أن تكون ٨ أحرف على الأقل وتحتوي حروفاً وأرقاماً."
+        : "كلمة المرور يجب أن تكون ٨ أحرف على الأقل.");
+      return;
+    }
+    if (!navigator.onLine) {
+      toast.error("خطأ في الاتصال، تحقّق من الإنترنت.");
       return;
     }
     setLoading(true);
@@ -155,17 +166,27 @@ function AuthPage() {
               </div>
               <div className="space-y-1.5">
                 <Label htmlFor="password">كلمة المرور</Label>
+                <div className="relative">
                 <Input
                   id="password"
-                  type="password"
+                  type={showPassword ? "text" : "password"}
                   dir="ltr"
                   autoComplete={mode === "login" ? "current-password" : "new-password"}
                   value={password}
                   onChange={(event) => setPassword(event.target.value)}
-                  className="rounded-xl"
                   required
-                  minLength={6}
+                  minLength={8}
+                  className="rounded-xl pl-10"
                 />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword((v) => !v)}
+                  aria-label={showPassword ? "إخفاء كلمة المرور" : "إظهار كلمة المرور"}
+                  className="absolute left-2 top-1/2 -translate-y-1/2 rounded-full p-1.5 text-muted-foreground hover:text-foreground"
+                >
+                  {showPassword ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
+                </button>
+                </div>
               </div>
               <Button
                 type="submit"

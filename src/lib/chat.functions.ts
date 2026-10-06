@@ -65,7 +65,7 @@ export const appendMessages = createServerFn({ method: "POST" })
           .array(
             z.object({
               sender: z.enum(["user", "assistant"]),
-              content: z.string().min(1).max(8000),
+              content: z.string().min(1).max(100000),
             }),
           )
           .min(1)

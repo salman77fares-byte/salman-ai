@@ -723,7 +723,50 @@ export function ChatScreen({ conversationId }: { conversationId?: string }) {
             </div>
           )}
 
-          <div className="flex items-end gap-2 w-full">
+          {listening && (
+            <div className="flex items-center gap-2 w-full px-1 py-1" role="dialog" aria-label="تسجيل صوتي">
+              <button
+                type="button"
+                onClick={() => finishMic("cancel")}
+                aria-label="إلغاء التسجيل"
+                className="flex size-10 shrink-0 items-center justify-center rounded-full border border-slate-700 bg-slate-800 text-slate-300 hover:text-white"
+              >
+                <X className="size-4" />
+              </button>
+              <div className="flex min-w-0 flex-1 flex-col items-center gap-1">
+                <div className="flex h-6 items-end gap-0.5" aria-hidden>
+                  {Array.from({ length: 18 }).map((_, i) => (
+                    <span
+                      key={i}
+                      className="w-1 animate-pulse rounded-full bg-[#2dd4bf]"
+                      style={{ height: `${30 + ((i * 37) % 70)}%`, animationDelay: `${(i % 6) * 120}ms` }}
+                    />
+                  ))}
+                </div>
+                <p dir="auto" className="w-full truncate text-center text-xs text-slate-300">
+                  {voiceText || "جاري الاستماع..."} <span className="text-slate-500">· {Math.floor(voiceSeconds / 60)}:{String(voiceSeconds % 60).padStart(2, "0")}</span>
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => finishMic("accept")}
+                aria-label="اعتماد النص"
+                className="flex size-10 shrink-0 items-center justify-center rounded-full border border-slate-700 bg-slate-800 text-[#2dd4bf] hover:bg-slate-700"
+              >
+                <Check className="size-4" />
+              </button>
+              <button
+                type="button"
+                onClick={() => finishMic("send")}
+                aria-label="إرسال الصوت"
+                className="flex size-10 shrink-0 items-center justify-center rounded-full bg-[#2dd4bf] text-slate-950 hover:bg-[#26b8a5]"
+              >
+                <Send className="-rotate-90 size-4" />
+              </button>
+            </div>
+          )}
+
+          <div className={`flex items-end gap-2 w-full ${listening ? "hidden" : ""}`}>
             <div className="relative flex flex-1 items-center">
               <input
                 type="file"

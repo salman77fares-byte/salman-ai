@@ -1,29 +1,21 @@
-import { defineConfig } from "@lovable.dev/vite-tanstack-config";
+import { defineConfig } from "vite";
+import react from "@vitejs/plugin-react-swc";
+import path from "path";
 
 export default defineConfig({
-  vite: {
-    base: "./", // تم التغيير إلى مسار نسبي ليعمل أوفلاين داخل الـ APK
-    build: {
-      outDir: "dist",
-      emptyOutDir: true,
+  base: "./",
+  server: {
+    host: "::",
+    port: 8080,
+  },
+  plugins: [react()],
+  resolve: {
+    alias: {
+      "@": path.resolve(__dirname, "./src"),
     },
-    plugins: [
-      {
-        name: "strip-lovable-badge",
-        configResolved(config) {
-          (config.plugins as any[]) = config.plugins.filter(
-            (plugin) =>
-              !plugin.name.includes("lovable") &&
-              !plugin.name.includes("gptengineer") &&
-              !plugin.name.includes("component-tagger")
-          );
-        },
-        transformIndexHtml(html) {
-          return html
-            .replace(/<script[^>]*gptengineer[^>]*><\/script>/gi, "")
-            .replace(/<script[^>]*lovable[^>]*><\/script>/gi, "");
-        },
-      },
-    ],
+  },
+  build: {
+    outDir: "dist",
+    emptyOutDir: true,
   },
 });

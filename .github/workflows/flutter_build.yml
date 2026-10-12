@@ -1,4 +1,4 @@
-name: Build and Publish Salman AI APK to Releases
+Name: Build and Publish Salman AI APK to Releases
 
 on:
   push:
@@ -37,26 +37,25 @@ jobs:
         run: |
           npm install --legacy-peer-deps || npm install --force
 
-      - name: Prepare Dummy Web Directory
+      - name: Build Web App Locally
         run: |
-          mkdir -p dist
-          echo '<html><body>Salman AI</body></html>' > dist/index.html
+          # بناء المشروع محلياً لضمان تخزين الواجهة والقوائم والإعدادات داخل التطبيق للعمل بدون إنترنت
+          npm run build
 
-      - name: Sync Capacitor Shell & Set Direct Web URL
+      - name: Sync Capacitor Shell & Configure Local Offline Support
         run: |
           npm install @capacitor/core@5.7.0 @capacitor/cli@5.7.0 @capacitor/android@5.7.0 --save-dev
           
-          # توجيه التطبيق لفتح الموقع مباشرة بدون أي تأخير أو صفحات وسيطة
+          # ضبط الإعدادات للعمل محلياً من مجلد dist دون فرض رابط خارجي إلزامي للتشغيل
           cat << 'EOF' > capacitor.config.json
           {
             "appId": "com.salman.ai",
             "appName": "Salman AI",
             "webDir": "dist",
+            "bundledWebRuntime": false,
             "server": {
-              "url": "https://salman-ai.lovable.app",
               "cleartext": true,
               "allowNavigation": [
-                "salman-ai.lovable.app",
                 "*.lovable.app",
                 "*.supabase.co"
               ]
@@ -71,10 +70,7 @@ jobs:
 
       - name: Process Logo & Apply Icon Padding
         run: |
-          # تثبيت مكتبة Pillow للتعامل مع الصور
           python3 -m pip install Pillow
-
-          # البحث عن صورة الشعار وإضافة هامش داخلي (Padding) لتظهر أيقونة متناسقة
           python3 -c "
           from PIL import Image
           import os, glob
@@ -143,10 +139,10 @@ jobs:
           tag_name: "v1.0.${{ github.run_number }}"
           name: "Salman AI Release v1.0.${{ github.run_number }}"
           body: |
-            📱 **تطبيق Salman AI - التحديث النهائي**
+            📱 **تطبيق Salman AI - النسخة المحلية بدون إنترنت**
             
-            - **سرعة الفتح**: تحويل مباشر وسريع جداً للموقع فور تشغيل التطبيق.
-            - **تحسين الأيقونة**: ضبط الهامش الشفاف للشعار لتنسيق شكله على الواجهة الرئيسية.
+            - **التشغيل المحلي**: الواجهة، القوائم، والإعدادات تعمل الآن بالكامل بدون الحاجة لإنترنت.
+            - **الاتصال الذكي**: الإنترنت يُستخدم فقط للردود الذكية والطلبات عبر مفاتيح الـ API.
           draft: false
           prerelease: false
           files: output_apk/*.apk

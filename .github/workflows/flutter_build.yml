@@ -21,10 +21,11 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v4
 
-      - name: Setup Bun Environment
-        uses: oven-sh/setup-bun@v1
+      - name: Set up Node.js 20
+        uses: actions/setup-node@v4
         with:
-          bun-version: latest
+          node-version: '20'
+          cache: 'npm'
 
       - name: Set up Java JDK 17
         uses: actions/setup-java@v5
@@ -32,20 +33,19 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
 
-      - name: Install Dependencies via Bun
+      - name: Install All Dependencies Forcefully
         run: |
-          bun install --no-save || npm install --legacy-peer-deps
+          npm install --force
 
       - name: Build Web App Locally
         run: |
           # بناء التطبيق محلياً لتخزين الشاشات والإعدادات داخل التطبيق ليعمل بدون إنترنت
-          bun run build || npm run build
+          npm run build
 
       - name: Sync Capacitor Shell & Configure Local Offline Support
         run: |
           npm install @capacitor/core@5.7.0 @capacitor/cli@5.7.0 @capacitor/android@5.7.0 --save-dev
           
-          # ضبط الإعدادات للعمل محلياً من مجلد dist دون فرض رابط خارجي إلزامي للتشغيل
           cat << 'EOF' > capacitor.config.json
           {
             "appId": "com.salman.ai",
@@ -98,7 +98,7 @@ jobs:
                   for root, dirs, files in os.walk(res_dir):
                       folder = os.path.basename(root)
                       if folder.startswith('mipmap') or folder.startswith('drawable'):
-                          for f in files:
+                        for f in files:
                               ext = os.path.splitext(f)[1].lower()
                               if f.startswith('ic_launcher') and ext in ['.png', '.webp']:
                                   target = os.path.join(root, f)

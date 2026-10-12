@@ -40,47 +40,12 @@ jobs:
       - name: Ensure index.html Exists
         run: |
           if [ ! -f "index.html" ]; then
-            cat << 'EOF' > index.html
-            <!doctype html>
-            <html lang="ar" dir="rtl">
-              <head>
-                <meta charset="UTF-8" />
-                <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-                <title>Salman AI</title>
-              </head>
-              <body class="bg-[#0b101b] text-white">
-                <div id="root"></div>
-                <script type="module" src="/src/main.tsx"></script>
-              </body>
-            </html>
-            EOF
+            echo '<!doctype html><html lang="ar" dir="rtl"><head><meta charset="UTF-8" /><meta name="viewport" content="width=device-width, initial-scale=1.0" /><title>Salman AI</title></head><body class="bg-[#0b101b] text-white"><div id="root"></div><script type="module" src="/src/main.tsx"></script></body></html>' > index.html
           fi
 
       - name: Fix Vite Config for Local Build
         run: |
-          cat << 'EOF' > vite.config.ts
-          import { defineConfig } from "vite";
-          import react from "@vitejs/plugin-react";
-          import path from "path";
-
-          export default defineConfig({
-            base: "./",
-            server: {
-              host: "::",
-              port: 8080,
-            },
-            plugins: [react()],
-            resolve: {
-              alias: {
-                "@": path.resolve(__dirname, "./src"),
-              },
-            },
-            build: {
-              outDir: "dist",
-              emptyOutDir: true,
-            },
-          });
-          EOF
+          echo 'import { defineConfig } from "vite"; import react from "@vitejs/plugin-react"; import path from "path"; export default defineConfig({ base: "./", server: { host: "::", port: 8080 }, plugins: [react()], resolve: { alias: { "@": path.resolve(__dirname, "./src") } }, build: { outDir: "dist", emptyOutDir: true } });' > vite.config.ts
 
       - name: Build Web App Locally
         run: |
@@ -90,21 +55,7 @@ jobs:
         run: |
           npm install @capacitor/core@5.7.0 @capacitor/cli@5.7.0 @capacitor/android@5.7.0 --save-dev
           
-          cat << 'EOF' > capacitor.config.json
-          {
-            "appId": "com.salman.ai",
-            "appName": "Salman AI",
-            "webDir": "dist",
-            "bundledWebRuntime": false,
-            "server": {
-              "cleartext": true,
-              "allowNavigation": [
-                "*.lovable.app",
-                "*.supabase.co"
-              ]
-            }
-          }
-          EOF
+          echo '{"appId":"com.salman.ai","appName":"Salman AI","webDir":"dist","bundledWebRuntime":false,"server":{"cleartext":true,"allowNavigation":["*.lovable.app","*.supabase.co"]}}' > capacitor.config.json
           
           if [ ! -d "android" ]; then
             npx cap add android

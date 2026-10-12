@@ -1,4 +1,4 @@
-Name: Build and Publish Salman AI APK to Releases
+name: Build and Publish Salman AI APK to Releases
 
 on:
   push:

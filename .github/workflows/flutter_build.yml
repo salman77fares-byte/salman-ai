@@ -1,4 +1,4 @@
-name: Build and Publish Salman AI APK to Releases
+Name: Build and Publish Salman AI APK to Releases
 
 on:
   push:
@@ -33,13 +33,59 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
 
-      - name: Install All Dependencies Forcefully
+      - name: Install Dependencies
         run: |
-          npm install --force
+          npm install --legacy-peer-deps || npm install --force
+
+      - name: Ensure index.html Exists
+        run: |
+          # التأكد من وجود ملف index.html رئيسي لكي تبدأ منه أداة Vite البناء محلياً
+          if [ ! -f "index.html" ]; then
+            cat << 'EOF' > index.html
+            <!doctype html>
+            <html lang="ar" dir="rtl">
+              <head>
+                <meta charset="UTF-8" />
+                <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+                <title>Salman AI</title>
+              </head>
+              <body class="bg-[#0b101b] text-white">
+                <div id="root"></div>
+                <script type="module" src="/src/main.tsx"></script>
+              </body>
+            </html>
+            EOF
+          fi
+
+      - name: Fix Vite Config for Local Build
+        run: |
+          cat << 'EOF' > vite.config.ts
+          import { defineConfig } from "vite";
+          import react from "@vitejs/plugin-react";
+          import path from "path";
+
+          export default defineConfig({
+            base: "./",
+            server: {
+              host: "::",
+              port: 8080,
+            },
+            plugins: [react()],
+            resolve: {
+              alias: {
+                "@": path.resolve(__dirname, "./src"),
+              },
+            },
+            build: {
+              outDir: "dist",
+              emptyOutDir: true,
+            },
+          });
+          EOF
 
       - name: Build Web App Locally
         run: |
-          # بناء التطبيق محلياً لتخزين الشاشات والإعدادات داخل التطبيق ليعمل بدون إنترنت
+          # بناء التطبيق محلياً لتخزين الشاشات والقوائم والإعدادات داخل التطبيق ليعمل بدون إنترنت
           npm run build
 
       - name: Sync Capacitor Shell & Configure Local Offline Support
@@ -98,7 +144,7 @@ jobs:
                   for root, dirs, files in os.walk(res_dir):
                       folder = os.path.basename(root)
                       if folder.startswith('mipmap') or folder.startswith('drawable'):
-                        for f in files:
+                          for f in files:
                               ext = os.path.splitext(f)[1].lower()
                               if f.startswith('ic_launcher') and ext in ['.png', '.webp']:
                                   target = os.path.join(root, f)

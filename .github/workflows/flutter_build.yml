@@ -21,11 +21,10 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v4
 
-      - name: Set up Node.js 20
-        uses: actions/setup-node@v4
+      - name: Setup Bun Environment
+        uses: oven-sh/setup-bun@v1
         with:
-          node-version: '20'
-          cache: 'npm'
+          bun-version: latest
 
       - name: Set up Java JDK 17
         uses: actions/setup-java@v5
@@ -33,14 +32,14 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
 
-      - name: Install Dependencies
+      - name: Install Dependencies via Bun
         run: |
-          npm install --legacy-peer-deps || npm install --force
+          bun install --no-save || npm install --legacy-peer-deps
 
       - name: Build Web App Locally
         run: |
-          # بناء المشروع محلياً لضمان تخزين الواجهة والقوائم والإعدادات داخل التطبيق للعمل بدون إنترنت
-          npm run build
+          # بناء التطبيق محلياً لتخزين الشاشات والإعدادات داخل التطبيق ليعمل بدون إنترنت
+          bun run build || npm run build
 
       - name: Sync Capacitor Shell & Configure Local Offline Support
         run: |
@@ -139,10 +138,10 @@ jobs:
           tag_name: "v1.0.${{ github.run_number }}"
           name: "Salman AI Release v1.0.${{ github.run_number }}"
           body: |
-            📱 **تطبيق Salman AI - النسخة المحلية بدون إنترنت**
+            📱 **تطبيق Salman AI - النسخة المحلية تعمل بدون إنترنت**
             
-            - **التشغيل المحلي**: الواجهة، القوائم، والإعدادات تعمل الآن بالكامل بدون الحاجة لإنترنت.
-            - **الاتصال الذكي**: الإنترنت يُستخدم فقط للردود الذكية والطلبات عبر مفاتيح الـ API.
+            - **التشغيل المحلي**: الواجهة، القوائم، والإعدادات تعمل محلياً دون الحاجة لإنترنت.
+            - **استخدام الشبكة**: الإنترنت يُستخدم فقط للردود الذكية وعمليات الـ API.
           draft: false
           prerelease: false
           files: output_apk/*.apk

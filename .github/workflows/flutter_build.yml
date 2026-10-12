@@ -1,4 +1,4 @@
-Name: Build and Publish Salman AI APK to Releases
+name: Build and Publish Salman AI APK to Releases
 
 on:
   push:
@@ -39,7 +39,6 @@ jobs:
 
       - name: Ensure index.html Exists
         run: |
-          # التأكد من وجود ملف index.html رئيسي لكي تبدأ منه أداة Vite البناء محلياً
           if [ ! -f "index.html" ]; then
             cat << 'EOF' > index.html
             <!doctype html>
@@ -85,7 +84,6 @@ jobs:
 
       - name: Build Web App Locally
         run: |
-          # بناء التطبيق محلياً لتخزين الشاشات والقوائم والإعدادات داخل التطبيق ليعمل بدون إنترنت
           npm run build
 
       - name: Sync Capacitor Shell & Configure Local Offline Support

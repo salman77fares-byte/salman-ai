@@ -1,5 +1,5 @@
 
-name: Build Salman AI Flutter APK
+name: Build Salman AI Android APK
 
 on:
   workflow_dispatch:
@@ -9,7 +9,6 @@ on:
     paths:
       - "lib/**"
       - "android/**"
-      - "test/**"
       - "pubspec.yaml"
       - "pubspec.lock"
       - ".github/workflows/flutter_build.yml"
@@ -19,7 +18,7 @@ permissions:
 
 jobs:
   build:
-    name: Build Android APK
+    name: Build Optimized APK
     runs-on: ubuntu-latest
 
     steps:
@@ -44,16 +43,21 @@ jobs:
             flutter create --platforms=android --project-name salman_ai .
           fi
 
-      - name: Install Flutter dependencies
+      - name: Install dependencies
         run: flutter pub get
 
-      - name: Build debug APK
-        run: flutter build apk --debug
+      - name: Build optimized release APKs
+        run: flutter build apk --release --split-per-abi
 
-      - name: Upload APK
+      - name: Verify APK files
+        run: |
+          ls -lh build/app/outputs/flutter-apk/*-release.apk
+          test -n "$(find build/app/outputs/flutter-apk -maxdepth 1 -name '*-release.apk' -print -quit)"
+
+      - name: Upload optimized APKs
         uses: actions/upload-artifact@v4
         with:
-          name: Salman-AI-Android-APK
-          path: build/app/outputs/flutter-apk/app-debug.apk
+          name: Salman-AI-Release-APKs
+          path: build/app/outputs/flutter-apk/*-release.apk
           if-no-files-found: error
           retention-days: 7

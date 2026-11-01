@@ -842,7 +842,7 @@ export function ChatScreen({ conversationId }: { conversationId?: string }) {
                 aria-label="اعتماد النص"
                 className="flex size-10 shrink-0 items-center justify-center rounded-full border border-slate-700 bg-slate-800 text-[#2dd4bf] hover:bg-slate-700"
               >
-                <Check className="size-4" />
+                {transcribing ? <Loader2 className="size-4 animate-spin" /> : <Check className="size-4" />}
               </button>
               <button
                 type="button"

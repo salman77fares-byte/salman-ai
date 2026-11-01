@@ -21,60 +21,59 @@ jobs:
     - name: Install Dependencies
       run: npm install --legacy-peer-deps
 
-    - name: Build Web Assets
+    # التطبيق يفتح النسخة المنشورة مباشرة (كل نشر في Lovable يصل للتطبيق فوراً)
+    # ويحمل داخله صفحة عدم الاتصال والشعار لتعمل بدون إنترنت.
+    - name: Prepare Native Web Shell
       run: |
-        npm run build || npx vite build || true
-
-    - name: Prepare Dist Directory
-      run: |
-        mkdir -p dist
-        if [ -d ".output/public" ]; then cp -r .output/public/* dist/; fi
-        if [ -d "build" ]; then cp -r build/* dist/; fi
-        if [ -d "out" ]; then cp -r out/* dist/; fi
-        
-        if [ ! -f "dist/index.html" ]; then
-          INDEX_PATH=$(find . -name "index.html" ! -path "*/node_modules/*" ! -path "*/android/*" ! -path "./dist/*" | head -n 1)
-          if [ -n "$INDEX_PATH" ]; then
-            cp "$INDEX_PATH" dist/
-          else
-            echo '<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Salman AI</title></head><body><div id="root"></div></body></html>' > dist/index.html
-          fi
-        fi
-
-    - name: Configure Capacitor Local Settings
-      run: |
-        cat << 'EOF' > capacitor.config.json
-        {
-          "appId": "com.salman.ai",
-          "appName": "Salman AI",
-          "webDir": "dist",
-          "server": {
-            "androidScheme": "https"
-          },
-          "android": {
-            "backgroundColor": "#0B0B0B"
-          }
-        }
+        rm -rf dist && mkdir -p dist
+        cp public/offline.html dist/offline.html
+        cp public/logo.png dist/logo.png
+        cat > dist/index.html << 'EOF'
+        <!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+        <script>location.replace(navigator.onLine ? "https://salman-ai.lovable.app/chat" : "offline.html");</script></head>
+        <body style="background:#0b101b"></body></html>
         EOF
 
-    - name: Sync Capacitor
+    - name: Add Android Platform
       run: |
         rm -rf android
         npx cap add android
         npx cap sync android
 
-    - name: Restore Application Icons
+    - name: Android Permissions
       run: |
-        rm -rf android/app/src/main/res/mipmap-anydpi-v26
-        ICON_SRC=$(find public src -name "*icon*.png" -o -name "*logo*.png" | head -n 1)
-        if [ -z "$ICON_SRC" ]; then ICON_SRC="public/favicon.ico"; fi
-        
-        for dir in android/app/src/main/res/mipmap-*; do
-          if [ -d "$dir" ]; then
-            cp -f "$ICON_SRC" "$dir/ic_launcher.png" 2>/dev/null || true
-            cp -f "$ICON_SRC" "$dir/ic_launcher_round.png" 2>/dev/null || true
-            cp -f "$ICON_SRC" "$dir/ic_launcher_foreground.png" 2>/dev/null || true
-          fi
+        MANIFEST=android/app/src/main/AndroidManifest.xml
+        PERMS='
+            <uses-permission android:name="android.permission.INTERNET" />
+            <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+            <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
+            <uses-permission android:name="android.permission.CAMERA" />
+            <uses-permission android:name="android.permission.RECORD_AUDIO" />
+            <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
+            <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+            <uses-permission android:name="android.permission.VIBRATE" />
+            <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
+            <uses-permission android:name="android.permission.READ_MEDIA_VIDEO" />
+            <uses-permission android:name="android.permission.READ_MEDIA_AUDIO" />
+            <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" />
+            <uses-feature android:name="android.hardware.camera" android:required="false" />
+            <uses-feature android:name="android.hardware.microphone" android:required="false" />'
+        sed -i '/android.permission.INTERNET/d' "$MANIFEST"
+        awk -v perms="$PERMS" '/<application/ && !done { print perms; done=1 } { print }' "$MANIFEST" > /tmp/m.xml && mv /tmp/m.xml "$MANIFEST"
+        sed -i 's|<application|<application android:usesCleartextTraffic="false"|' "$MANIFEST"
+        grep -n "permission" "$MANIFEST"
+
+    - name: App Icon From public/logo.png
+      run: |
+        sudo apt-get install -y imagemagick >/dev/null 2>&1 || true
+        RES=android/app/src/main/res
+        rm -rf $RES/mipmap-anydpi-v26
+        for pair in mdpi:48 hdpi:72 xhdpi:96 xxhdpi:144 xxxhdpi:192; do
+          d=${pair%%:*}; s=${pair##*:}
+          mkdir -p $RES/mipmap-$d
+          for n in ic_launcher ic_launcher_round ic_launcher_foreground; do
+            convert public/logo.png -resize ${s}x${s} $RES/mipmap-$d/$n.png 2>/dev/null || cp -f public/logo.png $RES/mipmap-$d/$n.png
+          done
         done
 
     - name: Set up JDK 21
@@ -83,7 +82,14 @@ jobs:
         java-version: '21'
         distribution: 'temurin'
 
-    - name: Build Standalone APK
+    # مفتاح توقيع ثابت بين البنيات حتى يُحدَّث التطبيق فوق النسخة السابقة دون حذفها
+    - name: Restore Signing Key
+      uses: actions/cache@v4
+      with:
+        path: ~/.android/debug.keystore
+        key: salman-ai-debug-keystore-v1
+
+    - name: Build APK
       run: |
         cd android
         chmod +x gradlew

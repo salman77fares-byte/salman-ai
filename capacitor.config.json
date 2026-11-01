@@ -3,10 +3,15 @@
   "appName": "Salman AI",
   "webDir": "dist",
   "server": {
-    "url": "https://salman-ai.lovable.app",
-    "cleartext": true
+    "url": "https://salman-ai.lovable.app/chat",
+    "androidScheme": "https",
+    "errorPath": "offline.html",
+    "allowNavigation": ["salman-ai.lovable.app", "*.lovable.app", "accounts.google.com", "*.supabase.co", "oauth.lovable.app"]
   },
   "android": {
-    "backgroundColor": "#0B0B0B"
+    "backgroundColor": "#0B101B",
+    "allowMixedContent": false,
+    "captureInput": true,
+    "webContentsDebuggingEnabled": false
   }
 }

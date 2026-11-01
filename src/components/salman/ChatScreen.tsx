@@ -224,28 +224,67 @@ export function ChatScreen({ conversationId }: { conversationId?: string }) {
     }
   };
 
-  // نافذة التسجيل الصوتي: يستمر التسجيل حتى يضغط المستخدم ✓ أو ✗ أو إرسال
+  // نافذة التسجيل الصوتي: تسجيل كامل بالميكروفون (يعمل في المتصفح وتطبيق أندرويد)
+  // ثم تحويله إلى نص على الخادم عند الضغط على ✓ أو إرسال
   const [listening, setListening] = useState(false);
+  const [transcribing, setTranscribing] = useState(false);
   const [voiceText, setVoiceText] = useState("");
   const [voiceSeconds, setVoiceSeconds] = useState(0);
-  const recognitionRef = useRef<{ stop: () => void; abort?: () => void } | null>(null);
-  const keepListeningRef = useRef(false);
-  const finalTextRef = useRef("");
-  const committedRef = useRef(""); // نص الجلسات السابقة (بعد إعادة التشغيل التلقائي)
   const barsRef = useRef<Array<HTMLSpanElement | null>>([]);
+  const recorderRef = useRef<MediaRecorder | null>(null);
+  const chunksRef = useRef<Blob[]>([]);
   const audioCleanupRef = useRef<(() => void) | null>(null);
 
-  // موجة صوتية حيّة من الميكروفون عبر Web Audio API
-  const startWaveform = async () => {
+  useEffect(() => {
+    if (!listening || transcribing) return;
+    setVoiceSeconds(0);
+    const t = setInterval(() => setVoiceSeconds((s) => s + 1), 1000);
+    return () => clearInterval(t);
+  }, [listening, transcribing]);
+
+  const releaseAudio = () => {
+    audioCleanupRef.current?.();
+    audioCleanupRef.current = null;
+  };
+
+  useEffect(() => () => {
+    try { recorderRef.current?.stop(); } catch { /* تجاهل */ }
+    audioCleanupRef.current?.();
+  }, []);
+
+  const startMic = async () => {
+    if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === "undefined") {
+      toast.error("الجهاز لا يدعم التسجيل الصوتي");
+      return;
+    }
+    let stream: MediaStream;
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true } });
+    } catch {
+      toast.error("يرجى السماح بالوصول إلى الميكروفون");
+      return;
+    }
+    const mime = ["audio/webm;codecs=opus", "audio/webm", "audio/mp4", "audio/ogg"].find((m) =>
+      MediaRecorder.isTypeSupported?.(m),
+    );
+    const rec = mime ? new MediaRecorder(stream, { mimeType: mime }) : new MediaRecorder(stream);
+    chunksRef.current = [];
+    rec.ondataavailable = (e) => {
+      if (e.data.size) chunksRef.current.push(e.data);
+    };
+    rec.start(250);
+    recorderRef.current = rec;
+
+    // موجة صوتية حيّة من نفس الميكروفون عبر Web Audio API
+    let raf = 0;
+    let ctx: AudioContext | null = null;
+    try {
       const Ctx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
-      const ctx = new Ctx();
+      ctx = new Ctx();
       const analyser = ctx.createAnalyser();
       analyser.fftSize = 64;
       ctx.createMediaStreamSource(stream).connect(analyser);
       const data = new Uint8Array(analyser.frequencyBinCount);
-      let raf = 0;
       const tick = () => {
         analyser.getByteFrequencyData(data);
         barsRef.current.forEach((bar, i) => {
@@ -256,131 +295,74 @@ export function ChatScreen({ conversationId }: { conversationId?: string }) {
         raf = requestAnimationFrame(tick);
       };
       tick();
-      audioCleanupRef.current = () => {
-        cancelAnimationFrame(raf);
-        stream.getTracks().forEach((t) => t.stop());
-        void ctx.close();
-      };
     } catch {
-      /* الموجة اختيارية؛ التعرف على الكلام يستمر */
+      /* الموجة اختيارية */
     }
+    audioCleanupRef.current = () => {
+      cancelAnimationFrame(raf);
+      stream.getTracks().forEach((t) => t.stop());
+      void ctx?.close();
+    };
+    setVoiceText("");
+    setListening(true);
   };
-  const stopWaveform = () => {
-    audioCleanupRef.current?.();
-    audioCleanupRef.current = null;
-  };
 
-  useEffect(() => {
-    if (!listening) return;
-    setVoiceSeconds(0);
-    const t = setInterval(() => setVoiceSeconds((s) => s + 1), 1000);
-    return () => clearInterval(t);
-  }, [listening]);
+  const stopRecording = () =>
+    new Promise<Blob>((resolve) => {
+      const rec = recorderRef.current;
+      recorderRef.current = null;
+      if (!rec || rec.state === "inactive") {
+        resolve(new Blob(chunksRef.current));
+        return;
+      }
+      rec.onstop = () => resolve(new Blob(chunksRef.current, { type: rec.mimeType || "audio/webm" }));
+      rec.stop();
+    });
 
-  useEffect(() => () => {
-    keepListeningRef.current = false;
-    recognitionRef.current?.stop();
-    audioCleanupRef.current?.();
-  }, []);
-
-  const startMic = () => {
-    const w = window as unknown as Record<string, unknown>;
-    const SR = (w["SpeechRecognition"] || w["webkitSpeechRecognition"]) as
-      | (new () => {
-          lang: string;
-          interimResults: boolean;
-          continuous: boolean;
-          onresult: (e: { resultIndex: number; results: ArrayLike<{ isFinal: boolean; 0: { transcript: string } }> }) => void;
-          onend: () => void;
-          onerror: (e: { error?: string }) => void;
-          start: () => void;
-          stop: () => void;
-        })
-      | undefined;
-    if (!SR) {
-      toast.error("المتصفح لا يدعم الإملاء الصوتي");
+  const finishMic = async (mode: "cancel" | "accept" | "send") => {
+    if (transcribing) return;
+    const blob = await stopRecording();
+    releaseAudio();
+    if (mode === "cancel") {
+      setListening(false);
       return;
     }
-    finalTextRef.current = "";
-    committedRef.current = "";
-    setVoiceText("");
-    keepListeningRef.current = true;
-
-    const launch = () => {
-      const rec = new SR();
-      rec.lang = "ar-SA";
-      rec.interimResults = true;
-      rec.continuous = true;
-      // نعيد بناء نص الجلسة كاملاً من جميع النتائج في كل مرة (بدل الإلحاق) لمنع التكرار،
-      // مع دمج المقاطع التراكمية التي يرسلها Android (كل مقطع يحتوي سابقه)
-      rec.onresult = (e) => {
-        const finals: string[] = [];
-        let interim = "";
-        for (let i = 0; i < e.results.length; i++) {
-          const r = e.results[i];
-          if (!r) continue;
-          const t = r[0].transcript.trim();
-          if (!t) continue;
-          if (r.isFinal) {
-            const last = finals[finals.length - 1];
-            if (last && t.startsWith(last)) finals[finals.length - 1] = t;
-            else if (!last || !last.endsWith(t)) finals.push(t);
-          } else {
-            interim = t;
-          }
-        }
-        let session = finals.join(" ");
-        if (interim && !session.endsWith(interim)) {
-          session = interim.startsWith(session) ? interim : `${session} ${interim}`;
-        }
-        finalTextRef.current = [committedRef.current, finals.join(" ")].filter(Boolean).join(" ");
-        setVoiceText([committedRef.current, session.trim()].filter(Boolean).join(" "));
-      };
-      rec.onerror = (e) => {
-        if (e?.error === "not-allowed" || e?.error === "service-not-allowed") {
-          keepListeningRef.current = false;
-          setListening(false);
-          toast.error("يرجى السماح بالوصول إلى الميكروفون");
-        }
-      };
-      // بعض المتصفحات توقف التعرف عند الصمت؛ نعيد التشغيل تلقائياً ما دامت النافذة مفتوحة
-      rec.onend = () => {
-        if (keepListeningRef.current) {
-          committedRef.current = finalTextRef.current;
-          try { launch(); } catch { /* تجاهل */ }
-        }
-      };
-      recognitionRef.current = rec;
-      rec.start();
-    };
+    if (blob.size < 500) {
+      setListening(false);
+      toast.error("لم يُلتقط صوت، حاول مجدداً");
+      return;
+    }
+    if (!navigator.onLine) {
+      setListening(false);
+      toast.error("لا يوجد اتصال بالإنترنت. يرجى الاتصال لتحويل الصوت إلى نص.");
+      return;
+    }
+    setTranscribing(true);
+    setVoiceText("جارِ تحويل الصوت إلى نص...");
     try {
-      launch();
-      setListening(true);
-      void startWaveform();
-    } catch {
-      toast.error("تعذّر تشغيل الميكروفون");
-    }
-  };
-
-  const finishMic = (mode: "cancel" | "accept" | "send") => {
-    keepListeningRef.current = false;
-    recognitionRef.current?.stop();
-    stopWaveform();
-    setListening(false);
-    const text = (voiceText || finalTextRef.current).trim();
-    setVoiceText("");
-    if (mode === "cancel" || !text) return;
-    const merged = (input ? input.trimEnd() + " " : "") + text;
-    setInput(merged);
-    if (mode === "send") {
+      const ext = blob.type.includes("mp4") ? "m4a" : blob.type.includes("ogg") ? "ogg" : "webm";
+      const form = new FormData();
+      form.append("file", new File([blob], `voice.${ext}`, { type: blob.type || "audio/webm" }));
+      const res = await fetch("/api/transcribe", { method: "POST", body: form });
+      const data = (await res.json().catch(() => ({}))) as { text?: string; error?: string };
+      if (!res.ok) throw new Error(data.error || "تعذّر تحويل الصوت إلى نص");
+      const text = (data.text || "").trim();
+      if (!text) throw new Error("لم أتمكن من فهم الكلام، حاول مجدداً");
+      const merged = (input ? input.trimEnd() + " " : "") + text;
+      setInput(merged);
       if (textareaRef.current) textareaRef.current.value = merged;
-      setTimeout(() => void handleSend(), 30);
-    } else {
-      setTimeout(() => textareaRef.current?.focus(), 30);
+      if (mode === "send") setTimeout(() => void handleSend(), 30);
+      else setTimeout(() => textareaRef.current?.focus(), 30);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "تعذّر تحويل الصوت إلى نص");
+    } finally {
+      setTranscribing(false);
+      setListening(false);
+      setVoiceText("");
     }
   };
 
-  const toggleMic = () => (listening ? finishMic("accept") : startMic());
+  const toggleMic = () => (listening ? void finishMic("accept") : void startMic());
 
   const handleStop = () => {
     stopGenerationRef.current = true;
@@ -834,6 +816,7 @@ export function ChatScreen({ conversationId }: { conversationId?: string }) {
               <button
                 type="button"
                 onClick={() => finishMic("cancel")}
+                disabled={transcribing}
                 aria-label="إلغاء التسجيل"
                 className="flex size-10 shrink-0 items-center justify-center rounded-full border border-slate-700 bg-slate-800 text-slate-300 hover:text-white"
               >
@@ -857,14 +840,16 @@ export function ChatScreen({ conversationId }: { conversationId?: string }) {
               <button
                 type="button"
                 onClick={() => finishMic("accept")}
+                disabled={transcribing}
                 aria-label="اعتماد النص"
                 className="flex size-10 shrink-0 items-center justify-center rounded-full border border-slate-700 bg-slate-800 text-[#2dd4bf] hover:bg-slate-700"
               >
-                <Check className="size-4" />
+                {transcribing ? <Loader2 className="size-4 animate-spin" /> : <Check className="size-4" />}
               </button>
               <button
                 type="button"
                 onClick={() => finishMic("send")}
+                disabled={transcribing}
                 aria-label="إرسال الصوت"
                 className="flex size-10 shrink-0 items-center justify-center rounded-full bg-[#2dd4bf] text-slate-950 hover:bg-[#26b8a5]"
               >

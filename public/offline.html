@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>Salman AI — لا يوجد اتصال</title>
+<style>
+  html,body{margin:0;height:100%;background:#0b101b;color:#e2e8f0;font-family:system-ui,"Segoe UI",Tahoma,sans-serif}
+  .wrap{min-height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;padding:24px;text-align:center}
+  img{width:88px;height:88px;border-radius:22px;box-shadow:0 0 40px rgba(45,212,191,.25)}
+  h1{font-size:20px;margin:0}
+  p{margin:0;color:#94a3b8;font-size:14px;line-height:1.8;max-width:320px}
+  button{margin-top:8px;border:0;border-radius:999px;background:#2dd4bf;color:#0b101b;font-weight:800;padding:12px 28px;font-size:15px}
+  .dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:#f59e0b;margin-left:6px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <img src="logo.png" alt="Salman AI" onerror="this.style.display='none'" />
+  <h1><span class="dot"></span>لا يوجد اتصال بالإنترنت</h1>
+  <p>يرجى الاتصال بالإنترنت لتلقي إجابات الذكاء الاصطناعي. سيُعاد فتح التطبيق تلقائياً عند عودة الاتصال.</p>
+  <button onclick="go()">إعادة المحاولة</button>
+</div>
+<script>
+  var APP_URL = "https://salman-ai.lovable.app/chat";
+  function go(){ location.href = APP_URL; }
+  window.addEventListener("online", go);
+  setInterval(function(){ if (navigator.onLine) { fetch(APP_URL, {mode:"no-cors",cache:"no-store"}).then(go).catch(function(){}); } }, 5000);
+</script>
+</body>
+</html>

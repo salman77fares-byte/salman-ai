@@ -816,6 +816,7 @@ export function ChatScreen({ conversationId }: { conversationId?: string }) {
               <button
                 type="button"
                 onClick={() => finishMic("cancel")}
+                disabled={transcribing}
                 aria-label="إلغاء التسجيل"
                 className="flex size-10 shrink-0 items-center justify-center rounded-full border border-slate-700 bg-slate-800 text-slate-300 hover:text-white"
               >
@@ -839,6 +840,7 @@ export function ChatScreen({ conversationId }: { conversationId?: string }) {
               <button
                 type="button"
                 onClick={() => finishMic("accept")}
+                disabled={transcribing}
                 aria-label="اعتماد النص"
                 className="flex size-10 shrink-0 items-center justify-center rounded-full border border-slate-700 bg-slate-800 text-[#2dd4bf] hover:bg-slate-700"
               >
@@ -847,6 +849,7 @@ export function ChatScreen({ conversationId }: { conversationId?: string }) {
               <button
                 type="button"
                 onClick={() => finishMic("send")}
+                disabled={transcribing}
                 aria-label="إرسال الصوت"
                 className="flex size-10 shrink-0 items-center justify-center rounded-full bg-[#2dd4bf] text-slate-950 hover:bg-[#26b8a5]"
               >

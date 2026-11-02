@@ -19,6 +19,8 @@ export const Route = createFileRoute("/auth")({
       { name: "description", content: "سجّل الدخول أو أنشئ حساباً لبدء المحادثة مع Salman AI." },
       { property: "og:title", content: "تسجيل الدخول — Salman AI" },
       { property: "og:description", content: "سجّل الدخول لبدء المحادثة مع Salman AI." },
+      { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary_large_image" },
     ],
   }),
   component: AuthPage,
@@ -41,7 +43,8 @@ function AuthPage() {
 
   const arabicAuthError = (message: string): string => {
     const text = message.toLowerCase();
-    if (text.includes("invalid login credentials")) return "البريد الإلكتروني أو كلمة المرور غير صحيحة.";
+    if (text.includes("invalid login credentials"))
+      return "البريد الإلكتروني أو كلمة المرور غير صحيحة.";
     if (text.includes("email not confirmed")) return "لم يتم تأكيد البريد الإلكتروني بعد.";
     if (text.includes("already registered") || text.includes("already been registered"))
       return "البريد الإلكتروني مستخدم بالفعل.";
@@ -59,10 +62,15 @@ function AuthPage() {
       toast.error("أدخل بريداً إلكترونياً صحيحاً.");
       return;
     }
-    if (password.length < 8 || (mode === "signup" && !(/[A-Za-z]/.test(password) && /\d/.test(password)))) {
-      toast.error(mode === "signup"
-        ? "كلمة المرور يجب أن تكون ٨ أحرف على الأقل وتحتوي حروفاً وأرقاماً."
-        : "كلمة المرور يجب أن تكون ٨ أحرف على الأقل.");
+    if (
+      password.length < 8 ||
+      (mode === "signup" && !(/[A-Za-z]/.test(password) && /\d/.test(password)))
+    ) {
+      toast.error(
+        mode === "signup"
+          ? "كلمة المرور يجب أن تكون ٨ أحرف على الأقل وتحتوي حروفاً وأرقاماً."
+          : "كلمة المرور يجب أن تكون ٨ أحرف على الأقل.",
+      );
       return;
     }
     if (!navigator.onLine) {
@@ -138,7 +146,6 @@ function AuthPage() {
           </p>
         </div>
 
-
         {sentEmail ? (
           <div className="mt-6 rounded-2xl bg-secondary p-5 text-center">
             <Mail className="mx-auto size-6 text-primary" />
@@ -167,25 +174,25 @@ function AuthPage() {
               <div className="space-y-1.5">
                 <Label htmlFor="password">كلمة المرور</Label>
                 <div className="relative">
-                <Input
-                  id="password"
-                  type={showPassword ? "text" : "password"}
-                  dir="ltr"
-                  autoComplete={mode === "login" ? "current-password" : "new-password"}
-                  value={password}
-                  onChange={(event) => setPassword(event.target.value)}
-                  required
-                  minLength={8}
-                  className="rounded-xl pl-10"
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword((v) => !v)}
-                  aria-label={showPassword ? "إخفاء كلمة المرور" : "إظهار كلمة المرور"}
-                  className="absolute left-2 top-1/2 -translate-y-1/2 rounded-full p-1.5 text-muted-foreground hover:text-foreground"
-                >
-                  {showPassword ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
-                </button>
+                  <Input
+                    id="password"
+                    type={showPassword ? "text" : "password"}
+                    dir="ltr"
+                    autoComplete={mode === "login" ? "current-password" : "new-password"}
+                    value={password}
+                    onChange={(event) => setPassword(event.target.value)}
+                    required
+                    minLength={8}
+                    className="rounded-xl pl-10"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword((v) => !v)}
+                    aria-label={showPassword ? "إخفاء كلمة المرور" : "إظهار كلمة المرور"}
+                    className="absolute left-2 top-1/2 -translate-y-1/2 rounded-full p-1.5 text-muted-foreground hover:text-foreground"
+                  >
+                    {showPassword ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
+                  </button>
                 </div>
               </div>
               <Button

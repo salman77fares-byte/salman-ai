@@ -91,25 +91,29 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { title: "Salman AI" },
       {
         name: "description",
-        content: "​Salman AI | منصتك الذكية المتكاملة لتوليد الصور، برمجة الأكواد، كتابة النصوص، وغيرها من الخدمات المتطورة بسرعة ودقة متناهية. ابدأ الآن!",
+        content:
+          "​Salman AI | منصتك الذكية المتكاملة لتوليد الصور، برمجة الأكواد، كتابة النصوص، وغيرها من الخدمات المتطورة بسرعة ودقة متناهية. ابدأ الآن!",
       },
       { name: "author", content: "Salman AI" },
       { property: "og:title", content: "Salman AI" },
       {
         property: "og:description",
-        content: "​Salman AI | منصتك الذكية المتكاملة لتوليد الصور، برمجة الأكواد، كتابة النصوص، وغيرها من الخدمات المتطورة بسرعة ودقة متناهية. ابدأ الآن!",
+        content:
+          "​Salman AI | منصتك الذكية المتكاملة لتوليد الصور، برمجة الأكواد، كتابة النصوص، وغيرها من الخدمات المتطورة بسرعة ودقة متناهية. ابدأ الآن!",
       },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
       { name: "twitter:title", content: "Salman AI" },
-      { name: "twitter:description", content: "​Salman AI | منصتك الذكية المتكاملة لتوليد الصور، برمجة الأكواد، كتابة النصوص، وغيرها من الخدمات المتطورة بسرعة ودقة متناهية. ابدأ الآن!" },
-      { property: "og:image", content: "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/fe948f62-4c43-4d78-8b1b-a4cb4747803c/id-preview-a928a428--7b49c286-5b40-474b-a3e2-e353200ab43c.lovable.app-1785956176893.png" },
-      { name: "twitter:image", content: "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/fe948f62-4c43-4d78-8b1b-a4cb4747803c/id-preview-a928a428--7b49c286-5b40-474b-a3e2-e353200ab43c.lovable.app-1785956176893.png" },
+      {
+        name: "twitter:description",
+        content:
+          "​Salman AI | منصتك الذكية المتكاملة لتوليد الصور، برمجة الأكواد، كتابة النصوص، وغيرها من الخدمات المتطورة بسرعة ودقة متناهية. ابدأ الآن!",
+      },
     ],
     links: [
       { rel: "stylesheet", href: appCss },
       { rel: "stylesheet", href: "https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css" },
-      { rel: "icon", type: "image/png", href: "/logo.png" },
+      { rel: "icon", type: "image/png", href: "/favicon.png" },
       { rel: "apple-touch-icon", sizes: "180x180", href: "/apple-touch-icon.png" },
       { rel: "manifest", href: "/manifest.webmanifest" },
       { rel: "preconnect", href: "https://fonts.googleapis.com" },
@@ -194,7 +198,7 @@ function RootComponent() {
           el.remove();
         } else if (el.shadowRoot) {
           const shadowBadge = el.shadowRoot.querySelector(
-            '#gptengineer-badge, [class*="badge"], [id*="badge"], a[href*="lovable"]'
+            '#gptengineer-badge, [class*="badge"], [id*="badge"], a[href*="lovable"]',
           );
           if (shadowBadge) el.remove();
         }

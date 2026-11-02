@@ -1,0 +1,78 @@
+"""Generate launcher and web icons exclusively from the official public logo."""
+import argparse
+import json
+from pathlib import Path
+
+from PIL import Image, ImageColor
+
+ROOT = Path(__file__).resolve().parents[1]
+DENSITIES = {"mdpi": 1, "hdpi": 1.5, "xhdpi": 2, "xxhdpi": 3, "xxxhdpi": 4}
+
+
+def padded_logo(source, size, fraction, background=None):
+    canvas = Image.new("RGBA", (size, size), background or (0, 0, 0, 0))
+    logo = source.copy().convert("RGBA")
+    edge = round(size * fraction)
+    logo.thumbnail((edge, edge), Image.Resampling.LANCZOS)
+    canvas.alpha_composite(logo, ((size - logo.width) // 2, (size - logo.height) // 2))
+    return canvas
+
+
+def generate_android(source, res, background):
+    for density, scale in DENSITIES.items():
+        folder = res / f"mipmap-{density}"
+        folder.mkdir(parents=True, exist_ok=True)
+        # A 68% square fits inside the legacy circular mask without corner clipping.
+        legacy = padded_logo(source, round(48 * scale), 0.68, background)
+        for name in ("ic_launcher", "ic_launcher_round"):
+            legacy.save(folder / f"{name}.png")
+        # Android adaptive layers are 108dp. Keep the full rectangular artwork
+        # inside the guaranteed 66dp safe circle, including its corners.
+        padded_logo(source, round(108 * scale), 46 / 108).save(
+            folder / "ic_launcher_foreground.png"
+        )
+    values = res / "values"
+    values.mkdir(parents=True, exist_ok=True)
+    color = "#%02x%02x%02x" % background[:3]
+    (values / "launcher_background.xml").write_text(
+        f'<resources><color name="salman_launcher_background">{color}</color></resources>\n'
+    )
+    adaptive = res / "mipmap-anydpi-v26"
+    adaptive.mkdir(parents=True, exist_ok=True)
+    xml = '''<?xml version="1.0" encoding="utf-8"?>
+<adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
+    <background android:drawable="@color/salman_launcher_background" />
+    <foreground android:drawable="@mipmap/ic_launcher_foreground" />
+</adaptive-icon>
+'''
+    for name in ("ic_launcher", "ic_launcher_round"):
+        (adaptive / f"{name}.xml").write_text(xml)
+
+
+def generate_web(source, public, background):
+    for name, size, fraction, fill in (
+        ("favicon.png", 64, 0.8, None),
+        ("apple-touch-icon.png", 180, 0.68, background),
+        ("icon-192.png", 192, 0.68, None),
+        ("icon-512.png", 512, 0.68, None),
+        ("icon-maskable-512.png", 512, 0.56, background),
+    ):
+        padded_logo(source, size, fraction, fill).save(public / name)
+
+
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--android-res", type=Path)
+    parser.add_argument("--web", action="store_true")
+    args = parser.parse_args()
+    config = json.loads((ROOT / "capacitor.config.json").read_text())
+    background = ImageColor.getcolor(config["android"]["backgroundColor"], "RGBA")
+    with Image.open(ROOT / "public/logo.png") as source:
+        if args.android_res:
+            generate_android(source, args.android_res, background)
+        if args.web:
+            generate_web(source, ROOT / "public", background)
+
+
+if __name__ == "__main__":
+    main()

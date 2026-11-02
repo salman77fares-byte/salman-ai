@@ -14,7 +14,7 @@ export function BrandMark({ className, size = 36 }: { className?: string; size?:
         alt="شعار Salman AI"
         width={size}
         height={size}
-        className="h-full w-full object-cover"
+        className="h-full w-full object-contain"
       />
     </span>
   );

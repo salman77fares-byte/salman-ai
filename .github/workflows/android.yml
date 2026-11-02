@@ -65,16 +65,9 @@ jobs:
 
     - name: App Icon From public/logo.png
       run: |
-        sudo apt-get install -y imagemagick >/dev/null 2>&1 || true
-        RES=android/app/src/main/res
-        rm -rf $RES/mipmap-anydpi-v26
-        for pair in mdpi:48 hdpi:72 xhdpi:96 xxhdpi:144 xxxhdpi:192; do
-          d=${pair%%:*}; s=${pair##*:}
-          mkdir -p $RES/mipmap-$d
-          for n in ic_launcher ic_launcher_round ic_launcher_foreground; do
-            convert public/logo.png -resize ${s}x${s} $RES/mipmap-$d/$n.png 2>/dev/null || cp -f public/logo.png $RES/mipmap-$d/$n.png
-          done
-        done
+        python3 -m pip install Pillow==11.3.0
+        python3 scripts/test_app_icons.py
+        python3 scripts/generate_app_icons.py --android-res android/app/src/main/res
 
     - name: Set up JDK 21
       uses: actions/setup-java@v4

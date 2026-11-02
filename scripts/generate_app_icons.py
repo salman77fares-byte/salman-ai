@@ -18,17 +18,27 @@ def padded_logo(source, size, fraction, background=None):
     return canvas
 
 
+def filled_logo(source, size):
+    """Scale the logo to cover the whole square edge-to-edge, center-cropping overflow."""
+    logo = source.copy().convert("RGBA")
+    scale = size / min(logo.width, logo.height)
+    w, h = max(size, round(logo.width * scale)), max(size, round(logo.height * scale))
+    logo = logo.resize((w, h), Image.Resampling.LANCZOS)
+    left, top = (w - size) // 2, (h - size) // 2
+    return logo.crop((left, top, left + size, top + size))
+
+
 def generate_android(source, res, background):
     for density, scale in DENSITIES.items():
         folder = res / f"mipmap-{density}"
         folder.mkdir(parents=True, exist_ok=True)
-        # A 68% square fits inside the legacy circular mask without corner clipping.
-        legacy = padded_logo(source, round(48 * scale), 0.68, background)
+        # Full-bleed: the logo fills 100% of the icon with no padding.
+        legacy = filled_logo(source, round(48 * scale))
         for name in ("ic_launcher", "ic_launcher_round"):
             legacy.save(folder / f"{name}.png")
         # Android adaptive layers are 108dp. Keep the full rectangular artwork
         # inside the guaranteed 66dp safe circle, including its corners.
-        padded_logo(source, round(108 * scale), 46 / 108).save(
+        filled_logo(source, round(108 * scale)).save(
             folder / "ic_launcher_foreground.png"
         )
     values = res / "values"

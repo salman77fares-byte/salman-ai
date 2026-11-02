@@ -3,20 +3,16 @@ import unittest
 from pathlib import Path
 
 from PIL import Image
-from generate_app_icons import DENSITIES, generate_android, padded_logo
+from generate_app_icons import DENSITIES, filled_logo, generate_android
 
 
 class AppIconTests(unittest.TestCase):
-    def test_adaptive_full_logo_fits_safe_circle_with_transparent_padding(self):
+    def test_icon_fills_full_square_without_transparent_padding(self):
         source = Image.new("RGBA", (3564, 3944), (20, 200, 180, 255))
-        icon = padded_logo(source, 432, 46 / 108)
-        box = icon.getbbox()
-        self.assertIsNotNone(box)
-        left, top, right, bottom = box
-        self.assertEqual(icon.getpixel((0, 0))[3], 0)
-        self.assertAlmostEqual((right - left) / (bottom - top), 3564 / 3944, delta=0.01)
-        for x, y in ((left, top), (right, top), (left, bottom), (right, bottom)):
-            self.assertLessEqual((x - 216) ** 2 + (y - 216) ** 2, (33 * 4) ** 2)
+        icon = filled_logo(source, 432)
+        self.assertEqual(icon.size, (432, 432))
+        for xy in ((0, 0), (431, 0), (0, 431), (431, 431), (216, 216)):
+            self.assertEqual(icon.getpixel(xy)[3], 255)
 
     def test_android_density_dimensions_and_adaptive_resources(self):
         with tempfile.TemporaryDirectory() as directory:

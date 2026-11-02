@@ -19,6 +19,8 @@ export const Route = createFileRoute("/auth")({
       { name: "description", content: "سجّل الدخول أو أنشئ حساباً لبدء المحادثة مع Salman AI." },
       { property: "og:title", content: "تسجيل الدخول — Salman AI" },
       { property: "og:description", content: "سجّل الدخول لبدء المحادثة مع Salman AI." },
+      { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary_large_image" },
     ],
   }),
   component: AuthPage,

@@ -91,18 +91,24 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { title: "Salman AI" },
       {
         name: "description",
-        content: "​Salman AI | منصتك الذكية المتكاملة لتوليد الصور، برمجة الأكواد، كتابة النصوص، وغيرها من الخدمات المتطورة بسرعة ودقة متناهية. ابدأ الآن!",
+        content:
+          "​Salman AI | منصتك الذكية المتكاملة لتوليد الصور، برمجة الأكواد، كتابة النصوص، وغيرها من الخدمات المتطورة بسرعة ودقة متناهية. ابدأ الآن!",
       },
       { name: "author", content: "Salman AI" },
       { property: "og:title", content: "Salman AI" },
       {
         property: "og:description",
-        content: "​Salman AI | منصتك الذكية المتكاملة لتوليد الصور، برمجة الأكواد، كتابة النصوص، وغيرها من الخدمات المتطورة بسرعة ودقة متناهية. ابدأ الآن!",
+        content:
+          "​Salman AI | منصتك الذكية المتكاملة لتوليد الصور، برمجة الأكواد، كتابة النصوص، وغيرها من الخدمات المتطورة بسرعة ودقة متناهية. ابدأ الآن!",
       },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
       { name: "twitter:title", content: "Salman AI" },
-      { name: "twitter:description", content: "​Salman AI | منصتك الذكية المتكاملة لتوليد الصور، برمجة الأكواد، كتابة النصوص، وغيرها من الخدمات المتطورة بسرعة ودقة متناهية. ابدأ الآن!" },
+      {
+        name: "twitter:description",
+        content:
+          "​Salman AI | منصتك الذكية المتكاملة لتوليد الصور، برمجة الأكواد، كتابة النصوص، وغيرها من الخدمات المتطورة بسرعة ودقة متناهية. ابدأ الآن!",
+      },
     ],
     links: [
       { rel: "stylesheet", href: appCss },
@@ -192,7 +198,7 @@ function RootComponent() {
           el.remove();
         } else if (el.shadowRoot) {
           const shadowBadge = el.shadowRoot.querySelector(
-            '#gptengineer-badge, [class*="badge"], [id*="badge"], a[href*="lovable"]'
+            '#gptengineer-badge, [class*="badge"], [id*="badge"], a[href*="lovable"]',
           );
           if (shadowBadge) el.remove();
         }

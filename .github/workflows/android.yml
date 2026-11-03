@@ -61,7 +61,9 @@ jobs:
         sed -i '/android.permission.INTERNET/d' "$MANIFEST"
         awk -v perms="$PERMS" '/<application/ && !done { print perms; done=1 } { print }' "$MANIFEST" > /tmp/m.xml && mv /tmp/m.xml "$MANIFEST"
         sed -i 's|<application|<application android:usesCleartextTraffic="false"|' "$MANIFEST"
-        grep -n "permission" "$MANIFEST"
+        # Deep link so the Google sign-in sheet can return to the app
+        awk '/android.intent.category.LAUNCHER/ && !done { print; getline; print; print "            <intent-filter android:autoVerify=\"false\"><action android:name=\"android.intent.action.VIEW\" /><category android:name=\"android.intent.category.DEFAULT\" /><category android:name=\"android.intent.category.BROWSABLE\" /><data android:scheme=\"com.salman.ai\" android:host=\"auth\" /></intent-filter>"; done=1; next } { print }' "$MANIFEST" > /tmp/m.xml && mv /tmp/m.xml "$MANIFEST"
+        grep -n "permission\|com.salman.ai" "$MANIFEST"
 
     - name: App Icon From public/logo.png
       run: |

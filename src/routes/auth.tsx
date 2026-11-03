@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { supabase } from "@/integrations/supabase/client";
 import { lovable } from "@/integrations/lovable/index";
+import { isNativeApp, openNativeGoogleSignIn } from "@/lib/native-auth";
 
 export const Route = createFileRoute("/auth")({
   ssr: false,
@@ -106,6 +107,14 @@ function AuthPage() {
   };
 
   const handleGoogle = async () => {
+    if (isNativeApp()) {
+      try {
+        await openNativeGoogleSignIn();
+      } catch {
+        toast.error("تعذّر فتح نافذة Google، حاول مرة أخرى.");
+      }
+      return;
+    }
     setLoading(true);
     try {
       const result = await lovable.auth.signInWithOAuth("google", {

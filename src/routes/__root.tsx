@@ -15,6 +15,7 @@ import { reportLovableError } from "../lib/lovable-error-reporting";
 import { ThemeProvider } from "../lib/theme";
 import { Toaster } from "@/components/ui/sonner";
 import { NetworkBanner } from "@/components/salman/NetworkBanner";
+import { NativeAuthBridge } from "@/components/salman/NativeAuthBridge";
 import { supabase } from "@/integrations/supabase/client";
 
 function NotFoundComponent() {
@@ -233,6 +234,7 @@ function RootComponent() {
     <QueryClientProvider client={queryClient}>
       <ThemeProvider>
         <NetworkBanner />
+        <NativeAuthBridge />
         <Outlet />
         <Toaster position="top-center" />
       </ThemeProvider>

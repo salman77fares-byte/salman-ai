@@ -7,6 +7,8 @@ from PIL import Image, ImageColor
 
 ROOT = Path(__file__).resolve().parents[1]
 DENSITIES = {"mdpi": 1, "hdpi": 1.5, "xhdpi": 2, "xxhdpi": 3, "xxxhdpi": 4}
+BLACK = (0, 0, 0, 255)
+
 
 
 def padded_logo(source, size, fraction, background=None):

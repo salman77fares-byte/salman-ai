@@ -32,13 +32,13 @@ def generate_android(source, res, background):
     for density, scale in DENSITIES.items():
         folder = res / f"mipmap-{density}"
         folder.mkdir(parents=True, exist_ok=True)
-        # Full-bleed: the logo fills 100% of the icon with no padding.
-        legacy = filled_logo(source, round(48 * scale))
+        # Prominent logo on a black tile: large, but never touching the edges.
+        legacy = padded_logo(source, round(48 * scale), 0.84, BLACK)
         for name in ("ic_launcher", "ic_launcher_round"):
             legacy.save(folder / f"{name}.png")
-        # Android adaptive layers are 108dp. Keep the full rectangular artwork
-        # inside the guaranteed 66dp safe circle, including its corners.
-        filled_logo(source, round(108 * scale)).save(
+        # Adaptive layers are 108dp; the visible squircle is ~72dp, so ~70dp
+        # of logo reads bold without being clipped by the system mask.
+        padded_logo(source, round(108 * scale), 0.65, BLACK).save(
             folder / "ic_launcher_foreground.png"
         )
     values = res / "values"

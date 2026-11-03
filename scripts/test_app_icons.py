@@ -7,7 +7,7 @@ from generate_app_icons import DENSITIES, filled_logo, generate_android
 
 
 class AppIconTests(unittest.TestCase):
-    def test_icon_fills_full_square_without_transparent_padding(self):
+    def test_filled_logo_square(self):
         source = Image.new("RGBA", (3564, 3944), (20, 200, 180, 255))
         icon = filled_logo(source, 432)
         self.assertEqual(icon.size, (432, 432))

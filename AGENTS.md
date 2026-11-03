@@ -11,3 +11,4 @@
 - Android app (Capacitor, appId com.salman.ai) loads the published site via server.url and bundles only public/offline.html + logo as errorPath fallback — the SSR app has no static build, so updates ship by publishing.
 - Voice input records with MediaRecorder and transcribes server-side via /api/transcribe — Web Speech API is unreliable in Android WebView.
 - Generate Android launcher and web icon derivatives with scripts/generate_app_icons.py; preserve aspect ratio and use separate adaptive foreground/background layers so system masks never crop the official artwork.
+- Android Google sign-in opens /auth/native in a Custom Tab (@capacitor/browser); that page hands tokens back via com.salman.ai://auth deep link caught by NativeAuthBridge — Google blocks OAuth inside WebViews.

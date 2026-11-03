@@ -525,14 +525,52 @@ export function ChatScreen({ conversationId }: { conversationId?: string }) {
     setAttachMenuOpen(false);
     if (!file) return;
 
-    if (file.size > 8 * 1024 * 1024) {
-      toast.error("حجم الملف يجب ألا يتجاوز 8 ميجابايت");
+    // Android WebView often reports an empty MIME type — fall back to the extension.
+    const name = file.name || "file";
+    const type = file.type || "";
+    const isImage =
+      type.startsWith("image/") || /\.(jpe?g|png|gif|webp|bmp|heic|heif)$/i.test(name);
+    const isPdf = type === "application/pdf" || /\.pdf$/i.test(name);
+    const isVideo = type.startsWith("video/") || /\.(mp4|mov|3gp|webm|mkv)$/i.test(name);
+
+    if (isVideo) {
+      toast.error("لا يمكن قراءة مقاطع الفيديو حالياً. أرفق صورة أو ملفاً.");
       return;
     }
 
-    if (file.type === "application/pdf" || /\.pdf$/i.test(file.name)) {
+    if (isImage) {
+      if (file.size > 30 * 1024 * 1024) {
+        toast.error("حجم الصورة كبير جداً (الحد 30 ميجابايت)");
+        return;
+      }
       setIsProcessingFile(true);
-      setProcessingLabel(`جارِ قراءة ملف PDF... (${file.name})`);
+      setProcessingLabel(`جارِ تجهيز الصورة... (${name})`);
+      imageFileToDataUrl(file)
+        .catch(
+          () =>
+            new Promise<string>((resolve, reject) => {
+              const r = new FileReader();
+              r.onload = () => resolve(r.result as string);
+              r.onerror = () => reject(r.error);
+              r.readAsDataURL(file);
+            }),
+        )
+        .then((dataUrl) => {
+          setSelectedFile({ name, type: "image/jpeg", url: dataUrl, base64: dataUrl });
+        })
+        .catch(() => toast.error("تعذّرت قراءة الصورة"))
+        .finally(() => setIsProcessingFile(false));
+      return;
+    }
+
+    if (file.size > 15 * 1024 * 1024) {
+      toast.error("حجم الملف يجب ألا يتجاوز 15 ميجابايت");
+      return;
+    }
+
+    if (isPdf) {
+      setIsProcessingFile(true);
+      setProcessingLabel(`جارِ قراءة ملف PDF... (${name})`);
       extractPdfText(file)
         .then((text) => {
           if (!text.replace(/--- صفحة \d+ ---/g, "").trim()) {
@@ -540,7 +578,7 @@ export function ChatScreen({ conversationId }: { conversationId?: string }) {
             return;
           }
           setSelectedFile({
-            name: file.name,
+            name,
             type: "application/pdf",
             url: URL.createObjectURL(file),
             base64: "",
@@ -555,48 +593,31 @@ export function ChatScreen({ conversationId }: { conversationId?: string }) {
       return;
     }
 
-    const isTextFile =
-      file.type.startsWith("text/") ||
-      /\.(txt|json|js|ts|tsx|jsx|py|md|html|css|csv|xml|json)$/i.test(file.name);
-
-    if (isTextFile) {
-      const reader = new FileReader();
-      setIsProcessingFile(true);
-      setProcessingLabel(`جارِ قراءة الملف... (${file.name})`);
-      reader.onerror = () => {
-        setIsProcessingFile(false);
-        toast.error("تعذّرت قراءة الملف");
-      };
-      reader.onload = () => {
-        setIsProcessingFile(false);
-        setSelectedFile({
-          name: file.name,
-          type: file.type || "text/plain",
-          url: URL.createObjectURL(file),
-          base64: "",
-          textContent: reader.result as string,
-        });
-      };
-      reader.readAsText(file);
-    } else {
-      const reader = new FileReader();
-      setIsProcessingFile(true);
-      setProcessingLabel(`جارِ قراءة الملف... (${file.name})`);
-      reader.onerror = () => {
-        setIsProcessingFile(false);
-        toast.error("تعذّرت قراءة الملف");
-      };
-      reader.onload = () => {
-        setIsProcessingFile(false);
-        setSelectedFile({
-          name: file.name,
-          type: file.type || "image/jpeg",
-          url: URL.createObjectURL(file),
-          base64: reader.result as string,
-        });
-      };
-      reader.readAsDataURL(file);
-    }
+    // Everything else: read as text; reject binary content we can't understand.
+    const reader = new FileReader();
+    setIsProcessingFile(true);
+    setProcessingLabel(`جارِ قراءة الملف... (${name})`);
+    reader.onerror = () => {
+      setIsProcessingFile(false);
+      toast.error("تعذّرت قراءة الملف");
+    };
+    reader.onload = () => {
+      setIsProcessingFile(false);
+      const text = String(reader.result ?? "");
+      const binaryChars = (text.slice(0, 4000).match(/\uFFFD|\u0000/g) || []).length;
+      if (!text.trim() || binaryChars > 20) {
+        toast.error("نوع هذا الملف غير مدعوم. أرفق صورة أو PDF أو ملفاً نصياً.");
+        return;
+      }
+      setSelectedFile({
+        name,
+        type: type || "text/plain",
+        url: URL.createObjectURL(file),
+        base64: "",
+        textContent: text.slice(0, 100000),
+      });
+    };
+    reader.readAsText(file);
   };
 
   if (loading || (conversationId && session && messagesPending)) {

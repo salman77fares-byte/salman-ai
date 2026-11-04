@@ -1,6 +1,7 @@
 import { Link } from "@tanstack/react-router";
 import { isToday, isYesterday, parseISO, subDays } from "date-fns";
 import {
+  Image as ImageIcon,
   LogIn,
   LogOut,
   MessageSquare,
@@ -206,6 +207,12 @@ export function AppSidebar({
 
       <Separator />
       <div className="space-y-1 p-3">
+        <Button asChild variant="ghost" className="w-full justify-start gap-2">
+          <Link to="/images" onClick={onClose}>
+            <ImageIcon className="size-4" />
+            إنشاء الصور
+          </Link>
+        </Button>
         <Button variant="ghost" className="w-full justify-start gap-2" onClick={onOpenSettings}>
           <Settings className="size-4" />
           الإعدادات

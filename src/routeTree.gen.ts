@@ -13,6 +13,7 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as AuthRouteImport } from './routes/auth'
 import { Route as ChatRouteImport } from './routes/chat'
 import { Route as DeleteAccountRouteImport } from './routes/delete-account'
+import { Route as GalleryRouteImport } from './routes/gallery'
 import { Route as ImagesRouteImport } from './routes/images'
 import { Route as PrivacyRouteImport } from './routes/privacy'
 import { Route as SettingsRouteImport } from './routes/settings'
@@ -42,6 +43,11 @@ const ChatRoute = ChatRouteImport.update({
 const DeleteAccountRoute = DeleteAccountRouteImport.update({
   id: '/delete-account',
   path: '/delete-account',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const GalleryRoute = GalleryRouteImport.update({
+  id: '/gallery',
+  path: '/gallery',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ImagesRoute = ImagesRouteImport.update({
@@ -100,6 +106,7 @@ export interface FileRoutesByFullPath {
   '/auth': typeof AuthRoute
   '/chat': typeof ChatRouteWithChildren
   '/delete-account': typeof DeleteAccountRoute
+  '/gallery': typeof GalleryRoute
   '/images': typeof ImagesRoute
   '/privacy': typeof PrivacyRoute
   '/settings': typeof SettingsRoute
@@ -115,6 +122,7 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
   '/delete-account': typeof DeleteAccountRoute
+  '/gallery': typeof GalleryRoute
   '/images': typeof ImagesRoute
   '/privacy': typeof PrivacyRoute
   '/settings': typeof SettingsRoute
@@ -132,6 +140,7 @@ export interface FileRoutesById {
   '/auth': typeof AuthRoute
   '/chat': typeof ChatRouteWithChildren
   '/delete-account': typeof DeleteAccountRoute
+  '/gallery': typeof GalleryRoute
   '/images': typeof ImagesRoute
   '/privacy': typeof PrivacyRoute
   '/settings': typeof SettingsRoute
@@ -150,6 +159,7 @@ export interface FileRouteTypes {
     | '/auth'
     | '/chat'
     | '/delete-account'
+    | '/gallery'
     | '/images'
     | '/privacy'
     | '/settings'
@@ -165,6 +175,7 @@ export interface FileRouteTypes {
     | '/'
     | '/auth'
     | '/delete-account'
+    | '/gallery'
     | '/images'
     | '/privacy'
     | '/settings'
@@ -181,6 +192,7 @@ export interface FileRouteTypes {
     | '/auth'
     | '/chat'
     | '/delete-account'
+    | '/gallery'
     | '/images'
     | '/privacy'
     | '/settings'
@@ -198,6 +210,7 @@ export interface RootRouteChildren {
   AuthRoute: typeof AuthRoute
   ChatRoute: typeof ChatRouteWithChildren
   DeleteAccountRoute: typeof DeleteAccountRoute
+  GalleryRoute: typeof GalleryRoute
   ImagesRoute: typeof ImagesRoute
   PrivacyRoute: typeof PrivacyRoute
   SettingsRoute: typeof SettingsRoute
@@ -236,6 +249,13 @@ declare module '@tanstack/react-router' {
       path: '/delete-account'
       fullPath: '/delete-account'
       preLoaderRoute: typeof DeleteAccountRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/gallery': {
+      id: '/gallery'
+      path: '/gallery'
+      fullPath: '/gallery'
+      preLoaderRoute: typeof GalleryRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/images': {
@@ -328,6 +348,7 @@ const rootRouteChildren: RootRouteChildren = {
   AuthRoute: AuthRoute,
   ChatRoute: ChatRouteWithChildren,
   DeleteAccountRoute: DeleteAccountRoute,
+  GalleryRoute: GalleryRoute,
   ImagesRoute: ImagesRoute,
   PrivacyRoute: PrivacyRoute,
   SettingsRoute: SettingsRoute,

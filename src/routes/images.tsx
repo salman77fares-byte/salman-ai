@@ -1,6 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
-import { ArrowRight, Loader2, Sparkles } from "lucide-react";
+import { ArrowRight, Images as ImagesIcon, Loader2, Sparkles } from "lucide-react";
+import { addToGallery } from "@/lib/image-gallery";
 import { useState } from "react";
 import { toast } from "sonner";
 
@@ -34,6 +35,12 @@ function ImagesPage() {
   const [items, setItems] = useState<Item[]>([]);
   const [model, setModel] = useState<ImageModelId>("flux");
 
+  const push = (english: string, m: ImageModelId) => {
+    const item = { id: Date.now(), url: buildPollinationsUrl(english, undefined, m), prompt: english, model: m };
+    addToGallery({ ...item, createdAt: item.id });
+    setItems((prev) => [item, ...prev]);
+  };
+
   const generate = async () => {
     const text = prompt.trim();
     if (!text || busy) return;
@@ -49,7 +56,7 @@ function ImagesPage() {
       } catch {
         /* use the original text */
       }
-      setItems((prev) => [{ id: Date.now(), url: buildPollinationsUrl(english, undefined, model), prompt: english, model }, ...prev]);
+      push(english, model);
     } finally {
       setBusy(false);
     }
@@ -63,7 +70,13 @@ function ImagesPage() {
             <ArrowRight className="size-5" />
           </Link>
         </Button>
-        <h1 className="text-lg font-extrabold">إنشاء الصور</h1>
+        <h1 className="flex-1 text-lg font-extrabold">إنشاء الصور</h1>
+        <Button asChild size="sm" variant="secondary" className="rounded-xl text-xs font-bold">
+          <Link to="/gallery">
+            <ImagesIcon className="size-3.5" />
+            مكتبة الصور
+          </Link>
+        </Button>
       </header>
 
       <main className="mx-auto max-w-2xl space-y-6 p-4">
@@ -107,12 +120,7 @@ function ImagesPage() {
                 key={item.id}
                 url={item.url}
                 prompt={item.prompt}
-                onRegenerate={() =>
-                  setItems((prev) => [
-                    { id: Date.now(), url: buildPollinationsUrl(item.prompt, undefined, item.model), prompt: item.prompt, model: item.model },
-                    ...prev,
-                  ])
-                }
+                onRegenerate={() => push(item.prompt, item.model)}
               />
             ))}
           </div>

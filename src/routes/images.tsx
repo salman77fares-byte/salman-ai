@@ -8,7 +8,7 @@ import { GeneratedImage } from "@/components/salman/GeneratedImage";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { translateImagePrompt } from "@/lib/image-prompt.functions";
-import { buildPollinationsUrl } from "@/lib/pollinations";
+import { buildPollinationsUrl, IMAGE_MODELS, type ImageModelId } from "@/lib/pollinations";
 
 export const Route = createFileRoute("/images")({
   ssr: false,
@@ -25,13 +25,14 @@ export const Route = createFileRoute("/images")({
   component: ImagesPage,
 });
 
-type Item = { id: number; url: string; prompt: string };
+type Item = { id: number; url: string; prompt: string; model: ImageModelId };
 
 function ImagesPage() {
   const translate = useServerFn(translateImagePrompt);
   const [prompt, setPrompt] = useState("");
   const [busy, setBusy] = useState(false);
   const [items, setItems] = useState<Item[]>([]);
+  const [model, setModel] = useState<ImageModelId>("flux");
 
   const generate = async () => {
     const text = prompt.trim();
@@ -48,7 +49,7 @@ function ImagesPage() {
       } catch {
         /* use the original text */
       }
-      setItems((prev) => [{ id: Date.now(), url: buildPollinationsUrl(english), prompt: english }, ...prev]);
+      setItems((prev) => [{ id: Date.now(), url: buildPollinationsUrl(english, undefined, model), prompt: english, model }, ...prev]);
     } finally {
       setBusy(false);
     }
@@ -67,6 +68,18 @@ function ImagesPage() {
 
       <main className="mx-auto max-w-2xl space-y-6 p-4">
         <div className="space-y-3 rounded-3xl border border-border bg-card p-4 shadow-soft">
+          <label className="block space-y-1 text-xs font-bold text-muted-foreground">
+            <span>نموذج التوليد (مجاني)</span>
+            <select
+              value={model}
+              onChange={(e) => setModel(e.target.value as ImageModelId)}
+              className="w-full rounded-xl border border-input bg-background px-3 py-2 text-sm text-foreground"
+            >
+              {IMAGE_MODELS.map((m) => (
+                <option key={m.id} value={m.id}>{m.label}</option>
+              ))}
+            </select>
+          </label>
           <Textarea
             dir="auto"
             value={prompt}
@@ -96,7 +109,7 @@ function ImagesPage() {
                 prompt={item.prompt}
                 onRegenerate={() =>
                   setItems((prev) => [
-                    { id: Date.now(), url: buildPollinationsUrl(item.prompt), prompt: item.prompt },
+                    { id: Date.now(), url: buildPollinationsUrl(item.prompt, undefined, item.model), prompt: item.prompt, model: item.model },
                     ...prev,
                   ])
                 }

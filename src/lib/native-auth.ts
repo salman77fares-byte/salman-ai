@@ -5,16 +5,26 @@ export const NATIVE_AUTH_PAGE = "https://salman-ai.lovable.app/auth/native";
 
 export function isNativeApp(): boolean {
   try {
-    return Capacitor.isNativePlatform();
+    if (Capacitor.isNativePlatform()) return true;
   } catch {
-    return false;
+    /* ignore */
   }
+  if (typeof window === "undefined") return false;
+  const w = window as unknown as { Capacitor?: { isNativePlatform?: () => boolean } };
+  if (w.Capacitor?.isNativePlatform?.()) return true;
+  // Android WebView marks its user agent with "; wv)"
+  return /Android.*; wv\)/.test(navigator.userAgent);
 }
 
 /** Opens Google sign-in in a Chrome Custom Tab sheet over the app. */
 export async function openNativeGoogleSignIn() {
-  const { Browser } = await import("@capacitor/browser");
-  await Browser.open({ url: NATIVE_AUTH_PAGE, presentationStyle: "popover" });
+  try {
+    const { Browser } = await import("@capacitor/browser");
+    await Browser.open({ url: NATIVE_AUTH_PAGE, presentationStyle: "popover" });
+  } catch {
+    // Fallback: hand the page to the system browser.
+    window.open(NATIVE_AUTH_PAGE, "_system");
+  }
 }
 
 /** Parses com.salman.ai://auth#access_token=..&refresh_token=.. */

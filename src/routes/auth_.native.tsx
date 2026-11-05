@@ -26,12 +26,15 @@ export const Route = createFileRoute("/auth_/native")({
 /** Runs inside the Custom Tab: signs in with Google, then hands the session back to the app. */
 function NativeAuthPage() {
   const [failed, setFailed] = useState(false);
+  const [returnUrl, setReturnUrl] = useState<string | null>(null);
   const started = useRef(false);
 
   useEffect(() => {
     const handBack = (s: { access_token: string; refresh_token: string }) => {
       const hash = new URLSearchParams({ access_token: s.access_token, refresh_token: s.refresh_token });
-      window.location.replace(`${NATIVE_AUTH_SCHEME}://auth#${hash.toString()}`);
+      const url = `${NATIVE_AUTH_SCHEME}://auth#${hash.toString()}`;
+      setReturnUrl(url);
+      window.location.replace(url);
     };
     const { data } = supabase.auth.onAuthStateChange((_e, s) => {
       if (s) handBack(s);
@@ -57,7 +60,14 @@ function NativeAuthPage() {
   return (
     <div className="flex min-h-screen flex-col items-center justify-center gap-4 bg-background px-6 text-center">
       <BrandMark size={56} />
-      {failed ? (
+      {returnUrl ? (
+        <>
+          <p className="text-sm font-bold">تم تسجيل الدخول بنجاح.</p>
+          <a href={returnUrl} className="rounded-xl bg-primary px-5 py-2.5 text-sm font-bold text-primary-foreground">
+            العودة إلى التطبيق
+          </a>
+        </>
+      ) : failed ? (
         <>
           <p className="text-sm font-bold">تعذّر تسجيل الدخول عبر Google.</p>
           <a href={`${NATIVE_AUTH_SCHEME}://auth#error=failed`} className="text-sm font-bold text-primary">

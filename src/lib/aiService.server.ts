@@ -4,6 +4,7 @@
 
 import { ENGINE_OPTIONS, type EngineId } from "@/lib/engines";
 import { buildSearchQuery, needsFreshInfo } from "@/lib/fresh-intent";
+import { appSystemContext } from "@/lib/app-context";
 
 type SearchResult = { title: string; url: string; snippet: string };
 
@@ -23,6 +24,7 @@ function baseSystemPrompt(): string {
     "4) استخدم **الخط العريض** للعناوين والكلمات المفتاحية، وقسّم الإجابة إلى نقاط قصيرة، وافصل الأفكار الكبيرة بفاصل بصري ---.",
     "إذا زُوّدت بنتائج بحث حية فاعتمد عليها كمصدر أساسي للحقائق الزمنية ولا تعتمد على بيانات تدريبك القديمة،",
     "واذكر المصادر في النهاية كقائمة روابط مختصرة. إن تعارضت معلوماتك مع نتائج البحث فالنتائج هي الصحيحة.",
+    appSystemContext(),
   ].join("\n");
 }
 

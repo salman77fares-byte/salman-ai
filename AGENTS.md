@@ -12,3 +12,5 @@
 - Voice input records with MediaRecorder and transcribes server-side via /api/transcribe — Web Speech API is unreliable in Android WebView.
 - Generate Android launcher and web icon derivatives with scripts/generate_app_icons.py; preserve aspect ratio and use separate adaptive foreground/background layers so system masks never crop the official artwork.
 - Android Google sign-in opens /auth/native in a Custom Tab (@capacitor/browser); that page hands tokens back via com.salman.ai://auth deep link caught by NativeAuthBridge — Google blocks OAuth inside WebViews.
+- Product knowledge is supplied through a shared app-context module, separate from personal memories, to keep behavioral boundaries consistent across chat providers.
+- Professional image requests use a fixed OpenAI server endpoint with session-only user keys; credentials never enter local storage or gallery records.

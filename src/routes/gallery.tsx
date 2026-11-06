@@ -1,11 +1,12 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { ArrowRight, Sparkles, Trash2 } from "lucide-react";
 import { useEffect, useState } from "react";
+import { toast } from "sonner";
 
 import { GeneratedImage } from "@/components/salman/GeneratedImage";
 import { Button } from "@/components/ui/button";
 import { addToGallery, loadGallery, modelLabel, removeFromGallery, type GalleryItem } from "@/lib/image-gallery";
-import { buildPollinationsUrl } from "@/lib/pollinations";
+import { generateImageUrl } from "@/lib/pro-image";
 
 export const Route = createFileRoute("/gallery")({
   ssr: false,
@@ -24,18 +25,25 @@ export const Route = createFileRoute("/gallery")({
 
 function GalleryPage() {
   const [items, setItems] = useState<GalleryItem[]>([]);
+  const [busy, setBusy] = useState(false);
   useEffect(() => setItems(loadGallery()), []);
 
-  const regenerate = (item: GalleryItem) => {
+  const regenerate = async (item: GalleryItem) => {
+    if (busy) return;
+    setBusy(true);
+    try {
+    const url = await generateImageUrl(item.prompt, item.model);
     const next: GalleryItem = {
       id: Date.now(),
-      url: buildPollinationsUrl(item.prompt, undefined, item.model),
+      url,
       prompt: item.prompt,
       model: item.model,
       createdAt: Date.now(),
     };
     addToGallery(next);
     setItems(loadGallery());
+    } catch (error) { toast.error(error instanceof Error ? error.message : "تعذّر إعادة التوليد."); }
+    finally { setBusy(false); }
   };
 
   return (
@@ -75,7 +83,7 @@ function GalleryPage() {
                     <Trash2 className="size-4" />
                   </Button>
                 </div>
-                <GeneratedImage url={item.url} prompt={item.prompt} onRegenerate={() => regenerate(item)} />
+                <GeneratedImage url={item.url} prompt={item.prompt} busy={busy} onRegenerate={() => void regenerate(item)} />
               </div>
             ))}
           </div>

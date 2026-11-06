@@ -19,6 +19,7 @@ import { Route as PrivacyRouteImport } from './routes/privacy'
 import { Route as SettingsRouteImport } from './routes/settings'
 import { Route as TermsRouteImport } from './routes/terms'
 import { Route as ApiChatRouteImport } from './routes/api/chat'
+import { Route as ApiImagesRouteImport } from './routes/api/images'
 import { Route as ApiTranscribeRouteImport } from './routes/api/transcribe'
 import { Route as AuthNativeRouteImport } from './routes/auth_.native'
 import { Route as ChatIndexRouteImport } from './routes/chat.index'
@@ -75,6 +76,11 @@ const ApiChatRoute = ApiChatRouteImport.update({
   path: '/api/chat',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiImagesRoute = ApiImagesRouteImport.update({
+  id: '/api/images',
+  path: '/api/images',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiTranscribeRoute = ApiTranscribeRouteImport.update({
   id: '/api/transcribe',
   path: '/api/transcribe',
@@ -112,6 +118,7 @@ export interface FileRoutesByFullPath {
   '/settings': typeof SettingsRoute
   '/terms': typeof TermsRoute
   '/api/chat': typeof ApiChatRoute
+  '/api/images': typeof ApiImagesRoute
   '/api/transcribe': typeof ApiTranscribeRoute
   '/auth/native': typeof AuthNativeRoute
   '/chat/$conversationId': typeof ChatConversationIdRoute
@@ -128,6 +135,7 @@ export interface FileRoutesByTo {
   '/settings': typeof SettingsRoute
   '/terms': typeof TermsRoute
   '/api/chat': typeof ApiChatRoute
+  '/api/images': typeof ApiImagesRoute
   '/api/transcribe': typeof ApiTranscribeRoute
   '/auth/native': typeof AuthNativeRoute
   '/chat/$conversationId': typeof ChatConversationIdRoute
@@ -146,6 +154,7 @@ export interface FileRoutesById {
   '/settings': typeof SettingsRoute
   '/terms': typeof TermsRoute
   '/api/chat': typeof ApiChatRoute
+  '/api/images': typeof ApiImagesRoute
   '/api/transcribe': typeof ApiTranscribeRoute
   '/auth_/native': typeof AuthNativeRoute
   '/chat/$conversationId': typeof ChatConversationIdRoute
@@ -165,6 +174,7 @@ export interface FileRouteTypes {
     | '/settings'
     | '/terms'
     | '/api/chat'
+    | '/api/images'
     | '/api/transcribe'
     | '/auth/native'
     | '/chat/$conversationId'
@@ -181,6 +191,7 @@ export interface FileRouteTypes {
     | '/settings'
     | '/terms'
     | '/api/chat'
+    | '/api/images'
     | '/api/transcribe'
     | '/auth/native'
     | '/chat/$conversationId'
@@ -198,6 +209,7 @@ export interface FileRouteTypes {
     | '/settings'
     | '/terms'
     | '/api/chat'
+    | '/api/images'
     | '/api/transcribe'
     | '/auth_/native'
     | '/chat/$conversationId'
@@ -216,6 +228,7 @@ export interface RootRouteChildren {
   SettingsRoute: typeof SettingsRoute
   TermsRoute: typeof TermsRoute
   ApiChatRoute: typeof ApiChatRoute
+  ApiImagesRoute: typeof ApiImagesRoute
   ApiTranscribeRoute: typeof ApiTranscribeRoute
   AuthNativeRoute: typeof AuthNativeRoute
   ApiPublicSearchRoute: typeof ApiPublicSearchRoute
@@ -293,6 +306,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiChatRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/images': {
+      id: '/api/images'
+      path: '/api/images'
+      fullPath: '/api/images'
+      preLoaderRoute: typeof ApiImagesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/transcribe': {
       id: '/api/transcribe'
       path: '/api/transcribe'
@@ -354,6 +374,7 @@ const rootRouteChildren: RootRouteChildren = {
   SettingsRoute: SettingsRoute,
   TermsRoute: TermsRoute,
   ApiChatRoute: ApiChatRoute,
+  ApiImagesRoute: ApiImagesRoute,
   ApiTranscribeRoute: ApiTranscribeRoute,
   AuthNativeRoute: AuthNativeRoute,
   ApiPublicSearchRoute: ApiPublicSearchRoute,

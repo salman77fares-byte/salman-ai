@@ -60,7 +60,7 @@ export function GeneratedImage({
   const [failed, setFailed] = useState(false);
   const [attempt, setAttempt] = useState(0);
   const [preview, setPreview] = useState(false);
-  const src = attempt === 0 ? url : `${url}&retry=${attempt}`;
+  const src = attempt === 0 || url.startsWith("data:") ? url : `${url}&retry=${attempt}`;
 
   const download = async () => {
     setDownloading(true);
@@ -70,7 +70,9 @@ export function GeneratedImage({
 
   if (failed) {
     return (
-      <p className="text-xs font-bold text-destructive">تعذّر توليد الصورة، حاول مرة أخرى.</p>
+      <div className="space-y-2"><p className="text-xs font-bold text-destructive">تعذّر توليد الصورة، حاول مرة أخرى.</p>
+        {onRegenerate ? <Button variant="secondary" size="sm" disabled={busy} onClick={onRegenerate}><RefreshCw className="size-4" />إعادة توليد</Button> : null}
+      </div>
     );
   }
 

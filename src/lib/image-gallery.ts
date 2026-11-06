@@ -1,6 +1,8 @@
 import { IMAGE_MODELS, type ImageModelId } from "./pollinations";
+import type { GenerationModelId } from "./pro-image";
+import { toast } from "sonner";
 
-export type GalleryItem = { id: number; url: string; prompt: string; model: ImageModelId; createdAt: number };
+export type GalleryItem = { id: number; url: string; prompt: string; model: GenerationModelId; createdAt: number };
 
 const KEY = "salman-image-gallery";
 const MAX = 200;
@@ -19,7 +21,7 @@ function save(items: GalleryItem[]) {
   try {
     localStorage.setItem(KEY, JSON.stringify(items.slice(0, MAX)));
   } catch {
-    /* storage full */
+    toast.error("تعذّر حفظ الصورة في المكتبة؛ مساحة الجهاز ممتلئة. يمكنك تحميلها مباشرة.");
   }
 }
 
@@ -33,6 +35,7 @@ export function removeFromGallery(id: number): GalleryItem[] {
   return next;
 }
 
-export function modelLabel(id: ImageModelId): string {
+export function modelLabel(id: GenerationModelId): string {
+  if (id === "openai-pro") return "OpenAI GPT Image 1";
   return IMAGE_MODELS.find((m) => m.id === id)?.label.split(" — ")[0] ?? id;
 }

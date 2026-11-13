@@ -1,74 +1,9 @@
-import { createFileRoute } from "@tanstack/react-router";
-import type {} from "@tanstack/react-start";
-
-const BASE_URL = "https://salman-ai.lovable.app";
-
-interface SitemapEntry {
-  path: string;
-  lastmod?: string;
-  changefreq?: "always" | "hourly" | "daily" | "weekly" | "monthly" | "yearly" | "never";
-  priority?: string;
-}
-
-export const Route = createFileRoute("/sitemap.xml")({
-  server: {
-    handlers: {
-      GET: async () => {
-        const today = new Date().toISOString().slice(0, 10);
-
-        // 1. قائمة الصفحات الثابتة الأساسية في مشروعك
-        const entries: SitemapEntry[] = [
-          { path: "/", changefreq: "daily", priority: "1.0", lastmod: today },
-          // أضف أي صفحات أخرى ثابتة هنا مستقبلاً، مثل:
-          // { path: "/tools", changefreq: "weekly", priority: "0.8", lastmod: today },
-          // { path: "/about", changefreq: "monthly", priority: "0.5", lastmod: today },
-        ];
-
-        // 2. (اختياري) إذا كان لديك صفحات ديناميكية تجلبها من قاعدة بيانات أو API
-        // يمكنك جلبها هنا عبر حلقة تكرارية (for / map) وإضافتها لمصفوفة entries بنفس الطريقة:
-        /*
-        try {
-          const response = await fetch("رابط_الـ_API_الخاص بك");
-          const items = await response.json();
-          for (const item of items) {
-            entries.push({
-              path: `/tool/${item.id}`,
-              lastmod: item.updated_at?.slice(0, 10) || today,
-              changefreq: "weekly",
-              priority: "0.7",
-            });
-          }
-        } catch (e) {
-          console.error("Error fetching dynamic sitemap items", e);
-        }
-        */
-
-        // بناء وسم الـ XML لكل صفحة مسجلة
-        const urls = entries.map((e) =>
-          [
-            `  <url>`,
-            `    <loc>${BASE_URL}${e.path}</loc>`,
-            e.lastmod ? `    <lastmod>${e.lastmod}</lastmod>` : null,
-            e.changefreq ? `    <changefreq>${e.changefreq}</changefreq>` : null,
-            e.priority ? `    <priority>${e.priority}</priority>` : null,
-            `  </url>`,
-          ].filter(Boolean).join("\n"),
-        );
-
-        const xml = [
-          `<?xml version="1.0" encoding="UTF-8"?>`,
-          `<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">`,
-          ...urls,
-          `</urlset>`,
-        ].join("\n");
-
-        return new Response(xml, {
-          headers: {
-            "Content-Type": "application/xml; charset=utf-8",
-            "Cache-Control": "public, max-age=1800",
-          },
-        });
-      },
-    },
-  },
-});
+<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <url>
+    <loc>https://salman-ai.lovable.app/</loc>
+    <lastmod>2026-11-13</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>1.0</priority>
+  </url>
+</urlset>
